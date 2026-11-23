@@ -17,6 +17,7 @@
 #include <limits>
 #include <optional>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Commands/PlayerCommands.h"
@@ -224,6 +225,7 @@ void OwnReportSystem::ReportView(uint32_t worldCameraIcons)
 	        (Locator::gameInterface::has_value() ? Locator::gameInterface::value().GetDrawnCameraIcons() : std::nullopt)
 	            .value_or(worldCameraIcons)),
 	    .mouseButtons = mouse.buttons,
+	    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 	};
 	// The keys held, by the game's number of each key
 	if (Locator::gameActionSystem::has_value())

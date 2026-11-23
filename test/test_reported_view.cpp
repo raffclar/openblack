@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <memory>
+#include <optional>
 
 #include <glm/mat4x4.hpp>
 #include <glm/matrix.hpp>
@@ -130,4 +131,22 @@ TEST(ReportedView, ThePlayersCameraArrivesAtItsTarget)
 	EXPECT_TRUE(script_camera::PlayerCameraArrived(eye, eye + glm::vec3(0.01f, 0.0f, 0.0f), focus, focus));
 	EXPECT_FALSE(script_camera::PlayerCameraArrived(eye, eye + glm::vec3(0.1f, 0.0f, 0.0f), focus, focus));
 	EXPECT_FALSE(script_camera::PlayerCameraArrived(eye, eye, focus, focus + glm::vec3(0.0f, 0.0f, 0.1f)));
+}
+
+// While the player is inside the temple, a script reads the camera as one point far out of the world
+TEST(ReportedView, AScriptReadsTheCameraFarOutOfTheWorldInsideTheTemple)
+{
+	const glm::vec3 reported {1200.0f, 40.0f, 2200.0f};
+	EXPECT_EQ(script_camera::ScriptCameraRead(reported, false), reported);
+	EXPECT_EQ(script_camera::ScriptCameraRead(reported, true), glm::vec3(50000.0f, 50000.0f, 50000.0f));
+	// Before the first report the camera is at the middle of the axes of the world, but not inside the temple
+	EXPECT_EQ(script_camera::ScriptCameraRead(std::nullopt, false), glm::vec3(0.0f));
+	EXPECT_EQ(script_camera::ScriptCameraRead(std::nullopt, true), glm::vec3(50000.0f));
+}
+
+// SET_CAMERA_POSITION does not change the script's camera while a two-thing camera has control
+TEST(ReportedView, ATwoThingCameraIgnoresTheScriptsSetPosition)
+{
+	EXPECT_TRUE(script_camera::SetPositionReachesScriptCamera(false));
+	EXPECT_FALSE(script_camera::SetPositionReachesScriptCamera(true));
 }

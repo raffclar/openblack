@@ -33,7 +33,7 @@ public:
 	void RemoveFarm(entt::entity farm) override;
 	void AddFisherman(entt::entity farm, entt::entity villager) override;
 	void RemoveFisherman(entt::entity farm, entt::entity villager) override;
-	[[nodiscard]] glm::vec3 FishingSpot(entt::entity farm) override;
+	[[nodiscard]] glm::ivec2 FishingSpot(entt::entity farm) override;
 	[[nodiscard]] std::optional<int32_t> Fish(entt::entity farm, uint32_t capacity, uint32_t held, float tribalPower) override;
 	void Reset() override;
 

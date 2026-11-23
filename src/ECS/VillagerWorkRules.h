@@ -51,10 +51,11 @@ inline constexpr float k_BigForestArriveShare = 0.5f;
 [[nodiscard]] map_coords::MapCoords EdgeWorkingPosition(const map_coords::MapCoords& thing,
                                                         const map_coords::MapCoords& villager, float thingRadius,
                                                         float villagerRadius);
-/// The point of a thing nearest a place, as a map position: out from the thing towards the place, by the radius of the
-/// thing. The offset adds to the map position of the thing as whole map units, so the result keeps its altitude.
-[[nodiscard]] map_coords::MapCoords NearestEdgePosition(const map_coords::MapCoords& thing, const map_coords::MapCoords& place,
-                                                        float radius);
+/// The nearest edge of a thing to a villager, as the game gives it as a walk goal: the edge position by both their sizes,
+/// changed to metres and back to a map position at altitude 0. The change to metres can move the goal by one map unit.
+[[nodiscard]] map_coords::MapCoords NearestEdgePosition(const map_coords::MapCoords& thing,
+                                                        const map_coords::MapCoords& villager, float thingRadius,
+                                                        float villagerRadius);
 /// A map position that changes to metres and back to whole map units, as the game does when it gives a point in metres.
 /// Far from the corner of the map the result can be a map unit or two away from the start. The altitude is 0.
 [[nodiscard]] map_coords::MapCoords ThroughMetres(const map_coords::MapCoords& place);

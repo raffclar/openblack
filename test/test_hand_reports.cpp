@@ -669,6 +669,7 @@ TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
 	second.cameraArrived = true;
 	second.gripsLand = false;
 	second.otherButton = true;
+	second.insideTemple = true;
 	_hands.ReportView(PlayerNames::PLAYER_ONE, first);
 	_hands.ReportView(PlayerNames::PLAYER_ONE, second);
 	const auto view = _hands.GetReportedView(PlayerNames::PLAYER_ONE);
@@ -684,6 +685,7 @@ TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
 	EXPECT_TRUE(view->cameraArrived);
 	EXPECT_FALSE(view->gripsLand);
 	EXPECT_TRUE(view->otherButton);
+	EXPECT_TRUE(view->insideTemple);
 	// A player with no hands has no view
 	_hands.ReportView(PlayerNames::PLAYER_TWO, first);
 	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_TWO).has_value());

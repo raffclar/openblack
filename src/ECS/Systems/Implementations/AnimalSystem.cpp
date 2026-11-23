@@ -626,7 +626,10 @@ entt::entity AnimalSystem::CreateSpellAnimal(AnimalInfo type, glm::vec2 position
 	SyncWorld(animal);
 	animal.previousPosition = animal.position;
 	animal.previousHeading = animal.heading;
-	registry.Assign<SpellAnimal>(entity, SpellAnimal {.spell = spell, .previous = point});
+	registry.Assign<SpellAnimal>(
+	    entity,
+	    SpellAnimal {.spell = spell,
+	                 .turnStart = {.x = animal.move.position.x, .z = animal.move.position.y, .altitude = heightAboveLand}});
 	// The miracle's doves and bats take the brightest of the land's light wherever they are, its wolves are white
 	registry.Assign<AnimalPose>(
 	    entity, AnimalPose {.light = type == AnimalInfo::SpellWolf ? AnimalLight::White : AnimalLight::BrightestLand});
@@ -874,10 +877,21 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	}
 	// Carried off by a tornado, it is the tornado's until it lets go; flying, the physics'. In a hand it takes its turn
 	auto& animal = registry.Get<Animal>(entity);
-	if (!animals::TakesOwnTurn({.tornado = registry.AllOf<CarriedByTornado>(entity),
-	                            .playersHand = registry.AllOf<InHand>(entity),
-	                            .creature = registry.AllOf<HeldByCreature>(entity),
-	                            .physics = registry.AllOf<InPhysics>(entity)}))
+	const bool ownTurn = animals::TakesOwnTurn({.tornado = registry.AllOf<CarriedByTornado>(entity),
+	                                            .playersHand = registry.AllOf<InHand>(entity),
+	                                            .creature = registry.AllOf<HeldByCreature>(entity),
+	                                            .physics = registry.AllOf<InPhysics>(entity)});
+	// At the start of its turn, an animal of a miracle keeps its place for the shield test. It does this also when it
+	// does not take its own turn. An animal that moves by itself has its height above the land as its altitude.
+	if (auto* spellAnimal = registry.TryGet<SpellAnimal>(entity))
+	{
+		spellAnimal->turnStart = ecs::thing_map_place::OfWithAltitude(registry, entity);
+		if (ownTurn)
+		{
+			spellAnimal->turnStart.altitude = animal.height;
+		}
+	}
+	if (!ownTurn)
 	{
 		return;
 	}

@@ -33,6 +33,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
@@ -94,8 +95,8 @@ void SetTopState(LivingAction& action, VillagerStates state)
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, state, false);
 }
 
-/// Walks straight to a point through what is in the way, then on into a state
-void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+/// Walks straight to a map position through what is in the way, then on into a state
+void MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
@@ -104,7 +105,7 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 }
 
 /// Walks to the farm along its footpaths where they lead its way
-void MoveOnPathsTo(LivingAction& action, entt::entity farm, glm::vec2 goal, VillagerStates final)
+void MoveOnPathsTo(LivingAction& action, entt::entity farm, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	villager_footpath::SetupMoveToOnFootpath(action, farm, goal, final);
 }
@@ -116,11 +117,11 @@ entt::entity FarmOf(entt::entity villager)
 	                                                                                                         : entt::null;
 }
 
-/// Where a fisherman walks to: the farm's own place, the middle of its map cell
-glm::vec2 ArrivePositionOf(entt::entity farm)
+/// Where a fisherman walks to: the farm's own place, the middle of its map cell, at altitude 0
+map_coords::MapCoords ArrivePositionOf(entt::entity farm)
 {
-	return map_coords::ToMetres(map_coords::MapCoords {Entities().Get<const FishFarm>(farm).place.x,
-	                                                   Entities().Get<const FishFarm>(farm).place.y, 0.0f});
+	const auto& place = Entities().Get<const FishFarm>(farm).place;
+	return {.x = place.x, .z = place.y, .altitude = 0.0f};
 }
 
 } // namespace
@@ -216,15 +217,18 @@ uint32_t villager_fisherman::FishermanArrivesAtFishing(LivingAction& action)
 		return 1;
 	}
 	const auto& place = Entities().Get<const FishFarm>(farm).place;
-	const auto here = map_coords::FromMetres(glm::xz(PositionOf(villager)));
+	const auto here = thing_map_place::Of(Entities(), villager);
 	switch (work::ArriveAtFishing(here, {place.x, place.y, 0.0f}))
 	{
 	case work::FishingArrival::WalkAgain:
 		MoveOnPathsTo(action, farm, ArrivePositionOf(farm), VillagerStates::FishermanArrivesAtFishing);
 		break;
 	case work::FishingArrival::MoveToSpot:
-		MoveTo(action, glm::xz(Locator::fishFarmSystem::value().FishingSpot(farm)), VillagerStates::FishermanArrivesAtFishing);
+	{
+		const auto spot = Locator::fishFarmSystem::value().FishingSpot(farm);
+		MoveTo(action, {.x = spot.x, .z = spot.y, .altitude = 0.0f}, VillagerStates::FishermanArrivesAtFishing);
 		break;
+	}
 	case work::FishingArrival::StartFishing:
 		// It stands with its rod until its clip ends, then fishes
 		Locator::livingActionSystem::value().VillagerPlayAnimThenSetState(action, VillagerStates::Fishing);

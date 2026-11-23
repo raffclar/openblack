@@ -106,6 +106,7 @@
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Gui/ScriptFade.h"
 #include "Gui/ScriptTexts.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
@@ -231,8 +232,10 @@ void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
-	// Without the script's camera the position is quietly dropped
-	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
+	// Without the script's camera, or while a two-thing camera has control, the position is ignored and no warning is
+	// given
+	if (auto* camera = OrderedScriptCamera();
+	    camera != nullptr && script_camera::SetPositionReachesScriptCamera(camera->InDualView()))
 	{
 		camera->SetOrigin(position);
 		RemakeDrawList();
@@ -269,16 +272,25 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
+/// The player is inside the temple, as the last view report of the player tells it
+bool ReportedInsideTemple()
+{
+	const auto view = ScriptView();
+	return view.has_value() && view->insideTemple;
+}
+
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
 	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-	PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
+	PushVec(script_camera::ScriptCameraRead(reported.has_value() ? std::optional(reported->origin) : std::nullopt,
+	                                        ReportedInsideTemple()));
 }
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
 	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-	PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
+	PushVec(script_camera::ScriptCameraRead(reported.has_value() ? std::optional(reported->focus) : std::nullopt,
+	                                        ReportedInsideTemple()));
 }
 
 void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
@@ -774,16 +786,16 @@ void SetFixedCamRotation() // 209 SET_FIXED_CAM_ROTATION
 void SetFade() // 241 SET_FADE
 {
 	// The game takes each as a whole number, the colour's as bytes and the seconds as a small signed one
-	const auto time = static_cast<int8_t>(static_cast<int32_t>(Popf()));
-	const auto blue = static_cast<uint8_t>(static_cast<int32_t>(Popf()));
-	const auto green = static_cast<uint8_t>(static_cast<int32_t>(Popf()));
-	const auto red = static_cast<uint8_t>(static_cast<int32_t>(Popf()));
+	const auto time = gui::FadeSecondsFromScript(Popf());
+	const auto blue = gui::FadeColourFromScript(Popf());
+	const auto green = gui::FadeColourFromScript(Popf());
+	const auto red = gui::FadeColourFromScript(Popf());
 	Locator::cinematicDirectorSystem::value().FadeTo(red, green, blue, time);
 }
 
 void SetFadeIn() // 242 SET_FADE_IN
 {
-	const auto duration = static_cast<int8_t>(static_cast<int32_t>(Popf()));
+	const auto duration = gui::FadeSecondsFromScript(Popf());
 	Locator::cinematicDirectorSystem::value().FadeBackToNormal(duration);
 }
 
