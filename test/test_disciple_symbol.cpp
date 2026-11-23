@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <array>
+#include <vector>
 
 #include <gtest/gtest.h>
 
+#include "ECS/DiscipleGlowDraw.h"
 #include "ECS/DiscipleSymbol.h"
 
 using namespace openblack;
@@ -138,4 +140,70 @@ TEST(DiscipleSymbol, TheSizeOfTheSymbolComesFromTheDistanceToTheGlow)
 	const glm::vec3 eye {13.0f, 6.0f, -7.0f};
 	EXPECT_FLOAT_EQ(disciple_symbol::SymbolDistance(eye, glow), 13.0f);
 	EXPECT_FLOAT_EQ(disciple_symbol::SymbolDistance(glow, glow), 0.0f);
+}
+
+namespace disciple_glow_draw = openblack::ecs::disciple_glow_draw;
+
+TEST(DiscipleGlowDraw, TheFrameDrawsTheGlowOnlyWithTheUsualBody)
+{
+	EXPECT_TRUE(disciple_glow_draw::Shown({.highDetail = false, .drawn = true}));
+	// The land's draw list leaves the body out
+	EXPECT_FALSE(disciple_glow_draw::Shown({.highDetail = false, .drawn = false}));
+	// A script draws the villager in high detail
+	EXPECT_FALSE(disciple_glow_draw::Shown({.highDetail = true, .drawn = true}));
+}
+
+TEST(DiscipleGlowDraw, AllGlowsUpToTheLimitShow)
+{
+	Registry land;
+	std::vector<disciple_glow_draw::Glow> glows;
+	for (uint32_t i = 0; i < 3; ++i)
+	{
+		glows.push_back({.villager = land.Create(), .place = 2 - i});
+	}
+	EXPECT_EQ(disciple_glow_draw::Kept(glows).size(), 3u);
+}
+
+TEST(DiscipleGlowDraw, TheGlowsPastTheLimitInTheFrameOrderDoNotShow)
+{
+	Registry land;
+	const auto listedLate = land.Create();
+	const auto listedEarly = land.Create();
+	const auto walking = land.Create();
+	const auto flying = land.Create();
+	const auto heldNear = land.Create();
+	const auto heldFar = land.Create();
+	const auto offScreen = land.Create();
+	using Draw = disciple_glow_draw::Draw;
+	const std::vector<disciple_glow_draw::Glow> glows {
+	    {.villager = heldNear, .draw = Draw::Hand, .key = 10.0f},
+	    {.villager = flying, .draw = Draw::Physics},
+	    {.villager = listedLate, .place = 7},
+	    {.villager = offScreen, .place = 0, .onScreen = false},
+	    {.villager = heldFar, .draw = Draw::Hand, .key = 90.0f},
+	    {.villager = walking, .draw = Draw::WalkPath},
+	    {.villager = listedEarly, .place = 3},
+	};
+	// The land's draw list in its order, the walked tracks, the physics, then the hands from the farthest. A glow off
+	// the screen does not count.
+	const std::vector<entt::entity> all {listedEarly, listedLate, walking, flying, heldFar, heldNear};
+	EXPECT_EQ(disciple_glow_draw::Kept(glows, 6), all);
+	EXPECT_EQ(disciple_glow_draw::Kept(glows, 3), (std::vector<entt::entity> {listedEarly, listedLate, walking}));
+	EXPECT_EQ(disciple_glow_draw::Kept(glows, 5),
+	          (std::vector<entt::entity> {listedEarly, listedLate, walking, flying, heldFar}));
+}
+
+TEST(DiscipleGlowDraw, TheLimitIs1024GlowsAFrame)
+{
+	Registry land;
+	std::vector<disciple_glow_draw::Glow> glows;
+	for (uint32_t i = 0; i < 1100; ++i)
+	{
+		glows.push_back({.villager = land.Create(), .place = 1099 - i});
+	}
+	const auto kept = disciple_glow_draw::Kept(glows);
+	ASSERT_EQ(kept.size(), 1024u);
+	// The nearest blocks of the list come first, so the last places of the list lose their glows
+	EXPECT_EQ(kept.front(), glows.back().villager);
+	EXPECT_EQ(kept.back(), glows.at(1100 - 1024).villager);
 }
