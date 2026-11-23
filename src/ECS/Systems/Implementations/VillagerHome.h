@@ -90,6 +90,12 @@ void LeaveHome(entt::entity villager);
 /// Where a villager stands when it reaches the building: its door, but the middle of a crèche, wonder, graveyard,
 /// village centre or field
 [[nodiscard]] glm::vec2 ArrivePosition(entt::entity abode);
+/// The building's door as a map position, the goal of a walk to the door. A door from the model or the village centre
+/// changes from metres to whole map units. A building with no door gives its map position as the map keeps it.
+[[nodiscard]] map_coords::MapCoords DoorPlace(entt::entity abode);
+/// The arrive place as a map position, the goal of a walk to the building: the map position of the building for the
+/// kinds that have their arrive place at the middle, else DoorPlace
+[[nodiscard]] map_coords::MapCoords ArrivePlace(entt::entity abode);
 
 /// Its home was knocked on or hurt: a villager inside comes out a few steps from the door, yawns and decides afresh,
 /// and won't go back to bed for its next decision. Whether it came out.

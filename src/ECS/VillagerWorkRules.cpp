@@ -46,6 +46,17 @@ map_coords::MapCoords villager_work::EdgeWorkingPosition(const map_coords::MapCo
 	return TowardsVillager(thing, villager, villagerRadius + thingRadius);
 }
 
+map_coords::MapCoords villager_work::NearestEdgePosition(const map_coords::MapCoords& thing, const map_coords::MapCoords& place,
+                                                         float radius)
+{
+	return TowardsVillager(thing, place, radius);
+}
+
+map_coords::MapCoords villager_work::ThroughMetres(const map_coords::MapCoords& place)
+{
+	return {.x = map_coords::ToFixed(map_coords::ToMetres(place.x)), .z = map_coords::ToFixed(map_coords::ToMetres(place.z))};
+}
+
 map_coords::MapCoords villager_work::BigForestArrivePosition(const map_coords::MapCoords& bigForest,
                                                              const map_coords::MapCoords& villager, float radius)
 {

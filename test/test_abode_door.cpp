@@ -69,3 +69,34 @@ TEST(AbodeDoor, AFieldAndAFishFarmHaveTheirMiddleAsTheirDoor)
 	EXPECT_EQ(DoorOfThing(AbodeType::Graveyard, false), Door::Model);
 	EXPECT_EQ(DoorOfThing(std::nullopt, false), Door::Model);
 }
+
+TEST(AbodeDoor, AModelDoorChangesFromMetresToWholeMapUnits)
+{
+	const openblack::map_coords::MapCoords middle {.x = 0x1FB5355, .z = 0x400001};
+	// 12.5 metres is 81920 map units; -3.25 metres is -21299.2, which goes to -21299
+	const auto door = DoorPlace(Door::Model, glm::vec2(12.5f, -3.25f), middle);
+	EXPECT_EQ(door.x, 81920);
+	EXPECT_EQ(door.z, -21299);
+	EXPECT_EQ(door.altitude, 0.0f);
+}
+
+TEST(AbodeDoor, ABuildingWithNoDoorKeepsEveryUnitOfItsMapPosition)
+{
+	// Far out on the map, metres cannot hold each map unit: 0x1FB5355 in metres and back is 0x1FB5356
+	const openblack::map_coords::MapCoords middle {.x = 0x1FB5355, .z = 0x1234567, .altitude = 0.0f};
+	EXPECT_EQ(DoorPlace(Door::Model, std::nullopt, middle), middle);
+	EXPECT_EQ(DoorPlace(Door::Middle, glm::vec2(12.5f, -3.25f), middle), middle);
+	EXPECT_NE(openblack::map_coords::ToFixed(openblack::map_coords::ToMetres(middle.x)), middle.x);
+}
+
+TEST(AbodeDoor, AModelDoorOnAnAxisOfTheMapCountsAsNoDoor)
+{
+	const openblack::map_coords::MapCoords middle {.x = 0x320000, .z = 0x330000};
+	// 0.0001 metres is less than one map unit, so x is 0
+	EXPECT_EQ(DoorPlace(Door::Model, glm::vec2(0.0001f, 40.0f), middle), middle);
+	EXPECT_EQ(DoorPlace(Door::Model, glm::vec2(40.0f, 0.0f), middle), middle);
+	// The village centre door has no such test
+	const auto centre = DoorPlace(Door::VillageCentre, glm::vec2(0.0001f, 40.0f), middle);
+	EXPECT_EQ(centre.x, 0);
+	EXPECT_EQ(centre.z, 262144);
+}

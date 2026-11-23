@@ -214,7 +214,7 @@ uint32_t housewife::GotoStoragePit(LivingAction& action)
 	const auto abode = AbodeOf(villager);
 	if (IsFunctional(pit) && abode != entt::null && !IsEnoughFoodForDinner(abode))
 	{
-		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePlace(*pit),
 		                                         VillagerStates::HousewifeArrivesAtStoragePit);
 		return 1;
 	}
@@ -257,7 +257,7 @@ uint32_t housewife::ArrivesAtStoragePit(LivingAction& action)
 	}
 	if (Entities().Get<const Villager>(villager).foodHeld != 0)
 	{
-		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePlace(*pit),
 		                                         VillagerStates::HousewifePickupFromStoragePit);
 		return 1;
 	}
@@ -271,7 +271,7 @@ uint32_t housewife::PickupFromStoragePit(LivingAction& action)
 	const auto abode = AbodeOf(villager);
 	if (Entities().Get<const Villager>(villager).foodHeld != 0 && abode != entt::null)
 	{
-		villager_footpath::SetupMoveToOnFootpath(action, abode, villager_home::ArrivePosition(abode),
+		villager_footpath::SetupMoveToOnFootpath(action, abode, villager_home::ArrivePlace(abode),
 		                                         VillagerStates::HousewifeReturnHomeWithFood);
 		return 1;
 	}

@@ -107,7 +107,7 @@ uint32_t StopHiding(LivingAction& action)
 
 void GoBackInside(LivingAction& action, entt::entity building)
 {
-	ecs::villager_footpath::SetupMoveToOnFootpath(action, building, ecs::villager_home::ArrivePosition(building),
+	ecs::villager_footpath::SetupMoveToOnFootpath(action, building, ecs::villager_home::ArrivePlace(building),
 	                                              VillagerStates::GoAndHideInNearbyBuilding);
 }
 
@@ -294,8 +294,8 @@ uint32_t villager_cover::GoAndHideInNearbyBuilding(LivingAction& action)
 		hidingIn->threat = entt::null;
 	}
 	const bool stands = CanHideIn(hidingIn->building);
-	const bool atDoor =
-	    stands && ecs::villager_home::AreWeThere(villager, ecs::villager_home::ArrivePosition(hidingIn->building));
+	const auto door = stands ? ecs::villager_home::ArrivePlace(hidingIn->building) : map_coords::MapCoords {};
+	const bool atDoor = stands && ecs::villager_home::AreWeThere(villager, glm::ivec2(door.x, door.z));
 	bool threatNear = false;
 	if (stands && atDoor && hidingIn->threat != entt::null)
 	{
