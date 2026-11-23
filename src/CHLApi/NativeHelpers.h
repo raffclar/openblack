@@ -118,7 +118,7 @@ std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::
 void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::components::Storm&)>& change);
 
 // In CHLApi/PlayerNatives.cpp
-PlayerNames ScriptPlayerName(int32_t scriptPlayer);
+PlayerNames ScriptPlayerName(float scriptPlayer);
 
 // In CHLApi/HandNatives.cpp
 ecs::components::HandClicked* LocalHandClicked();

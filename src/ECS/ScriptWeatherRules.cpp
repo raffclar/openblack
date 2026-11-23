@@ -18,6 +18,7 @@
 #include <type_traits>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack::ecs;
 
@@ -38,8 +39,8 @@ constexpr float k_ArrivalDistance = 0.001f;
 
 int8_t WholeByte(float value)
 {
-	// Cut towards nought, keeping the low byte
-	return static_cast<int8_t>(static_cast<uint8_t>(static_cast<int32_t>(value) & 0xff));
+	// Remove the fraction by the game's rule and keep the low byte
+	return static_cast<int8_t>(static_cast<uint8_t>(openblack::x87::ToInteger(value) & 0xff));
 }
 /// Reads up to as many comma-separated numbers as the list holds, the way the C library's scanning does: each may follow
 /// spaces, and reading stops at the first that is missing or not followed by a comma (the last needs none). Returns how
@@ -103,7 +104,7 @@ void script_weather::SetTimeFade(components::Storm& storm, float lastsFor, float
 
 void script_weather::SetClouds(components::Storm& storm, float count, float shade, float height)
 {
-	storm.cloudCount = static_cast<int32_t>(count);
+	storm.cloudCount = openblack::x87::ToInteger(count);
 	storm.cloudShade = shade;
 	storm.cloudHeight = height;
 }

@@ -812,7 +812,7 @@ void SetCreatureOnlyDesireOff() // 189 SET_CREATURE_ONLY_DESIRE_OFF
 void CallPlayerCreature() // 197 CALL_PLAYER_CREATURE
 {
 	// The player's creature is their primary one: the first they got that is still theirs
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto creature =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(player) : std::nullopt;
 	if (!creature.has_value() || !Locator::entitiesRegistry::value().Valid(*creature))
@@ -1341,7 +1341,7 @@ void LoadCreature() // 329 LOAD_CREATURE
 {
 	// A creature of the species for the player from a mind file, which becomes the creature of the player
 	const auto position = PopVec();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto fileName = PopString();
 	const auto speciesRow = Pop().uintVal;
 	ecs::creature_from_file::Make(
@@ -1445,7 +1445,7 @@ void ClearActorMind() // 346 CLEAR_ACTOR_MIND
 
 void ToggleLeash() // 354 TOGGLE_LEASH
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (!Locator::leashSystem::has_value())
 	{
 		return;

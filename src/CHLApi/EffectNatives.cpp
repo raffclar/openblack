@@ -614,8 +614,7 @@ void SetPlayerMagic() // 244 SET_PLAYER_MAGIC
 	// One more thing enables the magic type for the player, or one fewer does. A player that is not there is ignored.
 	if (ScriptPlayer(player) != nullptr && Locator::spellIconSystem::has_value())
 	{
-		Locator::spellIconSystem::value().SetMagicTypeEnabled(ScriptPlayerName(static_cast<int32_t>(player)),
-		                                                      static_cast<MagicType>(magic), enable);
+		Locator::spellIconSystem::value().SetMagicTypeEnabled(ScriptPlayerName(player), static_cast<MagicType>(magic), enable);
 	}
 }
 
@@ -898,7 +897,7 @@ bool PlayersIconStores(PlayerNames player, std::optional<MagicType> type)
 void IsSpellCharging() // 330 IS_SPELL_CHARGING
 {
 	// A miracle charges when an icon of the player has prayer power in its store, whatever hand asked for it
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	Pushb(PlayersIconStores(player, std::nullopt));
 }
 
@@ -906,7 +905,7 @@ void IsThatSpellCharging() // 331 IS_THAT_SPELL_CHARGING
 {
 	// As IS_SPELL_CHARGING, for the icons whose plain miracle is of the magic type
 	const auto type = static_cast<MagicType>(Pop().intVal);
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	Pushb(PlayersIconStores(player, type));
 }
 
@@ -1029,7 +1028,7 @@ void SetMagicInObject() // 386 SET_MAGIC_IN_OBJECT
 
 ecs::components::Player* ScriptPlayer(float number)
 {
-	const auto name = ScriptPlayerName(static_cast<int32_t>(number));
+	const auto name = ScriptPlayerName(number);
 	if (!Locator::playerSystem::has_value())
 	{
 		return nullptr;
@@ -1116,7 +1115,7 @@ void GetMana() // 422 GET_MANA
 void ClearPlayerSpellCharging() // 423 CLEAR_PLAYER_SPELL_CHARGING
 {
 	// At the sites of the player's temple, each icon that the first player charges stops its charge
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (!Locator::playerSystem::has_value() || !Locator::worshipSiteSystem::has_value() ||
 	    !Locator::spellIconSystem::has_value())
 	{

@@ -1033,7 +1033,7 @@ ScriptCameraModel::HandLookup ComputerHandPlace(PlayerNames player)
 
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (auto* camera = ComputerHandCamera(); camera != nullptr)
 	{
 		// The script's camera keeps looking at the hand of the god
@@ -1043,7 +1043,7 @@ void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
 
 void SetPositionFollowComputerPlayer() // 373 SET_POSITION_FOLLOW_COMPUTER_PLAYER
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (auto* camera = ComputerHandCamera(); camera != nullptr)
 	{
 		// The script's camera follows the hand of the god
