@@ -564,6 +564,25 @@ def drive_to(game, until_turn, at_turns, action):
     return results
 
 
+def needs_resume(state):
+    """Whether a game that no step holds is paused: a scenario can pause it, as its menu does, and a run with no
+    hand step has to let it go on"""
+    return bool(state.get("ready")) and bool(state.get("paused")) and not state.get("stepping")
+
+
+def keep_running(game, poll=0.5):
+    """Lets a game that a scenario pauses go on, until the game ends itself at its last turn"""
+    while game.process.poll() is None:
+        try:
+            if needs_resume(game.call("game.state")):
+                game.call("game.resume")
+        except (RuntimeError, OSError, inspector.GameError):
+            # The game ends itself at its last turn, also in the middle of a question
+            if game.process.poll() is not None:
+                return
+        time.sleep(poll)
+
+
 def run_once(options, name, fast, until_turn, load_at=None, load=True):
     """One run of the game: its record, its log and its exit code. With load_at, the run is driven to that turn, and
     there (with load) it saves and loads the save at once, then goes on. Without load it only stops at that turn, so
@@ -600,6 +619,10 @@ def run_once(options, name, fast, until_turn, load_at=None, load=True):
         elif driven:
             game.connect()
             actions = drive(game, options, until_turn)
+        elif options.scenario:
+            # A scenario can pause the game by itself (the menu does), and no hand step is there to resume it
+            game.connect()
+            keep_running(game)
         code = game.wait()
     finally:
         game.stop()
