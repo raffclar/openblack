@@ -94,6 +94,10 @@ struct EngineConfig
 	/// The debug menu shows the larger pictures of the sky's pack, when the pack loaded. Off by default: the game shows
 	/// its own pictures.
 	bool upscaledSkyPictures {false};
+	/// The whole land hears thunder. Far thunder gets quieter and loses its high sounds as real thunder does, and it
+	/// waits on after its bolt goes. On by default. The debug menu choice "Original" turns it off: then thunder is heard
+	/// as the game plays it.
+	bool farThunder {true};
 	bool drawWater {true};
 	bool drawIsland {true};
 	bool drawEntities {true};
@@ -110,6 +114,8 @@ struct EngineConfig
 	/// For the testbed only: a game in a window pushes the camera as one in full screen does, so that the push can be
 	/// watched without the game taking the whole screen
 	bool testbedPushScrollInWindow {false};
+	/// For the testbed only: the atmosphere sounds stay silent, so that only the sounds of a scenario are heard
+	bool testbedSilentAtmosphere {false};
 	/// Creatures' vertices at the seams between their bones are blended towards their partners, as the game draws them
 	bool blendCreatureSeams {true};
 	/// Creatures cast their shadows onto the land and what stands on it, and villagers a script draws in high detail

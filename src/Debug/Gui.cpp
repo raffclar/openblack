@@ -1063,6 +1063,21 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
+			if (ImGui::BeginMenu("Thunder"))
+			{
+				// The game hears thunder only near its bolt. The whole land hears far thunder, quieter and lower.
+				if (ImGui::MenuItem("Original", nullptr, !config.farThunder))
+				{
+					config.farThunder = false;
+				}
+				if (ImGui::MenuItem("Whole Land", nullptr, config.farThunder))
+				{
+					config.farThunder = true;
+				}
+
+				ImGui::EndMenu();
+			}
+
 			if (ImGui::BeginMenu("Shadows"))
 			{
 				ImGui::Checkbox("Creature Shadows", &config.drawCreatureShadows);

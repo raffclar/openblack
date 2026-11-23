@@ -43,6 +43,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Systems/Implementations/ParticleRuleSystem.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Particles/ParticleTypes.h"
@@ -192,6 +193,8 @@ protected:
 		}
 		Locator::resources::emplace<resources::Resources>();
 		Locator::gameRandom::emplace<FakeRandom>();
+		// The whole land hears thunder, as the debug menu sets it. One test sets the thunder of the game.
+		Locator::config::emplace().farThunder = true;
 		// The rules write their warnings to the log of the game
 		if (spdlog::get("game") == nullptr)
 		{
@@ -211,6 +214,7 @@ protected:
 		Locator::gameRandom::reset();
 		Locator::resources::reset();
 		Locator::filesystem::reset();
+		Locator::config::reset();
 	}
 
 	static Parts Save(ParticleRuleSystem& rules)
@@ -461,6 +465,25 @@ TEST_F(ParticleSaveParts, AThunderWhoseStrikeHasGoneWaitsOnAndASaveLeavesItOut)
 	ASSERT_TRUE(Read(loaded, turns.back().first.synced));
 	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), turns.back().first.local));
 	EXPECT_EQ(loaded.GetSoundCount(), 0u);
+}
+
+TEST_F(ParticleSaveParts, WithTheThunderOfTheGameAThunderWhoseStrikeHasGoneIsForgottenUnheard)
+{
+	Locator::config::value().farThunder = false;
+	AddStormFiles();
+	ParticleRuleSystem far;
+	const auto turns = RunStorm(far, k_FarListener);
+	// The strike has gone before its thunder came to the listener, so no sound is left to save
+	EXPECT_EQ(turns.back().second, 0u);
+	// The synced part is the same as with far thunder
+	Locator::config::value().farThunder = true;
+	ParticleRuleSystem wholeLand;
+	const auto wholeLandTurns = RunStorm(wholeLand, k_FarListener);
+	ASSERT_EQ(turns.size(), wholeLandTurns.size());
+	for (size_t turn = 0; turn < turns.size(); ++turn)
+	{
+		EXPECT_EQ(turns[turn].first.synced, wholeLandTurns[turn].first.synced) << "turn " << turn;
+	}
 }
 
 TEST_F(ParticleSaveParts, AThunderThatTravelsWhileItsStrikeLivesKeepsItsWaitInThePartOfThisComputer)

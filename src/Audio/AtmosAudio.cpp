@@ -167,7 +167,9 @@ void AtmosAudio::ContinueTurn(const TurnInputs& inputs)
 	audio.ProcessTurn();
 	if (!inputs.videoPlaying)
 	{
-		audio.AtmosProcess(true);
+		// A testbed scenario can keep the atmosphere silent, so that only its own sounds are heard
+		const bool silent = Locator::config::has_value() && Locator::config::value().testbedSilentAtmosphere;
+		audio.AtmosProcess(!silent);
 	}
 }
 

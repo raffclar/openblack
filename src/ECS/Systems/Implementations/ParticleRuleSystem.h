@@ -224,6 +224,8 @@ private:
 	static void WriteSound(particles::EffectWriter& out, const PlayingSound& sound);
 	/// A sound of a save, none when the load ends it
 	[[nodiscard]] static std::optional<PlayingSound> ReadSound(particles::EffectReader& in, SoundRecord record);
+	/// Whether the debug menu asks that the whole land hears thunder
+	[[nodiscard]] static bool FarThunder();
 	void Play(PlayingSound& sound) const;
 	/// The particle let go of the sound: stopped at once, or, when its effect file soft-releases it, its loop released
 	/// and its first step quieter taken

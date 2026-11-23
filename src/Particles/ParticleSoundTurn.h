@@ -18,9 +18,9 @@
 ///   sample decides what happens to a voice that plays already: a sample that plays once keeps its voice.
 /// - A sound that travels at the speed of sound (thunder) waits. It starts in the turn that its wait goes below zero. A
 ///   wait of zero or less at the start never ends, so the sound never plays.
-/// - Thunder that waits does not go with its particle. It keeps its wait and starts when the wait ends. The game lets
-///   go of it after that. This is a deviation, which the user asked for: in the game, thunder whose particle goes first
-///   is never heard.
+/// - When the whole land hears thunder, thunder that waits does not go with its particle. It keeps its wait and starts
+///   when the wait ends. The game lets go of it after that. This is a deviation, which the user asked for, and the debug
+///   menu turns it on: in the game, thunder whose particle goes first is never heard.
 namespace openblack::particles::sound_turn
 {
 
@@ -44,13 +44,20 @@ enum class Step : uint8_t
 	return distanceSquared < k_ReplayReach * k_ReplayReach;
 }
 
+/// Whether the whole land hears this sound as far thunder. Only a sound that travels at the speed of sound is thunder,
+/// and only when the debug menu asks for far thunder. Otherwise the game's limits apply.
+[[nodiscard]] constexpr bool WholeLandHears(bool travelsAtSoundSpeed, bool farThunder)
+{
+	return travelsAtSoundSpeed && farThunder;
+}
+
 /// The step of a particle sound in a turn. `wait` is the time in seconds before a sound that travels at the speed of
-/// sound is heard; the rule counts it down by `turnSeconds`. `travels` is true for a sound that travels at the speed of
-/// sound.
-[[nodiscard]] constexpr Step Next(bool particleLives, bool looping, bool travels, float& wait, float turnSeconds)
+/// sound is heard; the rule counts it down by `turnSeconds`. `wholeLand` is true for thunder that the whole land hears
+/// (see WholeLandHears).
+[[nodiscard]] constexpr Step Next(bool particleLives, bool looping, bool wholeLand, float& wait, float turnSeconds)
 {
 	const bool waits = wait > 0.0f;
-	if (!particleLives && !(travels && waits))
+	if (!particleLives && !(wholeLand && waits))
 	{
 		return Step::LetGo;
 	}
