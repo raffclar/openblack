@@ -104,41 +104,52 @@ villager_routine::SleepResult villager_routine::CheckSleep(const Sleep& sleep)
 	return result;
 }
 
-glm::vec2 villager_routine::TowardsTown(glm::vec2 town, glm::vec2 villager, const FloatRandom& random)
+map_coords::MapCoords villager_routine::StepFrom(const map_coords::MapCoords& from, float angle, float metres)
 {
-	const float angle = random(k_HalfPi) - k_QuarterPi + gutils::Get3DAngleFromXZ(town, villager);
-	const float distance = random(k_TowardsTownRange) + k_TowardsTownLeast;
-	return Polar(town, angle, distance);
+	return from + gutils::GetPosFromAngle(angle, metres);
 }
 
-glm::vec2 villager_routine::RoundAbout(glm::vec2 from, float least, float range, const FloatRandom& random)
+map_coords::MapCoords villager_routine::TowardsTown(const map_coords::MapCoords& town, const map_coords::MapCoords& villager,
+                                                    const FloatRandom& random)
+{
+	const float jitter = random(k_HalfPi) - k_QuarterPi;
+	const float angle = gutils::Get3DAngleFromXZ(town, villager) + jitter;
+	const float distance = random(k_TowardsTownRange) + k_TowardsTownLeast;
+	return StepFrom(town, angle, distance);
+}
+
+map_coords::MapCoords villager_routine::RoundAbout(const map_coords::MapCoords& from, float least, float range,
+                                                   const FloatRandom& random)
 {
 	const float distance = random(range) + least;
 	const float angle = random(k_TwoPi);
-	return Polar(from, angle, distance);
+	return StepFrom(from, angle, distance);
 }
 
-glm::vec2 villager_routine::VagrantWander(glm::vec2 villager, float facing, const FloatRandom& random)
+map_coords::MapCoords villager_routine::VagrantWander(const map_coords::MapCoords& villager, float facing,
+                                                      const FloatRandom& random)
 {
-	const float angle = random(k_QuarterPi) - k_EighthPi + facing;
+	const float jitter = random(k_QuarterPi) - k_EighthPi;
+	const float angle = facing + jitter;
 	const float distance = random(k_VagrantWanderRange) + k_VagrantWanderLeast;
-	return Polar(villager, angle, distance);
+	return StepFrom(villager, angle, distance);
 }
 
-glm::vec2 villager_routine::VagrantTentSearch(glm::vec2 villager, const FloatRandom& random)
+map_coords::MapCoords villager_routine::VagrantTentSearch(const map_coords::MapCoords& villager, const FloatRandom& random)
 {
 	return RoundAbout(villager, 0.0f, k_VagrantTentRange, random);
 }
 
-glm::vec2 villager_routine::BrokenHomeTentSearch(glm::vec2 abode, glm::vec2 villager, const FloatRandom& random)
+map_coords::MapCoords villager_routine::BrokenHomeTentSearch(const map_coords::MapCoords& abode,
+                                                             const map_coords::MapCoords& villager, const FloatRandom& random)
 {
 	const float jitter = k_EighthPi - random(k_QuarterPi);
-	const float angle = jitter + gutils::Get3DAngleFromXZ(abode, villager);
+	const float angle = gutils::Get3DAngleFromXZ(abode, villager) + jitter;
 	const float distance = random(k_BrokenHomeTentRange) + k_BrokenHomeTentLeast;
-	return Polar(villager, angle, distance);
+	return StepFrom(villager, angle, distance);
 }
 
-glm::vec2 villager_routine::TentRetry(glm::vec2 spot, const FloatRandom& random)
+map_coords::MapCoords villager_routine::TentRetry(const map_coords::MapCoords& spot, const FloatRandom& random)
 {
 	return RoundAbout(spot, k_TentRetryLeast, k_TentRetryRange, random);
 }

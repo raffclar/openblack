@@ -353,10 +353,12 @@ TEST(WorshipSitePlaces, AVillagerInspectsASiteFromItsMiddle)
 	const auto site = registry.Create();
 	registry.Assign<Transform>(site, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<WorshipSite>(site);
-	EXPECT_EQ(object_measures::InspectPoint(registry, site), ws::CentreOnLand({1000.0f, 0.0f, 1000.0f}, glm::mat3(1.0f), 1.0f));
+	const auto middle = ws::CentreOnLand({1000.0f, 0.0f, 1000.0f}, glm::mat3(1.0f), 1.0f);
+	EXPECT_EQ(map_coords::WholeXZ(object_measures::InspectPlace(registry, site)),
+	          map_coords::WholeXZ(map_coords::FromMetres(middle)));
 	const auto other = registry.Create();
 	registry.Assign<Transform>(other, glm::vec3(30.0f, 5.0f, 40.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	EXPECT_EQ(object_measures::InspectPoint(registry, other), glm::vec2(30.0f, 40.0f));
+	EXPECT_EQ(object_measures::InspectPlace(registry, other), map_coords::FromMetres({30.0f, 40.0f}));
 }
 
 TEST(WorshipSitePlaces, AFishFarmMeasuresWithItsFixedRadiusWhateverItsModel)

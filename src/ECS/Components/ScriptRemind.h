@@ -13,8 +13,6 @@
 
 #include <optional>
 
-#include <glm/vec2.hpp>
-
 #include "3D/MapCoords.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptStateArguments.h"
@@ -32,10 +30,9 @@ struct ScriptRemind
 
 	/// The script state it goes back to; none when it has nothing to go back to
 	VillagerStates returnTo {VillagerStates::InvalidState};
-	/// Where its walk was going when it left the script's hands, or where it stood, on the ground in metres
-	glm::vec2 goal {0.0f};
-	/// The height of that goal above the land
-	float goalHeight {0.0f};
+	/// Where its walk was going when it left the script's hands, or where it stood, as a map position. The altitude is
+	/// the height of the goal above the land.
+	map_coords::MapCoords goal;
 	/// What the script last gave it for its script states, and the clip it was to play
 	ScriptStateArguments arguments;
 	std::optional<ScriptAnimation> animation;

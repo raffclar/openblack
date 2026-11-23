@@ -41,6 +41,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/WorshipSites.h"
 #include "Fire/FireModel.h"
@@ -218,14 +219,19 @@ float object_measures::DistanceFromObject(const Registry& registry, entt::entity
 	       (TwoDRadius(registry, other) + TwoDRadius(registry, entity));
 }
 
-glm::vec2 object_measures::InspectPoint(const Registry& registry, entt::entity entity)
+map_coords::MapCoords object_measures::InspectPlace(const Registry& registry, entt::entity entity)
 {
-	const auto& transform = registry.Get<const Transform>(entity);
 	if (registry.AllOf<WorshipSite>(entity))
 	{
-		return worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
+		// The middle changes from metres to a map position, with its height above the ground there
+		const auto& transform = registry.Get<const Transform>(entity);
+		const auto middle = worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
+		const glm::vec3 point {middle.x, transform.position.y, middle.y};
+		return map_coords::FromWorld(point, [](const map_coords::MapCoords& coords) {
+			return Locator::terrainSystem::has_value() ? map_coords::GroundAt(Locator::terrainSystem::value(), coords) : 0.0f;
+		});
 	}
-	return glm::xz(transform.position);
+	return ecs::thing_map_place::Of(registry, entity);
 }
 
 float object_measures::NavRadius(const Registry& registry, entt::entity creature)
@@ -252,6 +258,28 @@ float object_measures::FireRadius(const Registry& registry, entt::entity entity)
 	return fire::DefaultFireRadius(reach, TwoDRadius(registry, entity), Height(registry, entity));
 }
 
+namespace
+{
+/// The middle of the box of the model of a dead or felled tree across the land, as the tree lies. None for every other
+/// thing, and for a dead tree without a model.
+std::optional<glm::vec2> DeadTreeModelMiddle(const ecs::Registry& registry, entt::entity entity)
+{
+	if (!registry.AllOf<DeadTree>(entity) || !Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto model = ecs::thing_model::ModelOf(registry, entity);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!model.has_value() || !meshes.Contains(*model))
+	{
+		return std::nullopt;
+	}
+	const auto& transform = registry.Get<const Transform>(entity);
+	const auto middle = meshes.Handle(*model)->GetBoundingBox().Center();
+	return object_measures::PlacedAcrossLand(middle, transform.rotation, transform.scale.x, transform.position);
+}
+} // namespace
+
 glm::vec2 object_measures::FireMiddle(const Registry& registry, entt::entity entity)
 {
 	const auto& transform = registry.Get<const Transform>(entity);
@@ -259,18 +287,23 @@ glm::vec2 object_measures::FireMiddle(const Registry& registry, entt::entity ent
 	{
 		return worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
 	}
-	if (registry.AllOf<DeadTree>(entity) && Locator::resources::has_value())
+	// A dead tree without a model measures from where it stands
+	return DeadTreeModelMiddle(registry, entity).value_or(glm::xz(transform.position));
+}
+
+glm::ivec2 object_measures::FireMiddlePlace(const Registry& registry, entt::entity entity)
+{
+	// A worship site and a dead or felled tree with a model change their fire middle from metres to whole map units
+	if (registry.AllOf<WorshipSite>(entity))
 	{
-		// A dead tree without a model measures from where it stands
-		const auto model = ecs::thing_model::ModelOf(registry, entity);
-		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (model.has_value() && meshes.Contains(*model))
-		{
-			const auto middle = meshes.Handle(*model)->GetBoundingBox().Center();
-			return PlacedAcrossLand(middle, transform.rotation, transform.scale.x, transform.position);
-		}
+		return map_coords::WholeXZ(map_coords::FromMetres(FireMiddle(registry, entity)));
 	}
-	return glm::xz(transform.position);
+	if (const auto middle = DeadTreeModelMiddle(registry, entity); middle.has_value())
+	{
+		return map_coords::WholeXZ(map_coords::FromMetres(*middle));
+	}
+	// Every other thing gives its own map position
+	return map_coords::WholeXZ(ecs::thing_map_place::Of(registry, entity));
 }
 
 glm::vec2 object_measures::PlacedAcrossLand(glm::vec3 point, const glm::mat3& rotation, float scale, glm::vec3 position)

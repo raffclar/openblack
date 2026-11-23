@@ -245,12 +245,27 @@ TEST(VillagerRoutine, ABiggerTownGathersInAWiderRingUpToItsFullSpread)
 TEST(VillagerRoutine, ARoamingSpotIsDrawnDistanceFirst)
 {
 	FakeFloats random {.answers = {0.0f, 0.0f}};
-	const glm::vec2 from {50.0f, 50.0f};
+	const map_coords::MapCoords from {.x = 31457283, .z = 25165827, .altitude = 0.5f};
 	const auto spot = TentRetry(from, random.Random());
 	ASSERT_EQ(random.limits.size(), 2u);
 	EXPECT_FLOAT_EQ(random.limits[0], k_TentRetryRange);
 	EXPECT_FLOAT_EQ(random.limits[1], k_TwoPi);
-	EXPECT_NEAR(glm::distance(spot, from), k_TentRetryLeast, k_GridLeeway);
+	// The step of 3 m at angle 0 adds 19660 whole map units to x. A trip through metres would move the spot by one unit.
+	EXPECT_EQ(spot, (map_coords::MapCoords {.x = 31457283 + 19660, .z = 25165827, .altitude = 0.5f}));
+}
+
+// A spot found from a map position adds the step in whole map units and keeps the altitude
+TEST(VillagerRoutine, ASleepSpotSearchStepsFromTheMapPositionInWholeMapUnits)
+{
+	const map_coords::MapCoords villager {.x = 31457283, .z = 25165827};
+	FakeFloats vagrant {.answers = {0.0f, 0.0f}};
+	EXPECT_EQ(VagrantTentSearch(villager, vagrant.Random()), villager);
+	// From its broken home to the villager is angle 0. The jitter is pi / 8 less the drawn number, pi / 4.
+	FakeFloats broken {.answers = {k_QuarterPi, 0.0f}};
+	const map_coords::MapCoords abode {.x = villager.x - 655360, .z = villager.z};
+	const auto spot = BrokenHomeTentSearch(abode, villager, broken.Random());
+	EXPECT_EQ(spot, villager + gutils::GetPosFromAngle(k_EighthPi - k_QuarterPi, k_BrokenHomeTentLeast));
+	EXPECT_EQ(StepFrom(villager, 0.0f, 2.0f), (map_coords::MapCoords {.x = villager.x + 13107, .z = villager.z}));
 }
 
 TEST(VillagerRoutine, ASittingVillagerGathersInAnEmergencyBeforeANeedOrAThought)
