@@ -40,6 +40,9 @@ struct InHand
 	{
 		glm::vec3 position;
 		glm::mat3 rotation;
+		/// True when the thing goes along the lead of its throw on this frame. It then casts the shadow of the lead
+		/// (see graphics::throw_lead_shadow).
+		bool onThrowLead {false};
 	};
 	/// Empty: the thing is drawn where its Transform puts it
 	std::optional<Drawn> drawn;

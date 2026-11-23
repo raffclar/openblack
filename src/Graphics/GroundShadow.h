@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <optional>
 #include <span>
 #include <vector>
@@ -118,6 +119,39 @@ struct GroundShadow
 		float nearest;
 	};
 
+	/// The land blocks along each side of the map, and the land cells along each side of the map
+	static constexpr int32_t k_BlocksPerSide = 32;
+	static constexpr int32_t k_MapCells = 512;
+	/// The cells along each side of a block, as a shift
+	static constexpr int32_t k_BlockCellsShift = 4;
+	/// A land cell's side, as the game finds the cell under a point: it multiplies by one tenth
+	static constexpr float k_PerCell = std::bit_cast<float>(0x3DCCCCCDu);
+	/// How far across x and across z from a body the game looks for a land block that lets its shadow show
+	static constexpr float k_BlockSearch = 60.0f;
+	/// A land block lets a shadow show only while its middle is nearer the camera than this distance. The list of the
+	/// things that the game draws uses the same distance.
+	static constexpr float k_BlockRange = 700.0f;
+
+	/// A land block as the moving shadows see it on this frame
+	struct BlockSight
+	{
+		/// The land has a block at this place
+		bool present {false};
+		/// Some part of the block's box is in the camera's view
+		bool inView {false};
+		/// How far the camera is from the middle of the block
+		float distance {0.0f};
+	};
+	/// The land blocks of the map, by the block's x along the map times k_BlocksPerSide, plus its z
+	using BlockSights = std::array<BlockSight, static_cast<size_t>(k_BlocksPerSide* k_BlocksPerSide)>;
+
+	/// Whether a moving shadow at a place can show. The game finds the block of the place, and the blocks of eight more
+	/// points 60 units round it. For each point, it truncates each coordinate times one tenth towards zero. The shadow
+	/// shows only when these two conditions are true:
+	/// - The block of the place is off the map, absent, or nearer than k_BlockRange.
+	/// - The block of one of the nine points is present, in view and nearer than k_BlockRange.
+	/// When one condition is false, the shadow has no opacity, whatever the fade.
+	[[nodiscard]] static bool NearBlockShows(const glm::vec3& place, const BlockSights& sights);
 	/// The fade, 0 to 255, at a camera distance from the ground beneath a body of a radius
 	[[nodiscard]] static float Fade(float cameraDistance, float radius);
 	/// A villager's shadow's opacity, 0 to 255: the fade, rounded down
