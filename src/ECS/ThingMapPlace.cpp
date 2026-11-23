@@ -136,4 +136,14 @@ void thing_map_place::Reinsert(entt::entity thing)
 	}
 }
 
+void thing_map_place::ReinsertWith(entt::entity thing, const std::function<void()>& change)
+{
+	if (!Locator::entitiesMap::has_value())
+	{
+		change();
+		return;
+	}
+	Locator::entitiesMap::value().ReinsertWith(thing, change);
+}
+
 } // namespace openblack::ecs
