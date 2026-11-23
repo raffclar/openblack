@@ -340,6 +340,21 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .environment = {.hour = 22.0f, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_PlannedHuts.front(), k_PlannedHuts.back(), k_Pit}, .distance = 0.6f},
 	    .objects = std::move(breeding),
+	    .checks = {{.label = "the first woman sleeps at home",
+	                .quantity = checks::Quantity::VillagerAsleepAtHome,
+	                .index = k_FirstBreedingHut + k_PlannedHuts.size() + 1,
+	                .byTurn = 1000,
+	                .atLeast = 1.0},
+	               {.label = "the first woman is pregnant",
+	                .quantity = checks::Quantity::VillagerPregnant,
+	                .index = k_FirstBreedingHut + k_PlannedHuts.size() + 1,
+	                .byTurn = 1000,
+	                .atLeast = 1.0},
+	               {.label = "a child shows",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "villagers",
+	                .byTurn = 2500,
+	                .atLeast = 7.0}},
 	});
 
 	// A town's people come across a creature standing still on the edge of their village

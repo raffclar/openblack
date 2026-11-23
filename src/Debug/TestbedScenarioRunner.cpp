@@ -134,6 +134,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -1666,6 +1667,26 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		return static_cast<double>(
 		    glm::distance(glm::vec2(ball->position.x, ball->position.z), glm::vec2(middle->position.x, middle->position.z)));
+	}
+	case checks::Quantity::VillagerPregnant:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !registry.AllOf<ecs::components::Villager>(*object))
+		{
+			return std::nullopt;
+		}
+		return ecs::villager_breeding::IsPregnant(*object) ? 1.0 : 0.0;
+	}
+	case checks::Quantity::VillagerAsleepAtHome:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* action = object.has_value() ? registry.TryGet<const ecs::components::LivingAction>(*object) : nullptr;
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::livingActionSystem::value().VillagerGetFinalState(*action) == VillagerStates::SleepingAtHome ? 1.0
+		                                                                                                             : 0.0;
 	}
 	}
 	return std::nullopt;
