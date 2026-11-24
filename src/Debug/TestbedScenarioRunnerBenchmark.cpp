@@ -119,11 +119,11 @@ std::vector<benchmark::StageInfo> BenchmarkStages()
 			std::string name(Profiler::k_StageNames.at(i));
 			if (stage > Profiler::Stage::ReflectionPass && stage <= Profiler::Stage::ReflectionDrawParticles)
 			{
-				name = "Reflection " + name;
+				name.insert(0, "Reflection ");
 			}
 			else if (stage > Profiler::Stage::MainPass && stage <= Profiler::Stage::MainPassDrawParticles)
 			{
-				name = "Main " + name;
+				name.insert(0, "Main ");
 			}
 			names.push_back(std::move(name));
 		}

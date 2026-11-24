@@ -711,6 +711,7 @@ constexpr size_t k_ChatAnnouncement = 4;
 /// The names that a Chat command gives the first gods
 constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
 
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct Command
 {
 	enum class Kind : uint8_t

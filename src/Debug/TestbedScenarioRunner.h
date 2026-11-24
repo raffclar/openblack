@@ -68,6 +68,7 @@ struct BenchmarkSettings
 /// Plays a scenario on the testbed: loads the testbed afresh, which clears away everything on it, sets the time of
 /// day, the weather and the creatures' body time, puts down the objects and creatures as the scenario has them, frames
 /// the camera, then gives the commands in turn as their time comes. Everything goes through the game's systems.
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 class Runner
 {
 public:
