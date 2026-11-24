@@ -75,6 +75,7 @@ public:
 		GuiLoop,
 		EditorUpdate,
 		GameLogic,
+		DrawnFrameFill,
 		SceneDraw,
 		CreatureSkinUpload,
 		FootprintPass,
@@ -150,6 +151,7 @@ public:
 	    "GUI Loop",             //
 	    "Editor",               //
 	    "Game Logic",           //
+	    "Drawn Frame Fill",     //
 	    "Encode Draw Scene",    //
 	    "Creature Skin Upload", //
 	    "Footprint Pass",       //

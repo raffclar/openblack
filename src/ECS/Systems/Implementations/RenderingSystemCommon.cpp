@@ -202,6 +202,7 @@ void RenderingSystemCommon::UploadRootsPiles()
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use)
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::PrepareDraw");
+	++_contextWrites;
 	const auto& registry = Locator::entitiesRegistry::value();
 	// The graphics device keeps no copy of the instance buffers. After a restore of the device the next draw gives all
 	// the instances again into the draw lists that it has.

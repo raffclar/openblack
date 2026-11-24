@@ -247,13 +247,14 @@ PlayerNames LocalInputPlayer()
 	return input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
 }
 
-graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& config, uint32_t time, bool drawHand)
+graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& config, const graphics::DrawnFrame& frame,
+                                                         bool drawHand)
 {
 	return {
-	    .camera = &Locator::camera::value(),
+	    .camera = frame.camera.get(),
 	    .frameBuffer = nullptr,
 	    .entities = Locator::entitiesRegistry::value(),
-	    .time = time,
+	    .time = frame.time,
 	    .timeOfDay = config.timeOfDay,
 	    .smallBumpMapStrength = graphics::detail_level::SmallBumpStrength(config.detail, config.smallBumpMapStrength),
 	    .viewId = graphics::RenderPass::Main,
@@ -267,8 +268,8 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .cullBack = false,
 	    .wireframe = config.wireframe,
 	    .drawHand = drawHand,
-	    .drawHandEffects =
-	        hand_visibility::ShowsMiracleEffects(drawHand, Locator::temple::has_value() && Locator::temple::value().Active()),
+	    .drawHandEffects = hand_visibility::ShowsMiracleEffects(drawHand, frame.templeActive),
+	    .frame = &frame,
 	};
 }
 
@@ -328,6 +329,7 @@ Game::Game(Arguments&& args) noexcept
     , _turnBesideDraw(args.turnBesideDraw)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
+	_drawnFrame = std::make_unique<graphics::DrawnFrame>();
 	// The screens of the start and of the loads, and the timers of the start
 	InitializeLoadingScreens({
 	    .quitRequested = [this]() { return _quitRequested; },
@@ -339,8 +341,12 @@ Game::Game(Arguments&& args) noexcept
 	    .quitRequested = [this]() { return _quitRequested; },
 	    .sizeSceneToWindow = [this]() { SizeSceneToWindow(); },
 	    .handDrawn = [this]() { return IsHandDrawn(); },
-	    .sceneDrawDesc = [](uint32_t time,
-	                        bool drawHand) { return game_detail::SceneDrawDesc(Locator::config::value(), time, drawHand); },
+	    .sceneDrawDesc =
+	        [this](uint32_t time, bool drawHand) {
+		        const auto& config = Locator::config::value();
+		        game_detail::FillDrawnFrame(*_drawnFrame, config, time);
+		        return game_detail::SceneDrawDesc(config, *_drawnFrame, drawHand);
+	        },
 	});
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
@@ -1298,8 +1304,15 @@ bool Game::RunFrame() noexcept
 		}
 		if (drawsFrame)
 		{
+			// The sun, the moon and the dome's blend of this frame, for drawing it
+			if (Locator::skySystem::has_value())
+			{
+				Locator::skySystem::value().UpdateFrame(config.drawSky);
+			}
+			// The draw reads the world only through the drawn copy
+			FillDrawnFrame(*_drawnFrame, config, drawMs);
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-			auto drawDesc = SceneDrawDesc(config, drawMs, IsHandDrawn());
+			auto drawDesc = SceneDrawDesc(config, *_drawnFrame, IsHandDrawn());
 			// The main pass submits the labels in the world among its draws, at the points where the game adds them
 			if (Locator::gameInterface::has_value())
 			{
@@ -1312,11 +1325,6 @@ bool Game::RunFrame() noexcept
 			if (Locator::spellIconSystem::has_value())
 			{
 				drawDesc.landShaded = [] { Locator::spellIconSystem::value().LightHandHolderEffects(); };
-			}
-			// The sun, the moon and the dome's blend of this frame, for drawing it
-			if (Locator::skySystem::has_value())
-			{
-				Locator::skySystem::value().UpdateFrame(config.drawSky);
 			}
 			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
 			const auto& videos = Locator::videoSystem::value();

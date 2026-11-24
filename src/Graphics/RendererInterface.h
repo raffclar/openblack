@@ -54,6 +54,7 @@ class Registry;
 
 namespace openblack::graphics
 {
+struct DrawnFrame;
 class L3DMesh;
 class Texture2D;
 class FrameBuffer;
@@ -95,6 +96,9 @@ public:
 		std::function<void(uint32_t)> submitLearningWords;
 		/// Runs once in the frame, after the frame shades the land and before it collects what the particle effects draw
 		std::function<void()> landShaded;
+		/// What the frame draws, as the steps of the frame left it. The passes of the land and of the models read only
+		/// this. The game gives it to every draw of the scene.
+		const DrawnFrame* frame {nullptr};
 	};
 
 	// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning

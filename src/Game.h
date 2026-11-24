@@ -105,6 +105,10 @@ namespace help::profile
 {
 struct WorldCameraView;
 }
+namespace graphics
+{
+struct DrawnFrame;
+}
 namespace online
 {
 class LanDiscoveryInterface;
@@ -1009,6 +1013,8 @@ private:
 	/// A frame drawn without the debug windows though no picture is taken of it
 	std::optional<uint32_t> _debugGuiHiddenFrame;
 	std::unique_ptr<HandAnimation> _handAnimation;
+	/// What the frame draws, as the steps of the frame left it before the draw
+	std::unique_ptr<graphics::DrawnFrame> _drawnFrame;
 	/// Poses the hand around the miracle seed it holds
 	magic::HandHoldPoser _handHold;
 	/// The changes of the hand that start a blend of the drawn hand
