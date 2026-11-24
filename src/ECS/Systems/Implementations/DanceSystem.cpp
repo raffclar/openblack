@@ -43,6 +43,7 @@
 #include "ECS/GamePlayers.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -225,12 +226,11 @@ void DanceSystem::ProcessTurn()
 	// The dances in the order of the game's list, the newest first
 	const auto all = ecs::list_order::Walk<Dance>(registry);
 	// The hands that the dances count. A game with one player counts only the hand of the first player. A network game
-	// counts the hand of each god, from the reports that all the computers read.
+	// counts the hand of each god, as the turn reads it on all the computers.
 	const bool networkGame = Locator::time::value().IsNetworkGame();
 	std::array<std::optional<glm::vec3>, components::k_DanceHandGods> hands {};
 	if (Locator::handSystem::has_value())
 	{
-		const auto& handSystem = Locator::handSystem::value();
 		// Each god of the game by its slot; a game with one player has only the first
 		for (const auto player : ecs::game_players::Gods())
 		{
@@ -239,7 +239,7 @@ void DanceSystem::ProcessTurn()
 			{
 				continue;
 			}
-			hands.at(*god) = handSystem.GetHandPositionsOf(player).at(static_cast<size_t>(HandSystemInterface::Side::Left));
+			hands.at(*god) = ecs::PlayerHandOf(player);
 		}
 	}
 	const auto handsNear = [&hands](const Dance& dance) {

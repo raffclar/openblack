@@ -60,6 +60,16 @@ namespace reported_camera
 /// Every other god has one hand, which can be at the origin of the world.
 [[nodiscard]] god_hand::Hands PlayerHandsOf(PlayerNames player);
 
+/// The left hand of a player as the world reads it in the turn (see PlayerHandsOf). After the step of a computer mind,
+/// this is the hand of the god before that step, not the hand that the god reported after the step.
+[[nodiscard]] std::optional<glm::vec3> PlayerHandOf(PlayerNames player);
+
+/// The point under the cursor of a player as the last report gave it. A person's player has the point that its hand
+/// picked. A god that no person plays has no cursor: it has the place of its hand after the last step of its computer
+/// mind, and the origin of the world before the first step. None for a player that the world does not have, or for a
+/// person's player with no hands.
+[[nodiscard]] std::optional<glm::vec3> PlayerReportedPointOf(PlayerNames player);
+
 /// The hand of a player that is nearest to a point (see god_hand::NearestOf). None for a player with no hands.
 [[nodiscard]] std::optional<glm::vec3> NearestHandOf(PlayerNames player, const glm::vec3& point);
 

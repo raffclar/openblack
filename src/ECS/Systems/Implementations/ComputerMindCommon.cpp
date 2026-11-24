@@ -391,12 +391,10 @@ void computer_world::ReachIcon(RuleContext& context, entt::entity icon, MagicTyp
 
 void computer_world::ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera)
 {
-	if (!Locator::handSystem::has_value() || !Locator::handSystem::value().GetHandsOf(player).has_value() ||
-	    !Locator::terrainSystem::has_value())
+	if (!Locator::handSystem::has_value() || !Locator::handSystem::value().GetHandsOf(player).has_value())
 	{
 		return;
 	}
-	// The god points at the land under its hand
-	const glm::vec3 under {hand.x, Locator::terrainSystem::value().GetHeightAt({hand.x, hand.z}), hand.z};
-	Locator::handSystem::value().Report(player, {.collidePoint = under, .handPoint = hand, .camera = camera, .focus = camera});
+	// The god has no cursor. Its point under the cursor is the map position of its hand, at the height of the hand.
+	Locator::handSystem::value().Report(player, {.collidePoint = hand, .handPoint = hand, .camera = camera, .focus = camera});
 }

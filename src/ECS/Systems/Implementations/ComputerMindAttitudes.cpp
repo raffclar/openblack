@@ -23,14 +23,13 @@
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
-#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
@@ -125,32 +124,21 @@ std::optional<map_coords::MapCoords> HeartOf(PlayerNames player)
 	return heart;
 }
 
-/// The place of a player: the heart of its temple, else the hand of its computer mind while the mind plays, else the
-/// place of its hand that the last report gave. A player with no report is at the start of the map.
+/// The place of a player: the heart of its temple, else the map position of the hand of its computer mind at the start
+/// of the last turn of its action while the mind plays, else the hand of the player as the world reads it. A player with
+/// no hand is at the start of the map.
 map_coords::MapCoords FixedPlace(const KnownPlayer& player)
 {
 	if (const auto heart = HeartOf(player.name); heart.has_value())
 	{
 		return *heart;
 	}
-	auto& registry = Entities();
-	if (const auto* mind = registry.TryGet<const ComputerPlayer>(player.entity); mind != nullptr && mind->switchedOn)
+	if (const auto* mind = Entities().TryGet<const ComputerPlayer>(player.entity); mind != nullptr && mind->switchedOn)
 	{
-		return HandCoords(mind->hand.hand);
+		return mind->hand.coords;
 	}
-	if (Locator::handSystem::has_value())
-	{
-		if (const auto hands = Locator::handSystem::value().GetHandsOf(player.name); hands.has_value())
-		{
-			const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
-			const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
-			if (reported != nullptr)
-			{
-				return HandCoords(reported->handPoint);
-			}
-		}
-	}
-	return {};
+	const auto hand = ecs::PlayerHandOf(player.name);
+	return hand.has_value() ? HandCoords(*hand) : map_coords::MapCoords {};
 }
 
 /// What the god knows of one side of an attack. The harm is the harm from the other side.
@@ -221,7 +209,7 @@ float DefeatPlayer(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 	}
 	const auto& registry = Entities();
 	const auto* attitudes = registry.TryGet<const ComputerAttitudes>(god->entity);
-	const float nearestAbode = player_relations::NearestAbode(HandCoords(context.state.hand.hand), AbodesOf(context.player));
+	const float nearestAbode = player_relations::NearestAbode(context.state.hand.coords, AbodesOf(context.player));
 	const auto godPlace = FixedPlace(*god);
 	const auto rivals = RivalsOf(context.player, true);
 	std::vector<float> values;

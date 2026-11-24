@@ -556,8 +556,9 @@ private:
 	[[nodiscard]] bool HasActingHand() const;
 	/// The player whose hand holds the seed, if a hand holds it
 	[[nodiscard]] std::optional<PlayerNames> HolderOf(entt::entity seed) const;
-	/// Where the last report of the player put the left hand, none before the first report or off the land
-	[[nodiscard]] std::optional<glm::vec3> ReportedHandOf(PlayerNames player) const;
+	/// Where the turn has the left hand of the player (see ecs::PlayerHandOf), none at the origin of the
+	/// world. After the step of a computer mind, this is the hand of the god before the step.
+	[[nodiscard]] std::optional<glm::vec3> WorldHandOf(PlayerNames player) const;
 
 	GameMagicWorld _world;
 	magic::FlockMiracle _flocks;

@@ -23,7 +23,6 @@
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
-#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
@@ -36,8 +35,8 @@
 #include "ECS/FieldOrder.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -313,21 +312,11 @@ float FoodFromFishFarm(RuleContext& context, computer_mind::Mind& mind, uint16_t
 	return wishes[*best];
 }
 
-/// The map position of the hand that the god last reported: its place at the start of the last step of its hand.
-/// Before the first report, the start of the map.
-map_coords::MapCoords ReportedHandCoords(PlayerNames player)
+/// The map position of the hand of the god as the world reads it. After a step of the hand, this is where the hand was
+/// before the step. Before the first report, the start of the map.
+map_coords::MapCoords WorldHandCoords(PlayerNames player)
 {
-	glm::vec3 hand {0.0f};
-	const auto hands = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player) : std::nullopt;
-	if (hands.has_value())
-	{
-		const auto left = hands->at(static_cast<size_t>(HandSystemInterface::Side::Left));
-		const auto* reported = Entities().Valid(left) ? Entities().TryGet<const ReportedHand>(left) : nullptr;
-		if (reported != nullptr)
-		{
-			hand = reported->handPoint;
-		}
-	}
+	const auto hand = ecs::PlayerHandOf(player).value_or(glm::vec3(0.0f));
 	return {.x = map_coords::ToFixed(hand.x), .z = map_coords::ToFixed(hand.z), .altitude = 0.0f};
 }
 
@@ -390,7 +379,7 @@ float WoodFromForest(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 		return 0.0f;
 	}
 	const float power = Locator::influenceSystem::value().InfluencePower(context.player);
-	const auto hand = ReportedHandCoords(context.player);
+	const auto hand = WorldHandCoords(context.player);
 	// The trees do not change while the god works out its needs, so the god lists the trees of the forests that it saw
 	// one time
 	if (!context.forestTrees.has_value())

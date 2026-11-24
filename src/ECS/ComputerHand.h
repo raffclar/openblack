@@ -189,6 +189,9 @@ struct World
 
 /// The hand has steps left
 [[nodiscard]] bool Busy(const HandAction& action);
+/// The next turn of the action only puts the move that brings the hand to the first step in front of that step. In
+/// that turn the hand does not move, and the god does not report its hand or its camera.
+[[nodiscard]] bool PutsMoveInFront(const HandAction& action);
 /// Adds a step at the end of the action
 void Add(HandAction& action, StepKind kind, std::vector<Argument> arguments);
 /// Stops the action: the steps go and the counts start again

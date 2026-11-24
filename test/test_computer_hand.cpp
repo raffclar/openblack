@@ -130,3 +130,30 @@ TEST(ComputerHand, CameraFollowsTheHandButNotOnTheTurnOfTheInsertedMove)
 	EXPECT_EQ(action.camera, action.hand);
 	EXPECT_GT(action.camera.x, 900.0f);
 }
+
+TEST(ComputerHand, OnlyTheTurnThatPutsAMoveInFrontMakesNoReport)
+{
+	FakeWorld world;
+	world.places[k_Icon] = {1000.0f, 1000.0f};
+	HandAction action;
+	action.hand = {900.0f, 0.0f, 1000.0f};
+	// An idle hand reports where it is
+	EXPECT_FALSE(PutsMoveInFront(action));
+	Add(action, StepKind::CastSpellAtObject,
+	    {Argument {.object = k_Icon}, Argument {.number = static_cast<int32_t>(MagicType::Food)}, Argument {.object = k_Icon}});
+	// The first turn only puts the move in front of the cast, and the god has no report yet
+	EXPECT_TRUE(PutsMoveInFront(action));
+	Process(action, world.view);
+	EXPECT_FALSE(action.reported.has_value());
+	// The next turns do the move, and the god reports its hand where each turn put it
+	EXPECT_FALSE(PutsMoveInFront(action));
+	Process(action, world.view);
+	Process(action, world.view);
+	ASSERT_TRUE(action.reported.has_value());
+	EXPECT_EQ(*action.reported, action.hand);
+	EXPECT_GT(action.reported->x, 900.0f);
+	// A step with no move in front does its part in the first turn
+	HandAction wait;
+	Add(wait, StepKind::Wait, {Argument {.number = 1}});
+	EXPECT_FALSE(PutsMoveInFront(wait));
+}
