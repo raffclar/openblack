@@ -19,6 +19,7 @@
 #include <glm/gtc/type_precision.hpp>
 
 #include "Creature/CreatureMarks.h"
+#include "Creature/CreatureSkin.h"
 #include "Creature/CreatureTattoo.h"
 
 namespace openblack::ecs::components
@@ -65,6 +66,9 @@ struct CreatureSkin
 		uint32_t id;
 		/// 256 by 256 texels, blue the lowest 4 bits and alpha the highest
 		std::vector<uint16_t> texels;
+		/// The revision of the skins at the last paint that changed the texels of this skin. The renderer takes up only
+		/// the skins whose texels changed.
+		uint32_t revision {0};
 	};
 	std::vector<Skin> skins;
 
@@ -81,7 +85,10 @@ struct CreatureSkin
 		bool operator==(const Painted&) const = default;
 	};
 	std::optional<Painted> painted;
-	/// Goes up each time the skins are painted, for the renderer to take them up
+	/// What the last paint that made the texels read. A paint from the same sources keeps the texels as they are.
+	std::optional<creature_skin::PaintSources> paintedFrom;
+	/// Goes up each time that a paint changes the texels of a skin, for the renderer to take them up. A paint that gives
+	/// the same texels as before does not change it.
 	uint32_t revision {0};
 	/// The colour of the painted skin under the point of the eyelids, 0 to 255 a channel. None when the species has no
 	/// eyelids or the skin has no colour there.

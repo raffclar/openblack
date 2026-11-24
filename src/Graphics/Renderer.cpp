@@ -728,6 +728,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	if (!_warmingUp)
 	{
 		PlanCreatureHairLight(drawDesc);
+		auto skinUpload = Locator::profiler::value().BeginScoped(Profiler::Stage::CreatureSkinUpload);
 		UploadCreatureSkins(drawDesc.entities, _creatureSkins);
 		// The copy of the creature in the temple's creature room has a skin of its own
 		if (Locator::temple::has_value())
@@ -1010,6 +1011,7 @@ void Renderer::Frame() noexcept
 			for (auto& [entity, entry] : *skins)
 			{
 				entry.stamp.reset();
+				std::ranges::fill(entry.textureStamps, std::nullopt);
 			}
 		}
 		_handSkinStamp.reset();

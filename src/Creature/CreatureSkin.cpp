@@ -169,3 +169,44 @@ void creature_skin::Compose(std::span<uint16_t> out, std::span<const uint16_t> b
 		}
 	}
 }
+
+bool creature_skin::KeepIfChanged(std::vector<uint16_t>& held, std::vector<uint16_t>& painted)
+{
+	if (held == painted)
+	{
+		return false;
+	}
+	held.swap(painted);
+	return true;
+}
+
+creature_skin::PaintSources creature_skin::SourcesOfPaint(entt::id_type rig, entt::id_type baseMesh, entt::id_type variantMesh,
+                                                          uint8_t weight, bool lowResolution, bool art,
+                                                          const creature_tattoo::Slots& tattoos,
+                                                          const creature_tattoo::Masks* masks,
+                                                          const creature_marks::Marks& marks)
+{
+	PaintSources sources {
+	    .rig = rig,
+	    .baseMesh = baseMesh,
+	    .variantMesh = variantMesh,
+	    .weight = weight,
+	    .lowResolution = lowResolution,
+	    .art = art,
+	    .tattoos = tattoos,
+	    .masks = {},
+	    .wounds = marks.wounds,
+	    .blood = marks.blood,
+	};
+	if (masks != nullptr)
+	{
+		for (size_t i = 0; i < tattoos.size(); ++i)
+		{
+			if (!tattoos.at(i).Empty())
+			{
+				sources.masks.at(i) = masks->at(i);
+			}
+		}
+	}
+	return sources;
+}

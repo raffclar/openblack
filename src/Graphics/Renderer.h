@@ -1005,6 +1005,8 @@ private:
 		/// The painting the textures hold, none before the first upload
 		std::optional<painted_skin::Stamp> stamp;
 		std::vector<std::unique_ptr<Texture2D>> textures;
+		/// The painting that each texture holds, none when the texture holds no skin yet
+		std::vector<std::optional<painted_skin::Stamp>> textureStamps;
 		/// The painted skins the body is drawn with in place of its base mesh's, by skin id
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
