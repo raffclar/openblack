@@ -514,6 +514,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _atmos(std::move(atmos))
     , _painter(_canvas, _font, *_atlas, *_fontTexture)
     , _menuCreaturePainter(_menuCreatureCanvas, _font, *_atlas, *_fontTexture)
+    , _filmOverlayPainter(_filmOverlayCanvas, _font, *_atlas, *_fontTexture)
     , _logoPainter(_logoCanvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::MidTextSize()))
@@ -2057,9 +2058,12 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		{
 			DrawCreaturePanel(resolution);
 		}
-		if (cinema_hides::ShowsToolTip(cinemaBars))
+		// The game draws the hand's tooltip after the falling spell's film and the creature of the film, so the tooltip
+		// shows over them. Other films show over the tooltip.
+		const bool overFallingFilm = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
+		if (cinema_hides::ShowsToolTip(cinemaBars) && !overFallingFilm)
 		{
-			DrawToolTip(resolution);
+			DrawToolTip(resolution, _canvas, _painter);
 		}
 	}
 	if (_tattooEditor->IsVisible())
@@ -2200,6 +2204,11 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	if (overFilm)
 	{
 		drawBars(_filmOverlayCanvas);
+		// The hand's tooltip shows over the film, the creature of the film and the bars
+		if (!menuOpen && cinema_hides::ShowsToolTip(cinemaBars))
+		{
+			DrawToolTip(resolution, _filmOverlayCanvas, _filmOverlayPainter);
+		}
 	}
 	if (const auto fade = director.GetFadeColour(); !inTemple && (fade >> 24u) != 0)
 	{
@@ -2302,6 +2311,11 @@ int GameInterface::DrawVideo(glm::u16vec2 resolution)
 
 void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
 {
+	DrawGlow(_canvas, min, max, colour);
+}
+
+void GameInterface::DrawGlow(Canvas& canvas, glm::vec2 min, glm::vec2 max, glm::vec4 colour)
+{
 	// A ninth of the glow at each corner, a square of half the box's height (in whole pixels) about each of its corners
 	if (_atmos == nullptr || colour.a <= 0.0f)
 	{
@@ -2310,18 +2324,17 @@ void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
 	const auto corner = static_cast<float>(WholeQuotient(static_cast<int>(max.y) - static_cast<int>(min.y), 4));
 	const std::array x = {min.x - corner, min.x + corner, max.x - corner, max.x + corner};
 	const std::array y = {min.y - corner, min.y + corner, max.y - corner, max.y + corner};
-	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
-	_canvas.SetBlend(Canvas::Blend::Additive);
+	const Canvas::CornersScope boxDraw(canvas, screen_pixels::Corners::BoxDraw);
+	canvas.SetBlend(Canvas::Blend::Additive);
 	for (size_t row = 0; row < 3; ++row)
 	{
 		for (size_t column = 0; column < 3; ++column)
 		{
-			_canvas.DrawQuad({x.at(column), y.at(row)}, {x.at(column + 1), y.at(row + 1)},
-			                 {k_GlowU.at(column), k_GlowV.at(row)}, {k_GlowU.at(column + 1), k_GlowV.at(row + 1)}, colour,
-			                 _atmos.get());
+			canvas.DrawQuad({x.at(column), y.at(row)}, {x.at(column + 1), y.at(row + 1)}, {k_GlowU.at(column), k_GlowV.at(row)},
+			                {k_GlowU.at(column + 1), k_GlowV.at(row + 1)}, colour, _atmos.get());
 		}
 	}
-	_canvas.SetBlend(Canvas::Blend::Alpha);
+	canvas.SetBlend(Canvas::Blend::Alpha);
 }
 
 std::pair<const GameFont*, const openblack::graphics::Texture2D*> GameInterface::DialogueFont(help::TextFont font) const
@@ -3551,7 +3564,7 @@ void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
 	}
 }
 
-void GameInterface::DrawToolTip(glm::u16vec2 resolution)
+void GameInterface::DrawToolTip(glm::u16vec2 resolution, Canvas& canvas, DialogPainter& painter)
 {
 	const auto shown = _toolTips.GetShown();
 	if (!shown.has_value() || !_handOnScreen.has_value())
@@ -3644,8 +3657,8 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const auto y = static_cast<float>(handY);
 	const auto sizeF = static_cast<float>(size);
 	const float textOffset = world_tooltip::WordsOffset(size, textSize);
-	const auto drawGlow = [this](const world_tooltip::PixelBox& box, glm::vec4 colour) {
-		DrawGlow(glm::vec2(box.min), glm::vec2(box.max), colour);
+	const auto drawGlow = [this, &canvas](const world_tooltip::PixelBox& box, glm::vec4 colour) {
+		DrawGlow(canvas, glm::vec2(box.min), glm::vec2(box.max), colour);
 	};
 
 	// The glows behind: white behind the mouse, and faint yellow behind the words and arrows
@@ -3672,7 +3685,7 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	if (click != nullptr && iconWidth != 0.0f)
 	{
 		const auto cell = icons::CellFor(*click, MouseRow(), machine_clock::Ticks());
-		_canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, cell.uvMin, cell.uvMax, white, _mice.get());
+		canvas.DrawQuad({iconX, y}, {iconX + sizeF, y + sizeF}, cell.uvMin, cell.uvMax, white, _mice.get());
 	}
 	else if (keyText != nullptr)
 	{
@@ -3683,14 +3696,14 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 		const auto cap = icons::LayoutKeyCap(placed);
 		if (_atmos != nullptr)
 		{
-			const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
+			const Canvas::CornersScope boxDraw(canvas, screen_pixels::Corners::BoxDraw);
 			for (size_t i = 0; i < cap.slices.size(); ++i)
 			{
-				_canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, white,
-				                 _atmos.get());
+				canvas.DrawQuad(cap.slices.at(i).min, cap.slices.at(i).max, cap.uvs.at(i).min, cap.uvs.at(i).max, white,
+				                _atmos.get());
 			}
 		}
-		_painter.DrawString(cap.textAt, *keyText, cap.textSize, cap.textColour);
+		painter.DrawString(cap.textAt, *keyText, cap.textSize, cap.textColour);
 	}
 	if (_atmos != nullptr)
 	{
@@ -3699,15 +3712,15 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 			if ((shown->arrows & arrow.bit) != 0)
 			{
 				const auto box = world_tooltip::ArrowPicture(arrow.side, lineIconX, iconWidth, handY, size);
-				const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
-				_canvas.DrawQuad(glm::vec2(box.min), glm::vec2(box.max), arrow.uvMin, arrow.uvMax, white, _atmos.get());
+				const Canvas::CornersScope boxDraw(canvas, screen_pixels::Corners::BoxDraw);
+				canvas.DrawQuad(glm::vec2(box.min), glm::vec2(box.max), arrow.uvMin, arrow.uvMax, white, _atmos.get());
 			}
 		}
 	}
 
 	// The words, in yellow over two black shadows
 	const auto textSizeF = static_cast<float>(textSize);
-	_painter.DrawString({textX - pixel, y - pixel + textOffset}, text, textSizeF, shadow);
-	_painter.DrawString({textX + pixel, y + pixel + textOffset}, text, textSizeF, shadow);
-	_painter.DrawString({textX, y + textOffset}, text, textSizeF, yellow);
+	painter.DrawString({textX - pixel, y - pixel + textOffset}, text, textSizeF, shadow);
+	painter.DrawString({textX + pixel, y + pixel + textOffset}, text, textSizeF, shadow);
+	painter.DrawString({textX, y + textOffset}, text, textSizeF, yellow);
 }
