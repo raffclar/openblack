@@ -865,7 +865,7 @@ glm::vec3 HeadAt(const Moves& moves, const CreatureAnimation& animation, const T
 	}
 	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 	const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, placement);
-	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
+	return {creature::PosedBone(points->head, pose.bones, pose.placement)[3]};
 }
 
 /// The hand that holds a thing, when the creature holds one: true for the left hand
@@ -1002,6 +1002,7 @@ void RoutePointTurn(entt::entity creature, CreatureLocomotion& self, const WalkT
 			const auto durationMs = turn.moves.Duration(end);
 			const auto [fromMs, toMs] = creature_pointing::RoutePointEndSounds(routePoint.timeMs, turn.spinMs, durationMs);
 			for (const auto& fired :
+			     // NOLINTNEXTLINE(bugprone-swapped-arguments): the argument order is correct
 			     creature_audio::EventsPassed(turn.moves.rig->soundEvents.at(end), static_cast<float>(fromMs),
 			                                  static_cast<float>(toMs), static_cast<uint32_t>(durationMs), false))
 			{

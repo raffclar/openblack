@@ -427,7 +427,7 @@ glm::vec3 ToWorld(entt::entity object, const fire::graphic::Anchor& anchor)
 		{
 			const auto drawn = DrawnTransform(*transform, animation);
 			const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
-			return glm::vec3(creature::PosedBone(*anchor.bone, animation->boneMatrices, placement)[3]);
+			return {creature::PosedBone(*anchor.bone, animation->boneMatrices, placement)[3]};
 		}
 	}
 	return ToWorld(object, anchor.point);

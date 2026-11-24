@@ -1972,6 +1972,7 @@ void ReactionSystem::ProcessTurn()
 		// The newest first, one a turn
 		const auto ids = Ids();
 		const auto cursor = _cursor != 0 ? std::optional(static_cast<uint32_t>(_cursor)) : std::nullopt;
+		// NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage): a list that is not empty always gives the next item
 		auto& reaction = _reactions.at(*ecs::list_order::NextInTurn(std::span<const uint32_t>(ids), cursor));
 		_cursor = reaction.id;
 		const auto* info = InfoOf(reaction.source.type);

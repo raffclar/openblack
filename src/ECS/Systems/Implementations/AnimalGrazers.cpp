@@ -584,6 +584,7 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 				const bool keeperScripted = keepMine ? mineScripted : theirsScripted;
 				for (const auto member : joining)
 				{
+					// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 					JoinFlock(member, keeperEntity);
 					// The script did not put the animal in its flock, so the size that the script reads does not count it
 					if (keeperScripted)

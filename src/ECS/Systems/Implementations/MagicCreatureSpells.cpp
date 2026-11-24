@@ -426,6 +426,7 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 	case Event::Ease:
 		if (value != nullptr)
 		{
+			// NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores): the start value stays as a guard for later changes
 			float target = slot.before;
 			if (event.spell == Spell::Small || event.spell == Spell::Big)
 			{

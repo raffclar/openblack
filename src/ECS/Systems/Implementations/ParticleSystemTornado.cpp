@@ -89,7 +89,7 @@ glm::u8vec3 GameParticleWorld::LandColour(glm::vec2 xz) const
 		return k_White;
 	}
 	const auto dust = glm::min(materials.at(material).tornadoDustColorRGB, glm::uvec3(255));
-	return glm::u8vec3(dust);
+	return {dust};
 }
 
 bool GameParticleWorld::IsDryLand(glm::vec3 point) const

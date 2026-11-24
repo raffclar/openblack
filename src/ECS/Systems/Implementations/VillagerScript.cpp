@@ -63,7 +63,6 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_script = openblack::ecs::villager_script;
 namespace rules = openblack::ecs::villager_script_rules;
-namespace wall_hug = openblack::ecs::wall_hug;
 
 namespace
 {

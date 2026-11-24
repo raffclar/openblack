@@ -1903,6 +1903,7 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		// source of the commands of a network game follows them.
 		if (const auto again = clock.GetTurn(); again != turn)
 		{
+			// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 			Locator::playerCommandSystem::value().TurnsStartAgain(turn, again);
 		}
 		_splitTurn = simulation::StartTurn(view, behind ? nullptr : budget);
@@ -1930,7 +1931,7 @@ bool LandSystem::ContinueSplitTurn(simulation::MindFrameBudget* budget)
 	// The turn is not split while it plays, so a save or a load that the turn does itself finds no turn to finish
 	auto turn = std::exchange(_splitTurn, std::nullopt);
 	auto* view = std::exchange(_splitView, nullptr);
-	_splitTurn = simulation::ContinueTurn(*view, std::move(*turn), budget);
+	_splitTurn = simulation::ContinueTurn(*view, *turn, budget);
 	if (_splitTurn.has_value())
 	{
 		_splitView = view;

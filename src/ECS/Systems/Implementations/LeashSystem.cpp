@@ -131,7 +131,6 @@ using namespace openblack::ecs::systems;
 using openblack::ecs::Registry;
 namespace leash = openblack::creature_leash;
 namespace orders = openblack::creature_leash_orders;
-namespace maze_puzzle = openblack::ecs::maze_puzzle;
 using creature_desires::Desire;
 
 namespace
@@ -290,7 +289,7 @@ glm::vec3 CollarPoint(const Registry& registry, entt::entity entity, CollarPose 
 	const auto posed = pose == CollarPose::Turn
 	                       ? creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, placement)
 	                       : creature::RulePose {.bones = animation->boneMatrices, .placement = placement};
-	return glm::vec3(creature::PosedBone(*bone, posed.bones, posed.placement)[3]);
+	return {creature::PosedBone(*bone, posed.bones, posed.placement)[3]};
 }
 
 float ObjectHeight(const Registry& registry, entt::entity entity)
@@ -1009,6 +1008,7 @@ bool LeashSystem::TakeOffAtTemple(PlayerNames player)
 	{
 		return false;
 	}
+	// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): the check above is false when the player has no creature
 	const auto creature = *PlayersCreature(player);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} goes into the temple: the leash comes off creature {}",
 	                   PlayerNumber(player), entt::to_integral(creature));
@@ -1023,6 +1023,7 @@ bool LeashSystem::TakeOffAtLeave(PlayerNames player)
 	{
 		return false;
 	}
+	// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): the check above is false when the player has no creature
 	const auto creature = *PlayersCreature(player);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} leaves the game: the leash comes off creature {}", PlayerNumber(player),
 	                   entt::to_integral(creature));

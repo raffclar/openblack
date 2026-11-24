@@ -31,7 +31,7 @@ public:
 	void ProcessTurn() override;
 	void Reset() override;
 	void BeginTurn() override;
-	void CreatureTurn(entt::entity creature) override;
+	void CreatureTurn(entt::entity entity) override;
 	void Update(float seconds) override;
 	void ShowPosts(bool handShown) override;
 	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) override;

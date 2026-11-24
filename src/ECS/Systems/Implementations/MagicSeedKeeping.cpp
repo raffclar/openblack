@@ -315,6 +315,7 @@ void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedG
 		}
 		AskPowerUpAtIcon(gesture.icon, gesture.level);
 		break;
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case player_commands::SeedGesture::Kind::Scribble:
 		// The hand asked for no power-up, so the scribble drops the seed
 		DiscardHeldSeed();
