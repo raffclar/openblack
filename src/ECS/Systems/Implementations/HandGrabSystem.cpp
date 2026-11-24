@@ -2277,10 +2277,12 @@ void HandGrabSystem::PlaceHeldForTurn()
 	// point above the ground.
 	// A thing that the hand of this computer pulls at is not changed here. Only this computer knows of the pull, and
 	// the frames only draw the lean. Thus a pulled villager continues to walk in the same way on every computer.
+	// The hand of a god that a computer mind plays is where the mind put it after its last step.
 	// Each thing at the place of the hand that holds it
 	auto& registry = _world->Entities();
 	registry.Each<const InHand, Transform>([this](const InHand& inHand, Transform& transform) {
-		transform.position = _world->HeldPlaceAt(_world->ReportedPlaceOf(inHand.hand));
+		const auto mind = _world->MindTurnPlaceOf(inHand.hand);
+		transform.position = _world->HeldPlaceAt(mind.has_value() ? *mind : _world->ReportedPlaceOf(inHand.hand));
 		transform.rotation = inHand.rotation;
 		transform.scale = inHand.scale;
 	});
@@ -2289,20 +2291,30 @@ void HandGrabSystem::PlaceHeldForTurn()
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 {
 	auto& registry = _world->Entities();
-	registry.Each<InHand>([this, &registry, frameMs](InHand& inHand) {
+	// The frames move what the hand of a person holds from the place before the last report to the reported place. When
+	// a computer mind reports its hand after a step, the movement starts and ends at the place of the hand before the
+	// step. Thus the frames show what the hand of the mind holds at that place, with no movement.
+	const auto drawnPoint = [this, &registry, frameMs](entt::entity hand) {
+		if (const auto mind = _world->MindDrawnPlaceOf(hand); mind.has_value())
+		{
+			return *mind;
+		}
+		const auto reported = _world->ReportedPlaceOf(hand);
+		auto* track = registry.TryGet<HeldDrawTrack>(hand);
+		return track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+	};
+	registry.Each<InHand>([this, &drawnPoint](InHand& inHand) {
 		if (!Exists(inHand.hand) || !_world->IsOtherPlayersHand(inHand.hand))
 		{
 			return;
 		}
-		const auto reported = _world->ReportedPlaceOf(inHand.hand);
-		auto* track = registry.TryGet<HeldDrawTrack>(inHand.hand);
-		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+		const auto point = drawnPoint(inHand.hand);
 		// Only the draw reads this place. The turns keep the thing at the reported place of the hand.
 		inHand.drawn = InHand::Drawn {.position = _world->AsMapPlace(point), .rotation = glm::mat3(1.0f)};
 	});
 	// A miracle seed in the hand of another god moves the same way. Its model shows only for a miracle that shows one
 	// in the hand; this computer draws no effect of it, as the hand of another god is not drawn.
-	registry.Each<const HandHeldSeed>([this, &registry, frameMs](entt::entity hand, const HandHeldSeed& held) {
+	registry.Each<const HandHeldSeed>([this, &registry, &drawnPoint](entt::entity hand, const HandHeldSeed& held) {
 		if (!registry.Valid(held.seed) || !_world->IsOtherPlayersHand(hand))
 		{
 			return;
@@ -2312,9 +2324,7 @@ void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 		{
 			return;
 		}
-		const auto reported = _world->ReportedPlaceOf(hand);
-		auto* track = registry.TryGet<HeldDrawTrack>(hand);
-		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+		const auto point = drawnPoint(hand);
 		transform->position = _world->AsMapPlace(point);
 		transform->rotation = glm::mat3(1.0f);
 	});

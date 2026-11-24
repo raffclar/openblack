@@ -85,10 +85,12 @@ public:
 	/// of the god's hand continues or stops, the hand forgets the things that it last took and let go once they are gone,
 	/// and a held thing that is gone leaves the hand
 	virtual void LockTurn([[maybe_unused]] PlayerNames player) {}
-	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size
+	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size.
+	/// The hand of a god that a computer mind plays is where the mind put it after its last step.
 	virtual void PlaceHeldForTurn() {}
 	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
-	/// toward the place of their last report, upright and at the size that it had as the hand took it
+	/// toward the place of their last report, upright and at the size that it had as the hand took it. What the hand of a
+	/// computer mind holds does not move between two turns.
 	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
 	/// Each drawn frame, after the hand poses what it holds: a thing that this computer threw and that waits for the
 	/// turn of the command shows on the flight of its lead

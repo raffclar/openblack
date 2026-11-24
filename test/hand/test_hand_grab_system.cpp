@@ -31,6 +31,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandHeldSeed.h"
+#include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
@@ -153,6 +154,16 @@ public:
 	{
 		const auto found = reportedPlaces.find(of);
 		return found != reportedPlaces.end() ? found->second : ReportedHandPlace();
+	}
+	[[nodiscard]] std::optional<glm::vec3> MindTurnPlaceOf(entt::entity of) const override
+	{
+		const auto found = mindTurnPlaces.find(of);
+		return found != mindTurnPlaces.end() ? std::optional(found->second) : std::nullopt;
+	}
+	[[nodiscard]] std::optional<glm::vec3> MindDrawnPlaceOf(entt::entity of) const override
+	{
+		const auto found = mindDrawnPlaces.find(of);
+		return found != mindDrawnPlaces.end() ? std::optional(found->second) : std::nullopt;
 	}
 	[[nodiscard]] glm::vec3 HeldPlaceAt(glm::vec3 point) const override { return point + heldPlaceStep; }
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
@@ -570,6 +581,9 @@ public:
 	/// The hands of the other gods of a network game, and where each last reported its hand
 	std::set<entt::entity> otherHands;
 	std::map<entt::entity, glm::vec3> reportedPlaces;
+	/// The hands that a computer mind plays: where the input of the turn puts each, and where the frames draw it
+	std::map<entt::entity, glm::vec3> mindTurnPlaces;
+	std::map<entt::entity, glm::vec3> mindDrawnPlaces;
 	/// What the map position of a held thing adds to the reported point of the hand
 	glm::vec3 heldPlaceStep {0.0f};
 	/// The second player has hands only once a network game gave them
@@ -2442,6 +2456,46 @@ TEST_F(HandGrabSystemWithWorld, TheTurnHasAHeldThingAtTheMapPositionOfTheReporte
 	_world->heldPlaceStep = {0.25f, -0.5f, 0.125f};
 	_system->PlaceHeldForTurn();
 	EXPECT_EQ(_world->registry.Get<const Transform>(rock).position, _world->ReportedHandPlace() + _world->heldPlaceStep);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheTurnHasAThingInTheHandOfAComputerMindWhereTheMindPutTheHandAfterItsLastStep)
+{
+	const auto rock = _world->AddRock({5.0f, 0.0f, 5.0f});
+	_system->DoTake(_world->HandPlayer(), rock);
+	ASSERT_EQ(_system->GetHeld(), rock);
+	// The last report gives the place before the step. The input of the turn moves the hand to the place after it.
+	_world->reportedPlaces[_world->hand] = glm::vec3(10.0f, 4.0f, 10.0f);
+	_world->mindTurnPlaces[_world->hand] = glm::vec3(30.0f, 6.0f, 20.0f);
+	_world->heldPlaceStep = {0.25f, -0.5f, 0.125f};
+	_system->PlaceHeldForTurn();
+	EXPECT_EQ(_world->registry.Get<const Transform>(rock).position, glm::vec3(30.0f, 6.0f, 20.0f) + _world->heldPlaceStep);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheFramesDrawAThingInTheHandOfAComputerMindWithNoMovementBetweenTurns)
+{
+	_world->networkGame = true;
+	auto& registry = _world->registry;
+	const auto rock = _world->AddRock({5.0f, 0.0f, 5.0f});
+	registry.Assign<InHand>(rock, InHand {.hand = _world->secondHand});
+	_world->otherHands.insert(_world->secondHand);
+	_world->reportedPlaces[_world->secondHand] = glm::vec3(40.0f, 5.0f, 60.0f);
+	_world->mindDrawnPlaces[_world->secondHand] = glm::vec3(20.0f, 5.0f, 30.0f);
+	// A report starts a movement for the hand of a person. The hand of a mind does not use it.
+	registry.Assign<HeldDrawTrack>(_world->secondHand,
+	                               HeldDrawTrack {.from = glm::vec3(0.0f), .elapsedMs = 0, .intervalMs = 100});
+	for (int frame = 0; frame < 5; ++frame)
+	{
+		_system->PlaceOthersHeldForFrame(20);
+		const auto& drawn = registry.Get<const InHand>(rock).drawn;
+		ASSERT_TRUE(drawn.has_value());
+		EXPECT_EQ(drawn->position, glm::vec3(20.0f, 5.0f, 30.0f));
+	}
+	// The seed in the hand of the mind is drawn at the same place
+	const auto seed = registry.Create();
+	registry.Assign<Transform>(seed, glm::vec3(1.0f, 2.0f, 3.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(_world->secondHand, HandHeldSeed {.seed = seed});
+	_system->PlaceOthersHeldForFrame(20);
+	EXPECT_EQ(registry.Get<const Transform>(seed).position, glm::vec3(20.0f, 5.0f, 30.0f));
 }
 
 TEST_F(HandGrabSystemWithWorld, AVillagerOfTheHandsPlayerAlarmsThoseAboutIt)
