@@ -73,6 +73,7 @@
 #include "EngineConfig.h"
 #include "Game.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/HandLight.h"
@@ -155,8 +156,9 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 
 	// While the creature fizzes, its eyes fizz with it, each piece drawn twice as its body is, just after it: but through
 	// the one static all the creatures' eyes share. A frozen eye is drawn frozen instead.
-	const bool fizzing = creature_fizz_look::EyesFizz(fizz, freeze) && Locator::creatureFizzSystem::has_value();
-	const auto scroll = fizzing ? Locator::creatureFizzSystem::value().EyeStaticScroll() : glm::vec2(0.0f);
+	const auto& eyeStatic = desc.frame->creatures.eyeStaticScroll;
+	const bool fizzing = creature_fizz_look::EyesFizz(fizz, freeze) && eyeStatic.has_value();
+	const auto scroll = fizzing ? *eyeStatic : glm::vec2(0.0f);
 	auto sortDepth = fizzSortDepth;
 	// Drawn as usual, the eyeball adds the glass environment map, as each of its primitives' materials says. A fizzing or
 	// frozen eye is drawn without it.
@@ -254,9 +256,9 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const auto viewId = static_cast<bgfx::ViewId>(pass);
 	const auto* program = _shaderManager->GetShader("CreatureHair");
 	// The hair takes the land's light and colour under the creature, and the haze at it, as its body does
-	const auto extent = Locator::terrainSystem::value().GetExtent();
+	const auto extent = desc.frame->land.extent.value_or(Extent2 {});
 	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = desc.frame->templeActive;
 	const bool landLit = !inTemple && _landLightTexture.has_value();
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, CreatureLandLightScale(desc.viewId), 0.0f, 0.0f};
 	const glm::vec4 u_hairOrigin {origin, 0.0f};

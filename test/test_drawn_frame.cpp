@@ -100,3 +100,38 @@ TEST(DrawnFrame, TheEffectsGiveOnlyTheSymbolsOfBeliefOfThisFrame)
 	effects.townBeliefCount = 0;
 	EXPECT_TRUE(effects.TownBeliefs().empty());
 }
+
+TEST(DrawnFrame, ASpriteShowsOnlyInTheViewsThatTheFillGaveIt)
+{
+	graphics::DrawnSprite sprite;
+	EXPECT_TRUE(sprite.ShownIn(false));
+	EXPECT_TRUE(sprite.ShownIn(true));
+	// A glow of a temple room that the temple does not draw whole shows only in the floor of the main room
+	sprite.inMainView = false;
+	EXPECT_FALSE(sprite.ShownIn(false));
+	EXPECT_TRUE(sprite.ShownIn(true));
+	sprite.inMainView = true;
+	sprite.inReflection = false;
+	EXPECT_TRUE(sprite.ShownIn(false));
+	EXPECT_FALSE(sprite.ShownIn(true));
+}
+
+TEST(DrawnFrame, TheSeaMirrorsACreatureOnlyFromTheSituationThatTheFillKept)
+{
+	graphics::DrawnCreatures::Creature creature;
+	// A creature with no situation, as a copy or a frame with no land, is not mirrored
+	EXPECT_FALSE(creature.MirroredAt(0.0f));
+	creature.mirror = graphics::creature_reflection::Situation {
+	    .primaryCreature = true,
+	    .onBlock = true,
+	    .blockInView = true,
+	    .blockDistance = 0.0f,
+	    .height = 0.0f,
+	    .fizz = 0.0f,
+	};
+	// The draw gives the height over the water of each mirror
+	EXPECT_TRUE(creature.MirroredAt(0.0f));
+	EXPECT_FALSE(creature.MirroredAt(graphics::creature_reflection::k_HighestStand));
+	creature.mirror->primaryCreature = false;
+	EXPECT_FALSE(creature.MirroredAt(0.0f));
+}

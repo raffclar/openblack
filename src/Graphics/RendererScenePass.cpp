@@ -85,6 +85,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -187,20 +188,21 @@ glm::vec3 SpriteSortPoint(const ecs::Registry& registry,
 	return ecs::script_highlights::SparkOrigin(highlight->centre, highlight->radius);
 }
 
-/// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
-/// creature is tested against the main camera's view. Its box reaches below the water when the land is mirrored.
-bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz, float waterLevel)
+/// What the game knows when it decides to mirror a creature's body in the sea this frame (see creature_reflection),
+/// except the height of the body over the water. The block under the creature is tested against the main camera's view.
+/// Its box reaches below the water when the land is mirrored. It is empty when the game cannot mirror the body.
+std::optional<creature_reflection::Situation> CreatureMirrorSituation(entt::entity entity, glm::vec3 position, float fizz)
 {
 	if (!Locator::playerSystem::has_value() || !Locator::terrainSystem::has_value() || !Locator::camera::has_value())
 	{
-		return false;
+		return std::nullopt;
 	}
 	const auto& players = Locator::playerSystem::value();
 	creature_reflection::Situation situation {
 	    .primaryCreature =
 	        players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
 	                                                                     : PlayerNames::PLAYER_ONE)) == entity,
-	    .height = position.y - waterLevel,
+	    .height = 0.0f,
 	    .fizz = fizz,
 	};
 	const auto under = creature_reflection::BlockUnder(position);
@@ -223,7 +225,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz, float
 			situation.blockDistance = object_draw_list::BlockDistance(camera.GetOrigin(), box);
 		}
 	}
-	return creature_reflection::Shown(situation);
+	return situation;
 }
 
 /// The colour a recognised gesture's flash adds to the hand's light, 0 to 1 a channel
@@ -809,6 +811,119 @@ void Renderer::DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws, temp
 	});
 }
 
+DrawnCreatures::Shape Renderer::ShapeOf(CreatureType species, const creature_morph::Morph& morph)
+{
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto ids = creature_morph::MeshesOf(species, morph, [&meshes](entt::id_type id) { return meshes.Contains(id); });
+	return DrawnCreatures::Shape {
+	    .meshes = {&*meshes.Handle(ids.evilGood), &*meshes.Handle(ids.thinFat), &*meshes.Handle(ids.weakStrong)},
+	    .weights = glm::abs(glm::vec3(morph.evilGood, morph.thinFat, morph.weakStrong)),
+	    .skins = {},
+	    .blendSeams = Locator::config::value().blendCreatureSeams,
+	};
+}
+
+void Renderer::CollectDrawnCreatures(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const
+{
+	auto& kept = frame.creatures;
+	kept.hairShown = Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown();
+	kept.eyeStaticScroll = Locator::creatureFizzSystem::has_value()
+	                           ? std::optional(Locator::creatureFizzSystem::value().EyeStaticScroll())
+	                           : std::nullopt;
+	// The interface's creatures find where their bones start in the texture from the bones of the world's creatures.
+	// Thus they come before the world's creatures take their copies of the bones.
+	kept.interfaceCreatures.reset();
+	kept.menuCreature.reset();
+	if (drawDesc.drawEntities)
+	{
+		CollectInterfaceCreatures(kept, drawDesc);
+		CollectMenuCreature(kept);
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& entities = drawDesc.entities;
+	for (auto& drawn : _drawnCreatures)
+	{
+		// The pass reads the copy of the bones that the texture of the posed bones holds
+		if (drawn.firstBone.has_value())
+		{
+			drawn.bones = std::span<const glm::mat4>(_posedBones).subspan(*drawn.firstBone, drawn.bones.size());
+		}
+		// A copy drawn elsewhere looks as its creature does, in a pose of its own. The copy is a thing of the temple's
+		// rooms.
+		const bool copy = drawn.posedBy != entt::null;
+		const auto poser = copy ? drawn.posedBy : drawn.entity;
+		const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : entities;
+		const auto* mesh = entities.TryGet<const ecs::components::Mesh>(drawn.entity);
+		if (mesh == nullptr || !meshes.Contains(mesh->id) || !posers.Valid(poser))
+		{
+			continue;
+		}
+		drawn.drawn = true;
+		drawn.mesh = mesh->id;
+		const auto* creature = entities.TryGet<const ecs::components::Creature>(drawn.entity);
+		// A copy with a shape of its own is drawn with that shape
+		const auto* morph = copy ? ecs::components::ShapeOfCopy(posers, poser, entities)
+		                         : entities.TryGet<const ecs::components::CreatureMorph>(drawn.entity);
+		if (creature != nullptr && morph != nullptr)
+		{
+			drawn.shape = ShapeOf(creature->species, morph->drawn);
+			// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
+			if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
+			    own != _roomCreatureSkins.end())
+			{
+				drawn.shape->skins = own->second.drawn;
+			}
+			else if (const auto skins = _creatureSkins.find(drawn.entity); skins != _creatureSkins.end())
+			{
+				drawn.shape->skins = skins->second.drawn;
+			}
+		}
+		// The environment map belongs to the creature's own body: a copy drawn elsewhere has its own body, without it
+		drawn.environmentWord = creature != nullptr && !copy ? creature->environmentMap : 0;
+		// A copy shows none of its creature's frozen or fizzing look
+		if (const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser); spells != nullptr)
+		{
+			drawn.spells =
+			    DrawnCreatures::Spells {.fizz = spells->fizz, .freeze = spells->freeze, .staticScroll = spells->staticScroll};
+		}
+		const float fizz = drawn.spells.has_value() ? drawn.spells->fizz : 0.0f;
+		const float freeze = drawn.spells.has_value() ? drawn.spells->freeze : 0.0f;
+		if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+		{
+			drawn.eyes = *eyes;
+		}
+		if (const auto* transform = posers.TryGet<const ecs::components::Transform>(poser); transform != nullptr)
+		{
+			drawn.position = transform->position;
+			// The hair hangs from the body where the frame draws it. A copy draws the hair of its own, which hangs from
+			// its own pose.
+			drawn.hairOrigin =
+			    ecs::components::DrawnTransform(*transform, entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+			        .position;
+			if (const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
+			    hair != nullptr && kept.hairShown && creature_environment_map::HairShown(fizz, freeze, drawn.environmentWord))
+			{
+				drawn.hair = *hair;
+			}
+			if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser); glows != nullptr)
+			{
+				drawn.handGlows = *glows;
+			}
+		}
+		// The sea reflects the body of the local player's creature alone
+		if (!copy)
+		{
+			const auto position = drawn.instance < renderCtx.instanceUniforms.size()
+			                          ? glm::vec3(renderCtx.instanceUniforms.at(drawn.instance).model[3])
+			                          : glm::vec3(0.0f);
+			drawn.mirror = CreatureMirrorSituation(drawn.entity, position, fizz);
+		}
+	}
+	// The drawn copy takes the list. The next fill makes the list again in the memory of the list before.
+	kept.creatures.swap(_drawnCreatures);
+}
+
 void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
 {
 	const auto& meshManager = Locator::resources::value().GetMeshes();
@@ -860,55 +975,34 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		submitDesc.viewId = desc.viewId;
 		return bodyDepth;
 	};
-	for (const auto& drawn : _drawnCreatures)
+	const auto& kept = desc.frame->creatures;
+	for (const auto& drawn : kept.creatures)
 	{
+		if (!drawn.drawn)
+		{
+			continue;
+		}
 		const auto entity = drawn.entity;
 		const auto instance = drawn.instance;
 		// A copy drawn elsewhere looks as its creature does, in a pose of its own
 		const bool copy = drawn.posedBy != entt::null;
-		const auto poser = copy ? drawn.posedBy : entity;
-		// The copy is a thing of the temple's rooms
-		const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
-		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-		const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
-		// A copy with a shape of its own is drawn with that shape
-		const auto* morph = copy && posers.Valid(poser) ? ecs::components::ShapeOfCopy(posers, poser, desc.entities)
-		                                                : desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-		if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
-		{
-			continue;
-		}
-		const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
+		const auto placers = renderCtx.instancedDrawDescs.find(drawn.mesh);
 		if (placers == renderCtx.instancedDrawDescs.end() ||
 		    (IsMirrorScene(desc.viewId) && placers->second.hiddenFromReflection))
 		{
 			continue;
 		}
 		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
-		if (creature != nullptr && morph != nullptr)
+		if (drawn.shape.has_value())
 		{
-			const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
-			                                          [&meshManager](entt::id_type id) { return meshManager.Contains(id); });
 			targets = L3DMeshSubmitDesc::MorphTargets {
-			    .meshes = {&*meshManager.Handle(ids.evilGood), &*meshManager.Handle(ids.thinFat),
-			               &*meshManager.Handle(ids.weakStrong)},
-			    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
-			    .skins = {},
-			    .blendSeams = Locator::config::value().blendCreatureSeams,
+			    .meshes = drawn.shape->meshes,
+			    .weights = drawn.shape->weights,
+			    .skins = drawn.shape->skins,
+			    .blendSeams = drawn.shape->blendSeams,
 			};
-			// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
-			if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
-			    own != _roomCreatureSkins.end())
-			{
-				targets->skins = own->second.drawn;
-			}
-			else if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
-			{
-				targets->skins = skins->second.drawn;
-			}
 		}
-		// The environment map belongs to the creature's own body: a copy drawn elsewhere has its own body, without it
-		const uint32_t environmentWord = creature != nullptr && !copy ? creature->environmentMap : 0;
+		const uint32_t environmentWord = drawn.environmentWord;
 		const EntityPose pose {
 		    .bones = drawn.bones,
 		    .morphTargets = targets ? &*targets : nullptr,
@@ -920,8 +1014,7 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			continue;
 		}
 		// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
-		const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
-		const float fizz = spells != nullptr ? spells->fizz : 0.0f;
+		const float fizz = drawn.spells.has_value() ? drawn.spells->fizz : 0.0f;
 		submitDesc.modelLight = drawn.light;
 		if (IsMirrorScene(desc.viewId))
 		{
@@ -932,13 +1025,13 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
 			                          : glm::vec3(0.0f);
 			// It shows none of the creature's frozen look. It comes after the hand and what the hand holds.
-			if (!copy && CreatureMirrored(entity, position, fizz, MirrorLevelOf(desc.viewId)))
+			if (!copy && drawn.MirroredAt(position.y - MirrorLevelOf(desc.viewId)))
 			{
 				flatReflection = FlatLook {.colour = creature_reflection::Colour(), .added = creature_reflection::Added()};
 				submitDesc.iceShown = false;
 				submitDesc.viewId = mirroredViewId;
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Creature);
-				drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+				drawInstances(drawn.mesh, placers->second, placers->second.materialBlending, instance, 1, &pose);
 				submitDesc.sortDepth = 0;
 				submitDesc.viewId = desc.viewId;
 				submitDesc.iceShown = true;
@@ -959,50 +1052,43 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			const auto rank = copy ? std::nullopt : renderCtx.fizzOrder.RankOf(entity);
 			const auto depth = rank.has_value() ? graphics::fizz_draw_order::CreatureDepth(*rank)
 			                                    : zsort::BeforeSorted(position, cameraOrigin);
-			eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
-			                            creature_fizz_look::Level(fizz), spells->staticScroll, depth, spells->freeze);
+			eyesSortDepth =
+			    drawFizzing(drawn.mesh, placers->second, instance, std::nullopt, pose, creature_fizz_look::Level(fizz),
+			                drawn.spells->staticScroll, depth, drawn.spells->freeze);
 		}
 		else if (creature_environment_map::BodyDrawn(fizz, environmentWord))
 		{
-			inSegment(copy ? 0 : renderCtx.fizzOrder.SegmentOf(entity),
-			          [&] { drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose); });
+			inSegment(copy ? 0 : renderCtx.fizzOrder.SegmentOf(entity), [&] {
+				drawInstances(drawn.mesh, placers->second, placers->second.materialBlending, instance, 1, &pose);
+			});
 		}
 		submitDesc.posedModelLight = false;
-		const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-		if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+		const float freeze = drawn.spells.has_value() ? drawn.spells->freeze : 0.0f;
+		if (drawn.eyes.has_value())
 		{
-			DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
+			DrawCreatureEyes(desc, *drawn.eyes, submitDesc, fizz, freeze, eyesSortDepth);
 		}
 		submitDesc.modelLight.reset();
 		// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all. With
-		// the environment map, the hair shows at all times. A copy draws the hair of its own, which hangs from its
-		// own pose.
-		const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
-		const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
-		if (creature_environment_map::HairShown(fizz, freeze, environmentWord) && hair != nullptr && transform != nullptr &&
-		    Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
+		// the environment map, the hair shows at all times. The fill keeps the hair only when it shows.
+		if (drawn.hair.has_value())
 		{
-			// The hair hangs from the body where the frame draws it. The hair of a body with the environment map
-			// takes the colours of the last usual hair before it.
-			const auto origin = ecs::components::DrawnTransform(
-			                        *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
-			                        .position;
+			// The hair of a body with the environment map takes the colours of the last usual hair before it
 			if (creature_environment_map::DrawnWithMap(environmentWord))
 			{
-				DrawEnvironmentHair(desc, entity, *hair, origin);
+				DrawEnvironmentHair(desc, entity, *drawn.hair, drawn.hairOrigin);
 			}
 			else
 			{
-				DrawCreatureHair(desc, *hair, origin);
+				DrawCreatureHair(desc, *drawn.hair, drawn.hairOrigin);
 			}
 		}
 		// The glows on its body, where its pose put them
-		if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
-		    glows != nullptr && transform != nullptr)
+		if (drawn.handGlows.has_value() && drawn.position.has_value())
 		{
-			DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
+			DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *drawn.handGlows,
 			                      desc.camera->GetProjectionMatrix(), IsMirrorScene(desc.viewId),
-			                      zsort::Depth(transform->position, cameraOrigin));
+			                      zsort::Depth(*drawn.position, cameraOrigin));
 		}
 	}
 	// The glows of the creed objects, which show no model of their own
@@ -1010,53 +1096,56 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 	               IsMirrorScene(desc.viewId), cameraOrigin);
 	// The creatures that the interface shows over itself, each moved for its draw to its place before the
 	// interface's own camera, in a view of their own
-	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
+	if (desc.viewId == RenderPass::Main && kept.interfaceCreatures.has_value())
 	{
-		DrawInterfaceCreatures(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
-		                                 const L3DMeshSubmitDesc::MorphTargets* targets,
-		                                 const ecs::components::CreatureEyes* eyes) {
-			const auto placers = renderCtx.instancedDrawDescs.find(meshId);
-			if (placers == renderCtx.instancedDrawDescs.end())
-			{
-				return;
-			}
-			const EntityPose pose {.bones = bones, .morphTargets = targets, .firstBone = FirstBoneOf(bones)};
-			submitDesc.viewId = RenderPass::InterfaceCreatures;
-			// The body takes the posed models' light, as in the world
-			submitDesc.posedModelLight = true;
-			drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose, nullptr,
-			              _interfaceCreatureInstances);
-			submitDesc.posedModelLight = false;
-			if (eyes != nullptr)
-			{
-				DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
-			}
-			submitDesc.viewId = desc.viewId;
-		});
+		DrawInterfaceCreatures(*kept.interfaceCreatures,
+		                       [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+		                           std::optional<uint32_t> firstBone, const L3DMeshSubmitDesc::MorphTargets* targets,
+		                           const ecs::components::CreatureEyes* eyes) {
+			                       const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+			                       if (placers == renderCtx.instancedDrawDescs.end())
+			                       {
+				                       return;
+			                       }
+			                       const EntityPose pose {.bones = bones, .morphTargets = targets, .firstBone = firstBone};
+			                       submitDesc.viewId = RenderPass::InterfaceCreatures;
+			                       // The body takes the posed models' light, as in the world
+			                       submitDesc.posedModelLight = true;
+			                       drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose,
+			                                     nullptr, _interfaceCreatureInstances);
+			                       submitDesc.posedModelLight = false;
+			                       if (eyes != nullptr)
+			                       {
+				                       DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+			                       }
+			                       submitDesc.viewId = desc.viewId;
+		                       });
 	}
 	// The creature that the main menu's tattoo editor shows, in the editor's view of its own. Its mesh can be a
 	// mesh that the scene does not have, so it has an instance of its own.
-	if (desc.viewId == RenderPass::Main && _menuCreature.has_value())
+	if (desc.viewId == RenderPass::Main && kept.menuCreature.has_value())
 	{
-		DrawMenuCreature(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
-		                           const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes) {
-			if (!meshManager.Contains(meshId) || !_menuCreatureInstance.has_value())
-			{
-				return;
-			}
-			const RenderContext::InstancedDrawDesc placers {0, 1, false};
-			const EntityPose pose {.bones = bones, .morphTargets = targets};
-			submitDesc.viewId = RenderPass::MenuCreature;
-			// The body takes the posed models' light, as in the world
-			submitDesc.posedModelLight = true;
-			drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
-			submitDesc.posedModelLight = false;
-			if (eyes != nullptr)
-			{
-				DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
-			}
-			submitDesc.viewId = desc.viewId;
-		});
+		DrawMenuCreature(desc, *kept.menuCreature,
+		                 [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+		                     std::optional<uint32_t> /*firstBone*/, const L3DMeshSubmitDesc::MorphTargets* targets,
+		                     const ecs::components::CreatureEyes* eyes) {
+			                 if (!_menuCreatureInstance.has_value())
+			                 {
+				                 return;
+			                 }
+			                 const RenderContext::InstancedDrawDesc placers {0, 1, false};
+			                 const EntityPose pose {.bones = bones, .morphTargets = targets};
+			                 submitDesc.viewId = RenderPass::MenuCreature;
+			                 // The body takes the posed models' light, as in the world
+			                 submitDesc.posedModelLight = true;
+			                 drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
+			                 submitDesc.posedModelLight = false;
+			                 if (eyes != nullptr)
+			                 {
+				                 DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+			                 }
+			                 submitDesc.viewId = desc.viewId;
+		                 });
 	}
 	// A warm-up draws a body of each species that is loaded, with its eyes and hair, as the first frame of a creature
 	// draws them. They are drawn at no size, and cover no pixel.
@@ -2701,6 +2790,103 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 	}
 }
 
+void Renderer::CollectSprites(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const
+{
+	using namespace ecs::components;
+	auto& sprites = frame.sprites;
+	sprites.clear();
+	if (!drawDesc.drawSprites)
+	{
+		return;
+	}
+	// The camera's bookmarks are drawn unless a script put them away or holds the cinema bars
+	const bool bookmarksShown =
+	    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
+	    (!Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+	// The markers of leash orders show only while the land shows
+	const bool leashMarkersShown =
+	    creature_leash_orders::MarkerShown(Locator::temple::has_value() && Locator::temple::value().Active(),
+	                                       Locator::videoSystem::has_value() && (Locator::videoSystem::value().CoversScreen() ||
+	                                                                             Locator::videoSystem::value().HidesWorld()));
+	const auto& detail = Locator::config::value().detail;
+	// The sprites name their textures by their ids in the cache
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto collect = [&](const ecs::Registry& from) {
+		// The walk makes no component, so the stores of the components stay the same for all of it
+		const ecs::drawn_place::DrawnPlaces drawnPlaces(from);
+		const ecs::ComponentLookup<CameraBookmark> bookmarks(from);
+		const ecs::ComponentLookup<LeashMarker> markers(from);
+		const ecs::ComponentLookup<TempleInteriorPart> templeParts(from);
+		const ecs::ComponentLookup<ScriptHighlightGlow> highlightSprites(from);
+		from.Each<const Sprite, const Transform>([&](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+			if (!bookmarksShown && bookmarks.Has(entity))
+			{
+				return;
+			}
+			if (const auto* marker = markers.TryGet(entity);
+			    marker != nullptr && (!leashMarkersShown || !IsOwnLeashMarker(from, *marker)))
+			{
+				return;
+			}
+			// The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows alone in its
+			// floor
+			bool inMainView = true;
+			bool inReflection = true;
+			if (const auto* templePart = templeParts.TryGet(entity); templePart != nullptr)
+			{
+				inMainView =
+				    Locator::temple::value().IsRoomDrawn(templePart->room) && detail_level::TempleGlowsShown(detail, false);
+				inReflection = templePart->room == TempleRoom::Main && detail_level::TempleGlowsShown(detail, true);
+				if (!inMainView && !inReflection)
+				{
+					return;
+				}
+			}
+			// A sprite whose texture the cache does not have is not drawn
+			const auto found =
+			    sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
+			if (!found.has_value())
+			{
+				return;
+			}
+			// A sprite that moves between the turns is drawn at its drawn place
+			const auto placed = drawnPlaces.Of(entity, transform);
+			auto modelMatrix = glm::mat4(1.0f);
+			modelMatrix = glm::translate(modelMatrix, placed.position);
+			modelMatrix *= glm::mat4(placed.rotation);
+			modelMatrix = glm::scale(modelMatrix, placed.scale);
+			// The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours premultiplied
+			// by alpha when the tint is
+			const auto tint = sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
+			sprites.push_back({
+			    .texture = found->texture,
+			    .alpha = found->alpha,
+			    .model = modelMatrix,
+			    .position = placed.position,
+			    .sortPoint = SpriteSortPoint(from, highlightSprites, entity, placed.position),
+			    .sampleRect = glm::vec4(sprite.uvExtent, sprite.uvMin),
+			    .params = glm::vec4(sprite.facesCamera ? 1.0f : 0.0f, sprite.alpha.has_value() ? 1.0f : 0.0f,
+			                        sprite.additive ? 1.0f : 0.0f, 0.0f),
+			    .tint = tint,
+			    .additive = sprite.additive,
+			    .inMainView = inMainView,
+			    .inReflection = inReflection,
+			});
+		});
+	};
+	// The temple's rooms have sprites of their own: their glows, and the flames and smoke of the creature's room
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		collect(Locator::temple::value().GetRooms());
+	}
+	collect(Locator::entitiesRegistry::value());
+	// The things that only the frames make, as the marks over the disciples, have sprites too
+	if (Locator::drawnRegistry::has_value())
+	{
+		collect(Locator::drawnRegistry::value());
+	}
+}
+
 void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass) const
 {
 	auto& profiler = Locator::profiler::value();
@@ -2712,18 +2898,6 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 
 	if (desc.drawSprites)
 	{
-		using namespace ecs::components;
-
-		const auto& registry = Locator::entitiesRegistry::value();
-		// The camera's bookmarks are drawn unless a script put them away or holds the cinema bars
-		const bool bookmarksShown =
-		    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
-		    (!Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive());
-		// The markers of leash orders show only while the land shows
-		const bool leashMarkersShown = creature_leash_orders::MarkerShown(
-		    Locator::temple::has_value() && Locator::temple::value().Active(),
-		    Locator::videoSystem::has_value() &&
-		        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld()));
 		// A warm-up draws a sprite of no size for each way that sprites blend, as the first sprites draw
 		if (_warmingUp)
 		{
@@ -2736,99 +2910,30 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 				spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId));
 			}
 		}
-		// The sprites name their textures by their ids in the cache
-		const auto& textures = Locator::resources::value().GetTextures();
 		// The view of this pass. A sprite out of it puts no pixel on the screen, so the pass does not draw it.
 		const auto seenBy = SceneFrustum(desc);
-		const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, bookmarksShown,
-		                          leashMarkersShown, &seenBy](const ecs::Registry& from) {
-			// The walk makes no component, so the stores of the components stay the same for all of it
-			const ecs::drawn_place::DrawnPlaces drawnPlaces(from);
-			const ecs::ComponentLookup<CameraBookmark> bookmarks(from);
-			const ecs::ComponentLookup<LeashMarker> markers(from);
-			const ecs::ComponentLookup<TempleInteriorPart> templeParts(from);
-			const ecs::ComponentLookup<ScriptHighlightGlow> highlightSprites(from);
-			from.Each<const Sprite, const Transform>(
-			    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
-			     leashMarkersShown, &seenBy, &drawnPlaces, &bookmarks, &markers, &templeParts,
-			     &highlightSprites](entt::entity entity, const Sprite& sprite, const Transform& transform) {
-				    if (!bookmarksShown && bookmarks.Has(entity))
-				    {
-					    return;
-				    }
-				    if (const auto* marker = markers.TryGet(entity);
-				        marker != nullptr && (!leashMarkersShown || !IsOwnLeashMarker(from, *marker)))
-				    {
-					    return;
-				    }
-				    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
-				    // alone in its floor
-				    if (const auto* templePart = templeParts.TryGet(entity); templePart != nullptr)
-				    {
-					    const bool inMainRoom = templePart->room == TempleRoom::Main;
-					    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-					    const bool inReflection = IsMirrorScene(desc.viewId);
-					    if ((inReflection ? !inMainRoom : !drawn) ||
-					        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
-					    {
-						    return;
-					    }
-				    }
-				    // A sprite whose texture the cache does not have is not drawn
-				    const auto found =
-				        sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
-				    if (!found.has_value())
-				    {
-					    return;
-				    }
-				    const auto* texture = found->texture;
-				    const auto* alpha = found->alpha;
-				    // A sprite that moves between the turns is drawn at its drawn place
-				    const auto placed = drawnPlaces.Of(entity, transform);
-				    auto modelMatrix = glm::mat4(1.0f);
-				    modelMatrix = glm::translate(modelMatrix, placed.position);
-				    modelMatrix *= glm::mat4(placed.rotation);
-				    modelMatrix = glm::scale(modelMatrix, placed.scale);
-				    if (!_warmingUp &&
-				        !view_frustum::SeesSphere(seenBy, placed.position,
-				                                  view_frustum::QuadRadius(glm::mat3(modelMatrix)) + view_frustum::k_BoxMargin))
-				    {
-					    return;
-				    }
-
-				    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
-
-				    bgfx::setTransform(glm::value_ptr(modelMatrix));
-				    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
-				    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f, sprite.alpha.has_value() ? 1.0f : 0.0f,
-				                                    sprite.additive ? 1.0f : 0.0f, 0.0f};
-				    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
-				    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
-				    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
-				    // premultiplied by alpha when the tint is
-				    const auto tint =
-				        sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
-				    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
-				    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
-
-				    _plane->GetVertexBuffer().Bind();
-
-				    bgfx::setState(SpriteState(sprite.additive));
-
-				    const auto sortPoint = SpriteSortPoint(from, highlightSprites, entity, placed.position);
-				    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId), zsort::Depth(sortPoint, cameraOrigin));
-			    });
-		};
-		// The temple's rooms have sprites of their own: their glows, and the flames and smoke of the creature's room
-		if (Locator::temple::has_value() && Locator::temple::value().Active())
+		const bool reflection = IsMirrorScene(desc.viewId);
+		for (const auto& sprite : desc.frame->sprites)
 		{
-			drawSprites(Locator::temple::value().GetRooms());
-		}
-		drawSprites(registry);
-		// The things that only the frames make, as the marks over the disciples, have sprites too
-		if (Locator::drawnRegistry::has_value())
-		{
-			drawSprites(Locator::drawnRegistry::value());
+			if (!sprite.ShownIn(reflection))
+			{
+				continue;
+			}
+			if (!_warmingUp &&
+			    !view_frustum::SeesSphere(seenBy, sprite.position,
+			                              view_frustum::QuadRadius(glm::mat3(sprite.model)) + view_frustum::k_BoxMargin))
+			{
+				continue;
+			}
+			bgfx::setTransform(glm::value_ptr(sprite.model));
+			spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(sprite.sampleRect));
+			spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(sprite.params));
+			spriteShader->SetTextureSampler("s_alpha", 1, *sprite.alpha);
+			spriteShader->SetUniformValue("u_tint", glm::value_ptr(sprite.tint));
+			spriteShader->SetTextureSampler("s_diffuse", 0, *sprite.texture);
+			_plane->GetVertexBuffer().Bind();
+			bgfx::setState(SpriteState(sprite.additive));
+			spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId), zsort::Depth(sprite.sortPoint, cameraOrigin));
 		}
 		DrawTempleLeashes(desc);
 	}

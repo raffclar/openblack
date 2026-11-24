@@ -42,6 +42,7 @@
 #include "Enums.h"
 #include "Graphics/DeviceRestore.h"
 #include "Graphics/DrawEncoder.h"
+#include "Graphics/DrawnCreatures.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
@@ -686,14 +687,15 @@ private:
 	void SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairLightSource* source, bool landLit,
 	                           const std::array<glm::vec4, 2>& haze) const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
-	/// creatures, its pose, its shape and its eyes
-	using InterfaceCreatureBody =
-	    std::function<void(entt::id_type mesh, uint32_t instance, std::span<const glm::mat4> bones,
-	                       const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes)>;
+	/// creatures, its pose, where its bones start in the texture of the posed bones, its shape and its eyes
+	using InterfaceCreatureBody = std::function<void(
+	    entt::id_type mesh, uint32_t instance, std::span<const glm::mat4> bones, std::optional<uint32_t> firstBone,
+	    const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes)>;
 	/// The creatures that the interface asked to show last, each moved to its place before the interface's camera
-	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
+	void DrawInterfaceCreatures(const DrawnCreatures::Interface& shown, const InterfaceCreatureBody& drawBody) const;
 	/// The creature that the main menu's tattoo editor asked to show last, in its view of its own
-	void DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
+	void DrawMenuCreature(const DrawSceneDesc& desc, const DrawnCreatures::Menu& shown,
+	                      const InterfaceCreatureBody& drawBody) const;
 	/// The columns of light over the village centres of the players whose borders show. Each centre's symbols of belief
 	/// come just after its column, also in the reflection.
 	void DrawTownColumns(const DrawSceneDesc& desc) const;
@@ -1049,21 +1051,9 @@ private:
 	mutable std::vector<std::unique_ptr<Texture2D>> _handSkinTextures;
 	mutable std::vector<std::pair<uint32_t, const Texture2D*>> _handSkins;
 	mutable std::optional<painted_skin::Stamp> _handSkinStamp;
-	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
-	/// upload the bones of
-	struct DrawnCreature
-	{
-		entt::entity entity;
-		uint32_t instance;
-		/// A copy of the creature drawn elsewhere in its own pose: the entity it takes its pose and eyes from, and where
-		/// it is lit from. The copy is a thing of the temple's rooms.
-		entt::entity posedBy {entt::null};
-		std::optional<glm::vec3> light;
-		/// The bones of its pose, or those of its mesh when it has no pose of its own
-		std::span<const glm::mat4> bones {};
-		/// Where its bones start in the texture of the posed bones
-		std::optional<uint32_t> firstBone {};
-	};
+	/// The creatures that the fill of this frame selects: all of them, or the nearest the camera when there are more than
+	/// the backend can upload the bones of. The fill then gives them to the drawn copy.
+	using DrawnCreature = DrawnCreatures::Creature;
 	mutable std::vector<DrawnCreature> _drawnCreatures;
 	/// A usual hair draw of the frame: the place of its creature, the camera that draws it and how much of the land's
 	/// light it takes. A hair with colours of its own does not use the place.
@@ -1114,6 +1104,17 @@ private:
 	void SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const;
 	/// Where the bones start in the texture of the posed bones, when they are the bones of a creature drawn this frame
 	[[nodiscard]] std::optional<uint32_t> FirstBoneOf(std::span<const glm::mat4> bones) const;
+	/// Copies what the creatures' pass reads of the creatures, of the interface's creatures and of the tattoo editor's
+	/// creature into the drawn copy. Call it after the upload of the posed bones.
+	void CollectDrawnCreatures(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
+	/// Copies the creatures that the interface asked to show into the drawn copy
+	void CollectInterfaceCreatures(DrawnCreatures& creatures, const DrawSceneDesc& drawDesc) const;
+	/// Copies the creature that the tattoo editor asked to show into the drawn copy
+	void CollectMenuCreature(DrawnCreatures& creatures) const;
+	/// The meshes that blend the body of a species to a shape, with no skins
+	[[nodiscard]] static DrawnCreatures::Shape ShapeOf(CreatureType species, const creature_morph::Morph& morph);
+	/// Copies the sprites that the frame shows into the drawn copy
+	void CollectSprites(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
 	/// Sampled by the primitives without a skin, as Direct3D's texture stages read white with no texture set
 	std::optional<TextureHandle> _whiteTexture;
 	/// A texel that the renderer reads back to make a frame wait for the GPU; none if the backend cannot read textures
