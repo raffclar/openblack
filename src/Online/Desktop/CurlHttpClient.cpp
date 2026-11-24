@@ -247,7 +247,7 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_slist* list = nullptr;
 	for (const auto& [name, value] : sent.headers)
 	{
-		list = curl_slist_append(list, (name + ": " + value).c_str());
+		list = curl_slist_append(list, (name + ": ").append(value).c_str());
 	}
 	// The client sends the body at once, without a wait for "100 Continue"
 	list = curl_slist_append(list, "Expect:");
@@ -363,6 +363,7 @@ std::optional<uint64_t> CurlHttpClient::SentBytes(HttpRequestId id) const
 
 void CurlHttpClient::Finish(Transfer& transfer, HttpResponse&& response)
 {
+	// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 	long status = 0;
 	curl_easy_getinfo(transfer.easy.get(), CURLINFO_RESPONSE_CODE, &status);
 	response.status = static_cast<int32_t>(status);

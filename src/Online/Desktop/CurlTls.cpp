@@ -26,6 +26,7 @@ void StartLibrary()
 
 void Apply(CURL* easy, const char* extraAuthorities)
 {
+	// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 	curl_easy_setopt(easy, CURLOPT_SSLVERSION, static_cast<long>(CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT));
 	curl_easy_setopt(easy, CURLOPT_SSL_CIPHER_LIST, std::string(k_Tls12Ciphers).c_str());
 	curl_easy_setopt(easy, CURLOPT_TLS13_CIPHERS, std::string(k_Tls13Ciphers).c_str());
@@ -37,6 +38,7 @@ void Apply(CURL* easy, const char* extraAuthorities)
 	}
 #if defined(_WIN32)
 	// The certificates of the authorities come from the certificate store of Windows
+	// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 	curl_easy_setopt(easy, CURLOPT_SSL_OPTIONS, static_cast<long>(CURLSSLOPT_NATIVE_CA));
 #elif defined(__linux__)
 	// The certificates of the authorities come from the bundle of the system, at the place that the distribution uses
