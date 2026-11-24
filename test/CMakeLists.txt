@@ -123,6 +123,7 @@ endif()
 openblack_setup_and_add_test(test_interpolator test_interpolator.cpp)
 openblack_setup_and_add_test(test_missing_game_data test_missing_game_data.cpp)
 openblack_setup_and_add_test(test_set_camera_pos camera/test_set_camera_pos.cpp)
+openblack_setup_and_add_test(test_drawn_frame test_drawn_frame.cpp)
 openblack_setup_and_add_test(
   test_keyboard_move_speed camera/test_keyboard_move_speed.cpp
 )

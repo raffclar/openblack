@@ -99,6 +99,7 @@
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
 #include "Graphics/CreatureReflection.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/EffectsAfterParticles.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
@@ -306,7 +307,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// in the order it is submitted, and its blended parts must be too: the pool's water, drawn with the lightmap
 	// program, would otherwise land after the hand, whose faded wrist writes depth, and leave a hole in the water
 	// where the wrist should show it through.
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const auto& frame = *desc.frame;
+	const bool inTemple = frame.templeActive;
 	_shaderManager->SetViewOrder(desc.viewId, inTemple ? ViewOrder::Sequential : ViewOrder::ByProgram);
 	// Outside the temple, what blends in the world is drawn after the rest of the scene in a pass of its own, all of it
 	// together and the farthest first, as the game sorts it
@@ -339,15 +341,15 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	_shaderManager->SetCamera(landViewId, *desc.camera, SceneTargetOf(desc));
 	_shaderManager->SetCamera(desc.viewId, *desc.camera, SceneTargetOf(desc));
 	_modelLight = GetModelLight();
-	if (Locator::camera::has_value())
+	if (frame.camera != nullptr)
 	{
-		const auto& camera = Locator::camera::value();
+		const auto& camera = *frame.camera;
 		_treeBrightness =
 		    static_cast<float>(tree_brightness::Factor(camera.GetFocus(), camera.GetForward(), glm::vec3(_modelLight))) /
 		    256.0f;
 		_treeBrightnessMade = true;
 	}
-	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
+	const auto skyType = frame.sky.skyType;
 	// The land mirrored under the sea is lit at half
 	const float landLightScale = IsMirrorScene(desc.viewId) ? 0.5f : 1.0f;
 	const glm::vec4 landSkyAndBump = {skyType, landLightScale, desc.smallBumpMapStrength, 0.0f};
@@ -415,7 +417,8 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 		const bool underSea = desc.viewId == RenderPass::Reflection;
 		const auto modelMatrix = underSea ? sky_dome::PlacementUnderSea(land_lakes::k_SeaLevel) : sky_dome::Placement();
 		// The value of the land that the sky shows, from 0, good, to 2, evil, mixes two of the alignments' domes
-		const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyLand());
+		const auto& sky = desc.frame->sky;
+		const auto alignments = sky_dome::AlignmentPair(sky.skyLand);
 		const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight,
 		                                static_cast<float>(_skyDomeRows)};
 
@@ -439,14 +442,12 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 		submitDesc.matrixCount = 1;
 		submitDesc.isSky = true;
 
-		const auto* dome =
-		    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
-		if (const auto* mesh = dome != nullptr ? Locator::resources::value().GetMeshes().Find(dome->meshId) : nullptr)
+		if (const auto* mesh = sky.dome.has_value() ? Locator::resources::value().GetMeshes().Find(sky.dome->meshId) : nullptr)
 		{
 			DrawMesh(*mesh, submitDesc, 0);
 		}
-		DrawSun(skyViewId);
-		DrawMoon(skyViewId);
+		DrawSun(skyViewId, *desc.frame);
+		DrawMoon(skyViewId, *desc.frame);
 	}
 }
 
@@ -493,7 +494,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 	auto section = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawIsland
 	                                                               : Profiler::Stage::MainPassDrawIsland);
 	// Below High detail the sea doesn't mirror the land
-	const bool landShown = !IsMirrorScene(desc.viewId) || Locator::config::value().detail.landReflection;
+	const auto& frame = *desc.frame;
+	const bool landShown = !IsMirrorScene(desc.viewId) || frame.land.reflected;
 	if (desc.drawIsland && landShown)
 	{
 		auto& island = Locator::terrainSystem::value();
@@ -601,15 +603,13 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		const ProgramUniform blockUniform {*terrainShader, "u_block"};
 		const ProgramUniform blockNeighboursUniform {*terrainShader, "u_blockNeighbours"};
 		const ProgramUniform coarsePageUniform {*terrainShader, "u_coarsePage"};
-		const bool coarseLand = Locator::config::value().detail.coarseLand;
+		const bool coarseLand = frame.land.coarse;
 		const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
 		const ProgramUniform groundShadowBlockUniform {*terrainShader, "u_groundShadowBlock"};
 		const bool groundShadowed = desc.viewId == RenderPass::Main;
 		// An open vortex opens a hole in the land block under its middle and lays a ring on it; the last vortex on a
 		// block is the one it shows
-		const std::span<const ecs::systems::VortexSystemInterface::GroundMark> groundMarks =
-		    Locator::vortexSystem::has_value() ? Locator::vortexSystem::value().GetGroundMarks()
-		                                       : std::span<const ecs::systems::VortexSystemInterface::GroundMark> {};
+		const std::span<const ecs::systems::VortexSystemInterface::GroundMark> groundMarks = frame.land.groundMarks;
 		using GroundTextures = ecs::components::Vortex::GroundTextures;
 		const auto groundTexturesLoaded = [&](const GroundTextures& ground) {
 			return textures.Contains(ground.hole) && textures.Contains(ground.ring);
@@ -734,8 +734,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 				}
 				paintedSnow = PaintLandSnow(drawnWithTexture);
 				// The paints of this frame also paint the blocks' coarse textures, in the order from the game's camera
-				PaintCoarseEdges(Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : desc.camera->GetOrigin(),
-				                 drawnIndices, paintedSnow);
+				PaintCoarseEdges(frame.camera != nullptr ? frame.camera->GetOrigin() : desc.camera->GetOrigin(), drawnIndices,
+				                 paintedSnow);
 			}
 			setTerrainUniforms();
 			for (const auto& entry : order)
@@ -1155,17 +1155,20 @@ void Renderer::DrawPassAnimals(const DrawSceneDesc& desc, auto& draws) const
 		submitDesc.boneTexture = nullptr;
 	}
 	drawDrawnPosedStills(false);
-	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	const auto& looks = desc.frame->entityLooks;
+	for (size_t index = 0; index < renderCtx.entityDraws.size() && index < looks.size(); ++index)
 	{
+		const auto& [entity, instance] = renderCtx.entityDraws[index];
 		if (mirroredWithHand(instance))
 		{
 			continue;
 		}
+		const auto& look = looks[index];
 		inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
 			// NOLINTNEXTLINE(clang-analyzer-core.NullDereference): the lambda uses values set before the call
-			drawAnimal(entity, instance, false);
-			drawVillager(entity, instance);
-			drawPosedStill(entity, instance, false);
+			drawAnimal(look, instance, false);
+			drawVillager(look, instance);
+			drawPosedStill(look, instance, false);
 		});
 	}
 }
@@ -1192,9 +1195,14 @@ void Renderer::DrawPassMirroredHeld(const DrawSceneDesc& desc, const ScenePass& 
 			const auto posed = std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
 			if (posed != renderCtx.entityDraws.end())
 			{
-				drawAnimal(held.entity, held.instance, false);
-				drawVillager(held.entity, held.instance);
-				drawPosedStill(held.entity, held.instance, false);
+				const auto index = static_cast<size_t>(std::distance(renderCtx.entityDraws.begin(), posed));
+				if (index < desc.frame->entityLooks.size())
+				{
+					const auto& look = desc.frame->entityLooks[index];
+					drawAnimal(look, held.instance, false);
+					drawVillager(look, held.instance);
+					drawPosedStill(look, held.instance, false);
+				}
 				continue;
 			}
 			const auto placers = renderCtx.instancedDrawDescs.find(held.mesh);
@@ -1249,6 +1257,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	auto& drawDrawnPosedStills = draws.drawDrawnPosedStills;
 	auto& drawHeld = draws.drawHeld;
 	auto& drawRootsPiles = draws.drawRootsPiles;
+	const auto& looks = desc.frame->entityLooks;
 	// The translucent meshes blend over the opaque ones, each in its own place in the sort
 	submitDesc.viewId = translucentViewId;
 	// A thing that the game draws at once comes at its place in the land's draw list, before every sorted thing. The
@@ -1325,13 +1334,14 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 			}
 		}
 		drawDrawnPosedStills(true);
-		for (const auto& [entity, instance] : renderCtx.entityDraws)
+		for (size_t index = 0; index < renderCtx.entityDraws.size() && index < looks.size(); ++index)
 		{
+			const auto instance = renderCtx.entityDraws[index].instance;
 			if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 			{
 				submitDesc.sortDepth =
 				    zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
-				drawPosedStill(entity, instance, true);
+				drawPosedStill(looks[index], instance, true);
 			}
 		}
 	}
@@ -1360,12 +1370,13 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	// Each thing that is posed by itself (an animal, a villager or posed scenery) is drawn above, in its own pose.
 	// It is not drawn here, because it would show again in the model's own pose.
 	DrawPassBlendedPlaced(desc, draws, temple_room_order::Step::CurrentRoomBlended, blendDepth);
-	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	for (size_t index = 0; index < renderCtx.entityDraws.size() && index < looks.size(); ++index)
 	{
+		const auto instance = renderCtx.entityDraws[index].instance;
 		if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 		{
 			submitDesc.sortDepth = blendDepth(instance);
-			drawAnimal(entity, instance, true);
+			drawAnimal(looks[index], instance, true);
 		}
 	}
 	// A warm-up draws each model of the land once in each way that the frames draw it: solid as it is placed, blended
@@ -1748,7 +1759,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	                   | BGFX_STATE_DEPTH_TEST_GREATER //
 	                   | BGFX_STATE_MSAA               //
 	    ;
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& frame = *desc.frame;
+	const auto& renderCtx = *frame.models;
 
 	// Instance meshes
 	// The creatures are drawn with a light of their own, at every detail level
@@ -2219,10 +2231,10 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	};
 	// The animals, each posed by its own clip and in its own light, as the mesh its distance chose; one fading out,
 	// by itself or in the distance, blends over the rest
-	const auto drawAnimal = [&](entt::entity entity, uint32_t instance, bool translucent) {
-		const auto* pose = desc.entities.TryGet<const ecs::components::AnimalPose>(entity);
+	const auto drawAnimal = [&](const DrawnFrame::EntityLook& look, uint32_t instance, bool translucent) {
+		const auto* pose = look.animal.has_value() ? &*look.animal : nullptr;
 		const auto holder = HolderOf(renderCtx, instance);
-		if (pose == nullptr || !holder.has_value() || pose->bones.empty() ||
+		if (pose == nullptr || !holder.has_value() || pose->bones.count == 0 ||
 		    (pose->alpha < 255 || holder->fading) != translucent || !meshManager.Contains(holder->mesh) ||
 		    (!holder->fading && _animalBoneGroups.contains(holder->mesh)))
 		{
@@ -2242,7 +2254,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			return;
 		}
-		const EntityPose entityPose {.bones = pose->bones, .morphTargets = nullptr};
+		const EntityPose entityPose {.bones = frame.BonesOf(pose->bones), .morphTargets = nullptr};
 		// What of a swimmer is under the sea is drawn beneath the sea's surface, which the sea is then blended
 		// over: in its colour under the sea, and nothing of it above the sea's level
 		if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && alpha >= 1.0f)
@@ -2301,13 +2313,12 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	const auto handDraw = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
 	const bool handReflected = desc.drawHand && handDraw != renderCtx.instancedDrawDescs.end() && handDraw->second.count > 0 &&
 	                           !handDraw->second.hiddenFromReflection;
-	const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
+	const auto drawVillager = [&](const DrawnFrame::EntityLook& look, uint32_t instance) {
 		const bool reflection = IsMirrorScene(desc.viewId);
-		const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
-		if (pose == nullptr || (reflection && !graphics::sea_reflection::ReflectsVillager(
-		                                          {.inPhysics = desc.entities.AllOf<ecs::components::InPhysics>(entity),
-		                                           .inHand = desc.entities.AllOf<ecs::components::InHand>(entity),
-		                                           .handReflected = handReflected})))
+		const auto* pose = look.villager.has_value() ? &*look.villager : nullptr;
+		if (pose == nullptr ||
+		    (reflection && !graphics::sea_reflection::ReflectsVillager(
+		                       {.inPhysics = pose->inPhysics, .inHand = pose->inHand, .handReflected = handReflected})))
 		{
 			return;
 		}
@@ -2319,16 +2330,15 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		const auto& [meshId, placers] = *holding;
 		const bool palette = placers->bonePalette && renderCtx.bonePaletteTexture;
 		const auto model = meshManager.Handle(meshId);
-		const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
+		const bool posed = pose->poseBones == model->GetBoneMatrices().size() && pose->bones.has_value();
 		const EntityPose entityPose = palette
 		                                  ? EntityPose {.bones = {}, .morphTargets = nullptr, .bonePalette = true}
-		                                  : EntityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
+		                                  : EntityPose {.bones = posed ? frame.BonesOf(*pose->bones)
 		                                                               : std::span<const glm::mat4>(model->GetBoneMatrices()),
 		                                                .morphTargets = nullptr};
 		// A villager that swims in high detail is also drawn under the sea's surface, so the sea blends over it:
 		// in the dark blue of a swimmer, and nothing of it above the sea's level
-		if (desc.viewId == RenderPass::Main && desc.drawWater &&
-		    ecs::swimmer_rules::Swims(desc.entities.AllOf<ecs::components::HighDetail>(entity), pose->clip))
+		if (desc.viewId == RenderPass::Main && desc.drawWater && ecs::swimmer_rules::Swims(pose->highDetail, pose->clip))
 		{
 			const auto view = std::exchange(submitDesc.viewId, RenderPass::UnderSea);
 			submitDesc.objectLook =
@@ -2355,10 +2365,10 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		});
 	};
 	// The gates and other scenery the scripts open and close, each posed by its own clip: those fading out in the
-	// distance and those that blend by their materials (an opened reward chest) with the blended things. `from`
-	// is the registry of the thing: the land's, or the drawn registry.
-	const auto drawPosedStillOf = [&](const ecs::Registry& from, entt::entity entity, uint32_t instance, bool blended) {
-		const auto* still = from.TryGet<const ecs::components::AnimatedStaticPose>(entity);
+	// distance and those that blend by their materials (an opened reward chest) with the blended things. The look is
+	// of a thing of the land or of the drawn registry.
+	const auto drawPosedStill = [&](const DrawnFrame::EntityLook& look, uint32_t instance, bool blended) {
+		const auto* still = look.still.has_value() ? &*look.still : nullptr;
 		if (still == nullptr)
 		{
 			return;
@@ -2367,7 +2377,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
 		// mirrors
 		const bool reflection = IsMirrorScene(desc.viewId);
-		if (reflection && from.AllOf<ecs::components::BoatFilmPart>(entity))
+		if (reflection && still->boatFilmPart)
 		{
 			return;
 		}
@@ -2384,8 +2394,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			return;
 		}
 		const auto model = meshManager.Handle(meshId);
-		const bool posed = still->bones.size() == model->GetBoneMatrices().size();
-		const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(still->bones)
+		const bool posed = still->bones.count == model->GetBoneMatrices().size();
+		const EntityPose entityPose {.bones = posed ? frame.BonesOf(still->bones)
 		                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
 		                             .morphTargets = nullptr};
 		if (placers->partsByLevel)
@@ -2395,18 +2405,11 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		drawInstances(meshId, *placers, fading ? false : placers->materialBlending, instance, 1, &entityPose);
 		submitDesc.detailLevel = 1;
 	};
-	const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
-		drawPosedStillOf(desc.entities, entity, instance, blended);
-	};
 	// The posed things that only the frames make, as the worm on the apple barrel, are in the first segment
 	const auto drawDrawnPosedStills = [&](bool blended) {
-		if (!Locator::drawnRegistry::has_value())
+		for (size_t index = 0; index < renderCtx.drawnEntityDraws.size() && index < frame.drawnEntityLooks.size(); ++index)
 		{
-			return;
-		}
-		const auto& drawn = Locator::drawnRegistry::value();
-		for (const auto& [entity, instance] : renderCtx.drawnEntityDraws)
-		{
+			const auto instance = renderCtx.drawnEntityDraws[index].instance;
 			if (instance >= renderCtx.instanceUniforms.size() || mirroredWithHand(instance))
 			{
 				continue;
@@ -2416,7 +2419,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 				submitDesc.sortDepth =
 				    zsort::ModelDepth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
 			}
-			drawPosedStillOf(drawn, entity, instance, blended);
+			drawPosedStill(frame.drawnEntityLooks[index], instance, blended);
 		}
 	};
 	// What the villagers hold in their hands, a draw for each model: the opaque ones here, those fading out with
@@ -2542,7 +2545,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	auto subSection = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawVegetation
 	                                                                  : Profiler::Stage::MainPassDrawVegetation);
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& renderCtx = *desc.frame->models;
 
 	if (desc.drawVegetation)
 	{

@@ -38,6 +38,7 @@ public:
 		MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::GetContext");
 		return _renderContext;
 	}
+	[[nodiscard]] uint64_t GetContextWrites() const override { return _contextWrites; }
 
 private:
 	virtual void PrepareDrawDescs(bool drawBoundingBox) = 0;
@@ -49,6 +50,8 @@ private:
 	virtual void ForgetUploads() {}
 	/// Whether the system is one of the owners that give their data to the graphics device again
 	bool _givesDataAgain {false};
+	/// How many times PrepareDraw changed the context
+	uint64_t _contextWrites {0};
 
 protected:
 	/// The bones of the villagers placed with the instances, for the vertex shader to read

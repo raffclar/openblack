@@ -22,6 +22,7 @@
 #include "Debug/FrameStatsLog.h"
 #include "Enums.h"
 #include "Game.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/RendererInterface.h"
 
 namespace openblack
@@ -61,8 +62,13 @@ namespace openblack::game_detail
 /// The player that the mouse, the keys and the gestures of this computer act for
 PlayerNames LocalInputPlayer();
 
-/// How the game draws its scene into the window, from its camera
-graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& config, uint32_t time, bool drawHand);
+/// Fills the frame's drawn copy from the world as the steps of the frame left it. Call it after the steps of the frame
+/// and before the draw.
+void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uint32_t time);
+
+/// How the game draws its scene into the window, from the camera of the drawn copy
+graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& config, const graphics::DrawnFrame& frame,
+                                                         bool drawHand);
 
 /// A network game with a session: the menu has Exit Online Game and the Multiplayer tab
 bool InNetworkGame();

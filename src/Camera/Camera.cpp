@@ -82,6 +82,10 @@ glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
 
 camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
 {
+	if (interpolation == Interpolation::Current && _keptPose.has_value())
+	{
+		return *_keptPose;
+	}
 	auto pose = camera_drawn::Pose {.eye = GetOrigin(interpolation), .focus = GetFocus(interpolation)};
 	// The frame draws the world from an eye and a focus that are numbers, with the eye not on its focus and not below the
 	// land. The temple draws its inside from its own camera. The editor's camera goes anywhere.
@@ -580,6 +584,13 @@ std::unique_ptr<Camera> Camera::ContinueWith(std::unique_ptr<CameraModel> model)
 	other->_eyeMayGoBelowLand = _eyeMayGoBelowLand;
 	other->_heldFollowHeading = _heldFollowHeading;
 	return other;
+}
+
+std::unique_ptr<Camera> Camera::DrawnCopy() const
+{
+	auto copy = ContinueWith(nullptr);
+	copy->_keptPose = DrawnPose(Interpolation::Current);
+	return copy;
 }
 
 void Camera::TakeBackFrom(Camera& other)

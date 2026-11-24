@@ -70,6 +70,7 @@
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DrawOrder.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/IndexBuffer.h"
@@ -1217,17 +1218,20 @@ void Renderer::UploadPosedBones(const DrawSceneDesc& drawDesc) const
 	constexpr uint32_t k_BoneTextureWidth = 1024;
 	_animalBoneGroups.clear();
 	_posedBones.clear();
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& frame = *drawDesc.frame;
+	const auto& renderCtx = *frame.models;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	struct Drawn
 	{
 		uint32_t instance;
-		const ecs::components::AnimalPose* pose;
+		const DrawnFrame::AnimalLook* pose;
 	};
 	std::unordered_map<entt::id_type, std::vector<Drawn>> byModel;
-	for (const auto& [entity, instance] : renderCtx.entityDraws)
+	for (size_t index = 0; index < renderCtx.entityDraws.size() && index < frame.entityLooks.size(); ++index)
 	{
-		const auto* pose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity);
+		const auto instance = renderCtx.entityDraws[index].instance;
+		const auto& look = frame.entityLooks[index].animal;
+		const auto* pose = look.has_value() ? &*look : nullptr;
 		const auto holder = HolderOf(renderCtx, instance);
 		if (pose != nullptr && holder.has_value() && !holder->fading)
 		{
@@ -1261,7 +1265,8 @@ void Renderer::UploadPosedBones(const DrawSceneDesc& drawDesc) const
 		for (const auto& drawn : animals)
 		{
 			// Each in its place among the model's instances, in the pose its clip gives it, or its model's own
-			const auto& posed = drawn.pose->bones.size() == rest.size() ? drawn.pose->bones : rest;
+			const auto posed =
+			    drawn.pose->bones.count == rest.size() ? frame.BonesOf(drawn.pose->bones) : std::span<const glm::mat4>(rest);
 			const auto place = first + ((drawn.instance - placers->second.offset) * bones);
 			std::ranges::copy(posed, _posedBones.begin() + place);
 		}

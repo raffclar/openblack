@@ -185,6 +185,9 @@ public:
 	/// A camera that continues from this one with the model given: the same view, movement, lens and count of the
 	/// model's time. The world's camera continues so behind the temple.
 	[[nodiscard]] std::unique_ptr<Camera> ContinueWith(std::unique_ptr<CameraModel> model) const;
+	/// A copy of the camera as the frame draws it now: the same view, movement, lens and shake, with no model. The copy
+	/// keeps the eye and the focus that this camera draws from now, so it does not read the land or the temple again.
+	[[nodiscard]] std::unique_ptr<Camera> DrawnCopy() const;
 	/// Takes back the movement, the model, the count of the model's time and the point to turn about from a camera that
 	/// continued from this one. The lens and the projection stay.
 	void TakeBackFrom(Camera& other);
@@ -304,6 +307,8 @@ protected:
 	std::optional<View> _drawnView;
 	/// The last eye and focus of the world camera that have no coordinate that is not a number
 	camera_drawn::Pose _lastCorrectPose {.eye = camera_drawn::k_FirstCorrectPoint, .focus = camera_drawn::k_FirstCorrectPoint};
+	/// The eye and the focus that a drawn copy keeps for its current view
+	std::optional<camera_drawn::Pose> _keptPose;
 	/// True when the frame draws the world from this camera, and false when the temple draws its inside
 	[[nodiscard]] static bool DrawsTheWorld();
 	/// The kept view, or the view now when there is no kept view

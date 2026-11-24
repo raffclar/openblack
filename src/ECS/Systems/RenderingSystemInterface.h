@@ -443,6 +443,9 @@ public:
 	virtual void SetLayoutDirty() = 0;
 	virtual void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use) = 0;
 	virtual const RenderContext& GetContext() = 0;
+	/// How many times the steps of the frame changed the context. Only PrepareDraw changes it. A drawn frame keeps the
+	/// count, so a check can find a change while the frame encodes.
+	[[nodiscard]] virtual uint64_t GetContextWrites() const { return 0; }
 	/// The detail that a thing of the land is drawn in this frame, as the bit that its mesh's parts name it by (see
 	/// graphics::mesh_detail::LevelBit). None when the frame does not draw the thing whole as a mesh by itself. Ask it
 	/// before the frame is drawn, after the camera moved.
