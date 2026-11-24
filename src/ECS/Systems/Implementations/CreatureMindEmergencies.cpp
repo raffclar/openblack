@@ -65,7 +65,10 @@ entt::entity NearestTownWithin(const ecs::Registry& registry, glm::vec3 point, f
 	entt::entity nearest = entt::null;
 	float best = reach;
 	ecs::player_towns::ForEachInOrder(registry, [&](entt::entity town) {
-		if (const auto* transform = registry.TryGet<const Transform>(town))
+		// A town that is surely not nearer than the nearest so far, or the reach, does not change the result
+		const auto* transform = registry.TryGet<const Transform>(town);
+		if (transform != nullptr &&
+		    !gutils::SurelyNotNearer({point.x, point.z}, {transform->position.x, transform->position.z}, best))
 		{
 			const float distance =
 			    gutils::GetDistanceInMetres(from, map_coords::FromMetres({transform->position.x, transform->position.z}));

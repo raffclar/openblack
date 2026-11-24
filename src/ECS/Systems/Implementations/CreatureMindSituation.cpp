@@ -299,11 +299,14 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.eyeDistance = x87::Length<x87::SumOrder::Zyx>(*situation.eye - transform->position);
 	}
-	situation.hangAround = HangAroundPlacesOf(creature);
+	// The pen of the temple of its player is the same for each home below, because nothing here changes the temples
+	const auto templePen =
+	    body != nullptr ? ecs::creature_home::TemplePenOf(registry, body->owner) : std::optional<glm::vec3> {};
+	situation.hangAround = HangAroundPlacesOf(creature, templePen);
 	situation.turnSeconds = k_TurnSeconds;
 	situation.turnsPerSecond = k_TurnsPerSecond;
 	SituatePlayer(creature, situation);
-	SituateHome(creature, situation);
+	SituateHome(creature, situation, templePen);
 	SituateEmotes(creature, situation);
 	SituateFriends(creature, situation);
 	if (body != nullptr)
@@ -440,7 +443,8 @@ void CreatureMindSystem::BelieveInTempleToEnter(entt::entity creature, const cre
 	}
 }
 
-void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_actions::Situation& situation)
+void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_actions::Situation& situation,
+                                     const std::optional<glm::vec3>& templePen)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -450,12 +454,12 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 		return;
 	}
 	situation.standing = at->position;
-	if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+	if (const auto home = ecs::creature_home::HomeOf(registry, creature, templePen))
 	{
 		situation.home = glm::vec2(home->x, home->z);
 		situation.homeDistance = gutils::GetDistanceInMetres(situation.position, *situation.home);
 	}
-	if (const auto home = ecs::creature_home::HomeOnMapOf(registry, creature))
+	if (const auto home = ecs::creature_home::HomeOnMapOf(registry, creature, templePen))
 	{
 		situation.homeCellDistance = creature_plan_actions::HomeCellDistance(map_coords::FromMetres(situation.position), *home);
 	}
@@ -491,7 +495,8 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 	situation.nothingFrighteningNear = creature_mind::NothingFrighteningNear(situation.height, others);
 }
 
-creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::entity creature)
+creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::entity creature,
+                                                                       const std::optional<glm::vec3>& templePen)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto onGround = [](glm::vec3 point) {
@@ -504,7 +509,7 @@ creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::ent
 	places.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
 	// Each creature gets a home when it is made: the pen of its temple, or the place where it was made. Only a
 	// creature that has no home hangs around where it stands.
-	if (const auto home = ecs::creature_home::HomeOf(registry, creature))
+	if (const auto home = ecs::creature_home::HomeOf(registry, creature, templePen))
 	{
 		places.home = onGround(*home);
 	}

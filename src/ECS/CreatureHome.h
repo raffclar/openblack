@@ -32,6 +32,11 @@ namespace openblack::ecs::creature_home
 /// The same home as a map position: the temple's pen as the map keeps it, else the exact map position that the leash
 /// keeps; none without a home
 [[nodiscard]] std::optional<map_coords::MapCoords> HomeOnMapOf(const Registry& registry, entt::entity creature);
+/// The same two homes, with the temple pen of the creature's player (TemplePenOf) that the caller found
+[[nodiscard]] std::optional<glm::vec3> HomeOf(const Registry& registry, entt::entity creature,
+                                              const std::optional<glm::vec3>& templePen);
+[[nodiscard]] std::optional<map_coords::MapCoords> HomeOnMapOf(const Registry& registry, entt::entity creature,
+                                                               const std::optional<glm::vec3>& templePen);
 /// The pen of the first temple of the player whose mesh marks a pen; none when no temple of the player has one
 [[nodiscard]] std::optional<glm::vec3> TemplePenOf(const Registry& registry, PlayerNames owner);
 /// The creature home of the player's citadel on the map: a marked place of the first temple of the player, on the ground.

@@ -260,12 +260,13 @@ bool IsTownCentre(const Abode& abode)
 }
 
 /// The temple nearest a point, of every player's in turn and then the neutral one's; the first of equals
-entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapCoords& from)
+entt::entity NearestTemple(const ecs::Registry& registry, glm::vec2 point)
 {
 	if (!Locator::worshipSiteSystem::has_value())
 	{
 		return entt::null;
 	}
+	const auto from = map_coords::FromMetres(point);
 	entt::entity nearest = entt::null;
 	auto within = std::numeric_limits<float>::max();
 	const auto players = ecs::game_players::All();
@@ -276,7 +277,8 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 		const auto index = static_cast<size_t>(player);
 		const auto temple = index < temples.size() ? temples[index] : entt::null;
 		const auto* at = temple != entt::null ? registry.TryGet<const Transform>(temple) : nullptr;
-		if (at == nullptr)
+		// A temple that is surely not nearer than the nearest so far does not change the result
+		if (at == nullptr || gutils::SurelyNotNearer(point, glm::xz(at->position), within))
 		{
 			continue;
 		}
@@ -811,7 +813,7 @@ void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& 
 		}
 	}
 	// The nearest temple, if it is another than the last that it came across
-	const auto temple = NearestTemple(registry, from);
+	const auto temple = NearestTemple(registry, glm::xz(transform.position));
 	if (temple != entt::null && temple != mind.nearestTemple)
 	{
 		mind.nearestTemple = temple;

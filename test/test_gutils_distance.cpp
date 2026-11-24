@@ -10,9 +10,14 @@
 // The game's distances, against values worked out with the game's 24-bit float arithmetic. The sigmoid table is
 // checked in bits.
 
+#include <cmath>
+
+#include <array>
 #include <bit>
 #include <limits>
+#include <random>
 
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
 #include "Common/GUtilsDistance.h"
@@ -217,4 +222,39 @@ TEST(GUtilsDistance, DistanceChangeToBelief)
 	EXPECT_EQ(gu::DistanceChangeToBelief(1.0f, 1.0f), gu::k_Sigmoid[18]);
 	EXPECT_FLOAT_EQ(gu::DistanceChangeToBelief(0.5f, 1.0f), 0.9997212290763855f);
 	EXPECT_EQ(gu::DistanceChangeToBelief(-1.0f, 1.0f), 1.0f);
+}
+
+// The quick test never says that a point is not nearer when its map distance is less than the bound. A bound just above
+// the map distance must always give false. Other bounds give true often, so the test is not empty.
+TEST(GUtilsDistance, SurelyNotNearerNeverRejectsANearerPoint)
+{
+	std::mt19937 random(12345);
+	const std::array<float, 5> ranges {2.0f, 50.0f, 600.0f, 5'000.0f, 99'000.0f};
+	size_t rejected = 0;
+	for (const float range : ranges)
+	{
+		std::uniform_real_distribution<float> place(-range, range);
+		for (int i = 0; i < 40'000; ++i)
+		{
+			const glm::vec2 a {place(random), place(random)};
+			// Half of the second points are near the first, along one side or across
+			const glm::vec2 b =
+			    i % 2 == 0 ? glm::vec2 {place(random), place(random)} : a + glm::vec2 {place(random), place(random) * 0.01f};
+			const float distance = gu::GetDistanceInMetres(a, b);
+			ASSERT_FALSE(gu::SurelyNotNearer(a, b, std::nextafter(distance, std::numeric_limits<float>::max())))
+			    << a.x << " " << a.y << " " << b.x << " " << b.y << " " << distance;
+			if (gu::SurelyNotNearer(a, b, distance * 0.9f))
+			{
+				++rejected;
+			}
+		}
+	}
+	EXPECT_GT(rejected, 50'000u);
+	// Points far outside the map and NaN give false
+	constexpr float k_NaN = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_FALSE(gu::SurelyNotNearer({0.0f, 0.0f}, {200'000.0f, 0.0f}, 1.0f));
+	EXPECT_FALSE(gu::SurelyNotNearer({0.0f, 0.0f}, {k_NaN, 0.0f}, 1.0f));
+	EXPECT_FALSE(gu::SurelyNotNearer({0.0f, 0.0f}, {std::numeric_limits<float>::infinity(), 0.0f}, 1.0f));
+	// A bound of the largest float is never reached
+	EXPECT_FALSE(gu::SurelyNotNearer({-99'000.0f, -99'000.0f}, {99'000.0f, 99'000.0f}, std::numeric_limits<float>::max()));
 }

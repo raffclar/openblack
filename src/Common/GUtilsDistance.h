@@ -104,6 +104,11 @@ constexpr float k_MetresPerCell = 10.0f;
 /// The same for two map positions kept as (x, z) in map units: unlike the vec2 overload, not metres
 [[nodiscard]] float GetDistanceInMetres(glm::ivec2 a, glm::ivec2 b);
 
+/// Whether GetDistanceInMetres of two (x, z) pairs in metres is surely not less than the bound. A search for the nearest
+/// thing can then skip the distance. The test reads only the larger side of the vector, thus it costs less. It gives
+/// false when it cannot tell, and for points far outside the map.
+[[nodiscard]] bool SurelyNotNearer(glm::vec2 a, glm::vec2 b, float bound);
+
 /// The distance from a map position to the centre of a map cell, in metres
 [[nodiscard]] float GetDistanceInMetresToCell(const map_coords::MapCoords& a, map_coords::JustMapXZ cell);
 
