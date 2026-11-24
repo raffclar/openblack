@@ -39,7 +39,7 @@ public:
 	    , _on(static_cast<size_t>(side) * side, 0)
 	    , _energy(static_cast<size_t>(side) * side, 0.0)
 	{
-		const auto across = static_cast<size_t>((_radius * 2) + 1);
+		const auto across = (static_cast<size_t>(_radius) * 2) + 1;
 		_kernel.resize(across * across);
 		for (int dy = -_radius; dy <= _radius; ++dy)
 		{
@@ -61,7 +61,7 @@ public:
 		const auto side = static_cast<int>(_side);
 		const auto x = static_cast<int>(texel % _side);
 		const auto y = static_cast<int>(texel / _side);
-		const auto across = static_cast<size_t>((_radius * 2) + 1);
+		const auto across = (static_cast<size_t>(_radius) * 2) + 1;
 		for (int dy = -_radius; dy <= _radius; ++dy)
 		{
 			const auto row = static_cast<size_t>((y + dy + side) % side) * _side;

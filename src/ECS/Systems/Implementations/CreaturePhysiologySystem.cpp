@@ -225,7 +225,7 @@ glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
 	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
 	const auto groin = rigs.Handle(rigId)->actionPoints->groin;
-	return glm::vec3(creature::PosedBone(groin, pose.bones, pose.placement)[3]);
+	return {creature::PosedBone(groin, pose.bones, pose.placement)[3]};
 }
 /// The name of the action that the creature's plan carries out, none without a plan
 std::optional<std::string_view> PlanActionOf(const ecs::Registry& registry, entt::entity creature)
@@ -241,7 +241,7 @@ std::optional<std::string_view> PlanActionOf(const ecs::Registry& registry, entt
 	{
 		return std::nullopt;
 	}
-	return std::string_view(tables->actions[action].name);
+	return std::string_view {tables->actions[action].name};
 }
 } // namespace
 

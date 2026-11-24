@@ -57,7 +57,7 @@ std::array<std::string, k_Pictures> PictureFiles()
 				prefix[0] = 'S';
 				hour[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(hour[0])));
 			}
-			files.at(index++) = prefix + "_" + std::string(alignment) + "_" + hour + ".555";
+			files.at(index++) = (prefix + "_").append(alignment).append("_").append(hour).append(".555");
 		}
 	}
 	return files;

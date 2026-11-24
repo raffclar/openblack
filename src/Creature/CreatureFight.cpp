@@ -1718,6 +1718,7 @@ float creature_fight::LifeAfterPayments(float life, float fightHealth, uint32_t 
 	for (uint32_t payment = 0; payment < payments; ++payment)
 	{
 		const auto after = LifeAfterFight(life, fightHealth);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		if (script::property_rules::CanSetLife(after, protectedLife, false))
 		{
 			life = after;

@@ -1649,7 +1649,7 @@ void LobbyClientSystem::OpenPush()
 	{
 		// The origin is an https:// address, and the channel is at the same host over WSS
 		constexpr std::string_view k_Https = "https://";
-		url = fmt::format("wss://{}{}", std::string_view(_config->origin).substr(k_Https.size()), lobby_api::k_EventsPath);
+		url = fmt::format("wss://{}{}", std::string_view {_config->origin}.substr(k_Https.size()), lobby_api::k_EventsPath);
 	}
 	const auto generation = _generation;
 	_push->Open(std::move(url), _accessToken,

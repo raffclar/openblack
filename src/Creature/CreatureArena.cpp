@@ -91,6 +91,7 @@ std::optional<glm::ivec2> creature_arena::FindClearPlace(glm::ivec2 start, float
 
 	// The circle covers a square of this many cells a side
 	auto cells = static_cast<uint32_t>(map_coords::FtoL(diameter / k_CellSize));
+	// NOLINTNEXTLINE(clang-analyzer-core.DivideZero): the size of a cell is a constant that is not zero
 	if (map_coords::FtoL(diameter) % map_coords::FtoL(k_CellSize) != 0)
 	{
 		++cells;
@@ -146,6 +147,7 @@ std::optional<glm::ivec2> creature_arena::FindClearPlace(glm::ivec2 start, float
 
 std::optional<Placed> creature_arena::Place(glm::ivec2 start, float wantedRadius, const UsableCell& usable)
 {
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the values of the original game
 	for (float scale = 1.0f; scale > k_SmallestScale; scale -= k_ScaleStep)
 	{
 		const float radius = scale * wantedRadius;

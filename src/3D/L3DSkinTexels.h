@@ -83,6 +83,7 @@ enum class Layout : uint8_t
 /// them for an opaque skin
 [[nodiscard]] inline std::vector<uint16_t> SolidAlphaTexels(size_t count)
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list calls another constructor of the vector
 	return std::vector<uint16_t>(count, static_cast<uint16_t>(0xF000U));
 }
 

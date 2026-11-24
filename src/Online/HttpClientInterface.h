@@ -58,19 +58,24 @@ inline constexpr size_t k_MostLargeAnswerBytes = 64 * 1024 * 1024;
 
 /// A large transfer stops when it gets fewer bytes than this in each second for the time of the stall limit. A slow
 /// modem gives more than 4 KiB in each second, so only a server that holds the transfer open stops.
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 inline constexpr long k_LargeStallBytesPerSecond = 1024;
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 inline constexpr long k_LargeStallSeconds = 30;
 /// The time to connect to the server of a large transfer
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 inline constexpr long k_LargeConnectMs = 10'000;
 
 /// The full time of a large transfer of at most this number of bytes: the time to connect, one stall, and the time of
 /// all the bytes at the stall speed. A server that sends just more than the stall speed thus cannot hold the transfer
 /// open for longer.
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 [[nodiscard]] constexpr long LargeTransferTimeoutMs(uint64_t mostBytes) noexcept
 {
 	constexpr uint64_t k_Most = 0x7FFF'FFFF;
 	const uint64_t ms = static_cast<uint64_t>(k_LargeConnectMs) + (static_cast<uint64_t>(k_LargeStallSeconds) * 1000) +
 	                    ((mostBytes / static_cast<uint64_t>(k_LargeStallBytesPerSecond)) * 1000);
+	// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 	return static_cast<long>(ms < k_Most ? ms : k_Most);
 }
 

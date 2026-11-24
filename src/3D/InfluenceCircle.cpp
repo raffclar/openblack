@@ -78,6 +78,7 @@ void Overlap(Circle& circle, Circle& older)
 	else
 	{
 		HideInside(circle, older);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		HideInside(older, circle);
 	}
 }

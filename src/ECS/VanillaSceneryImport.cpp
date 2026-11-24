@@ -219,7 +219,7 @@ std::optional<StaticKind> StaticKindOf(const VanillaRecord& record)
 std::optional<uint32_t> StaticRowOf(const VanillaWorld& world, const VanillaRecord& record, StaticKind kind)
 {
 	const auto info = world.Word(record, "info").value_or(0);
-	const auto index = [](auto row) { return row.has_value() ? std::optional(static_cast<uint32_t>(*row)) : std::nullopt; };
+	const auto index = [](auto row) { return row.has_value() ? std::optional {static_cast<uint32_t>(*row)} : std::nullopt; };
 	switch (kind)
 	{
 	case StaticKind::MobileStatic:

@@ -70,10 +70,10 @@ LayoutSpace openblack::gui::FrontEndSpace(int32_t screenWidth, int32_t screenHei
 
 glm::ivec2 LayoutSpace::PixelToLayout(glm::ivec2 pixel) const noexcept
 {
-	return glm::ivec2(glm::floor(ToLayout(glm::vec2(pixel) + 0.5f)));
+	return {glm::floor(ToLayout(glm::vec2(pixel) + 0.5f))};
 }
 
 glm::ivec2 LayoutSpace::LayoutToPixel(glm::ivec2 layout) const noexcept
 {
-	return glm::ivec2(glm::floor(ToScreen(glm::vec2(layout) + 0.5f)));
+	return {glm::floor(ToScreen(glm::vec2(layout) + 0.5f))};
 }

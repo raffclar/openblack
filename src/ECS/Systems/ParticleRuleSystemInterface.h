@@ -105,14 +105,17 @@ public:
 
 	/// An effect from a particle file by its name (such as "SF_Smoke"), at a point and a magnitude; k_NoEffect if there
 	/// is no such file. Its random numbers are the shared ones when synced.
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual EffectId Start(std::string_view file, glm::vec3 origin, float magnitude, bool synced = false) = 0;
 	/// The effect of a particle type; k_NoEffect for a type without a file
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual EffectId Start(ParticleType type, glm::vec3 origin, float magnitude, bool synced = false) = 0;
 	/// Loads the files of all the particle types, and the models and light maps that they use. Call it behind the
 	/// loading screen, so that the first start of an effect does not read files in a frame.
 	virtual void LoadAllTypes() {}
 	/// An effect a miracle owns and steps itself with ProcessForSpell; it is told the effect started. Its random numbers
 	/// are the shared ones unless it is only this computer's, such as the one shown in the hand
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual EffectId StartForSpell(ParticleType type, glm::vec3 origin, glm::vec3 direction, float magnitude,
 	                               particles::SpellSink& sink, bool synced = true) = 0;
 	/// One step of a miracle's effect; false once it has ended, and then it is gone
@@ -142,6 +145,7 @@ public:
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes. Its random numbers are
 	/// the shared ones, unless it shows only what the hand of this computer did.
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                                 float magnitude = 1.0f, bool synced = true) = 0;
 

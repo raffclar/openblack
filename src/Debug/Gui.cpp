@@ -176,29 +176,29 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 
 	std::vector<std::unique_ptr<Window>> debugWindows;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
-	debugWindows.emplace_back(new Profiler);
-	debugWindows.emplace_back(new MeshViewer);
-	debugWindows.emplace_back(new TextureViewer);
-	debugWindows.emplace_back(new Console);
-	debugWindows.emplace_back(new LandIsland);
-	debugWindows.emplace_back(new PathFinding);
-	debugWindows.emplace_back(new Audio);
-	debugWindows.emplace_back(new TempleInterior);
+	debugWindows.emplace_back(std::make_unique<Profiler>());
+	debugWindows.emplace_back(std::make_unique<MeshViewer>());
+	debugWindows.emplace_back(std::make_unique<TextureViewer>());
+	debugWindows.emplace_back(std::make_unique<Console>());
+	debugWindows.emplace_back(std::make_unique<LandIsland>());
+	debugWindows.emplace_back(std::make_unique<PathFinding>());
+	debugWindows.emplace_back(std::make_unique<Audio>());
+	debugWindows.emplace_back(std::make_unique<TempleInterior>());
 	debugWindows.emplace_back(std::make_unique<TempleVillagers>());
-	debugWindows.emplace_back(new gui::Camera);
-	debugWindows.emplace_back(new Weather);
-	debugWindows.emplace_back(new Moon);
+	debugWindows.emplace_back(std::make_unique<gui::Camera>());
+	debugWindows.emplace_back(std::make_unique<Weather>());
+	debugWindows.emplace_back(std::make_unique<Moon>());
 	debugWindows.emplace_back(std::make_unique<StateHash>());
 	debugWindows.emplace_back(std::make_unique<MemoryUse>());
 	debugWindows.emplace_back(std::make_unique<AlignmentHistory>());
 	debugWindows.emplace_back(std::make_unique<CreatureMindWindow>());
-	debugWindows.emplace_back(new Advisors);
+	debugWindows.emplace_back(std::make_unique<Advisors>());
 	debugWindows.emplace_back(std::make_unique<Challenges>());
-	debugWindows.emplace_back(new Magic);
-	debugWindows.emplace_back(new Gestures);
-	debugWindows.emplace_back(new Physics);
-	debugWindows.emplace_back(new KeyBindingsWindow);
-	debugWindows.emplace_back(new VideoViewer);
+	debugWindows.emplace_back(std::make_unique<Magic>());
+	debugWindows.emplace_back(std::make_unique<Gestures>());
+	debugWindows.emplace_back(std::make_unique<Physics>());
+	debugWindows.emplace_back(std::make_unique<KeyBindingsWindow>());
+	debugWindows.emplace_back(std::make_unique<VideoViewer>());
 	auto spawner = std::make_unique<CreatureSpawner>();
 	auto scenarios = std::make_unique<TestbedScenarios>(*spawner);
 	// The editor hosts the creature spawner's and the scenarios' windows, and the scripts
@@ -215,8 +215,8 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(std::move(spawner));
 #endif
 
-	auto gui = std::unique_ptr<DebugGuiInterface>(
-	    new Gui(imgui, static_cast<bgfx::ViewId>(viewId), std::move(debugWindows), !Locator::windowing::has_value()));
+	std::unique_ptr<DebugGuiInterface> gui = std::make_unique<Gui>(imgui, static_cast<bgfx::ViewId>(viewId),
+	                                                               std::move(debugWindows), !Locator::windowing::has_value());
 
 	if (Locator::windowing::has_value())
 	{
@@ -449,6 +449,7 @@ void Gui::OpenWindow(std::string_view name) noexcept
 std::vector<DebugGuiInterface::WindowState> Gui::ListWindows() const noexcept
 {
 	std::vector<WindowState> windows;
+	windows.reserve(_debugWindows.size());
 	for (const auto& window : _debugWindows)
 	{
 		windows.push_back({.name = window->GetName(), .open = window->IsOpen()});

@@ -86,7 +86,9 @@ uint16_t TexelOf(uint8_t red, uint8_t green, uint8_t blue) noexcept
 		return 0;
 	}
 	// The game reads each channel as a signed byte, and shifts blue with its sign
+	// NOLINTNEXTLINE(bugprone-signed-char-misuse): the game reads the channel as a signed byte
 	const int32_t signedRed = static_cast<int8_t>(red);
+	// NOLINTNEXTLINE(bugprone-signed-char-misuse): the game reads the channel as a signed byte
 	const int32_t signedGreen = static_cast<int8_t>(green);
 	const int32_t signedBlue = static_cast<int8_t>(blue) >> 4;
 	return static_cast<uint16_t>((((signedRed & 0xFF0) + 0xF00) << 4) + signedBlue + (signedGreen & 0xFFF0));

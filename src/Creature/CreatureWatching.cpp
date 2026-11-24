@@ -391,6 +391,7 @@ std::vector<uint32_t> creature_watching::CopyActionsOf(const MimicRule& rule, si
 	{
 		return {};
 	}
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list calls another constructor of the vector
 	return std::vector<uint32_t>(k_CopySlots, miracles[magic].action);
 }
 

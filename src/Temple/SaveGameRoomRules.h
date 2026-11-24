@@ -38,6 +38,7 @@ inline constexpr size_t k_NameLength = 32;
 
 /// What the room's list of saved games and their small pictures come from. Two equal stamps tell that the game did not
 /// save a game, delete a game or write the picture of a slot between them, for the same player on the same land.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct SavedGamesStamp
 {
 	/// The count of the saves, the deletes and the slot pictures that the game started to write

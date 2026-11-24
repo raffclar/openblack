@@ -993,7 +993,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    .landGripped = gripping,
 	    .rotateAroundMouse = rotateAroundMouse,
 	    .bothButtons = twoButtons,
-	    .mouseDelta = takesControls ? glm::ivec2(actionSystem.GetMouseDelta()) : glm::ivec2(0),
+	    .mouseDelta = takesControls ? actionSystem.GetMouseDelta() : glm::ivec2(0),
 	};
 	_helpEvents = {};
 	// Turning, tilting, zooming or turning round the hand, or the movement keys unless the land is gripped with them

@@ -61,7 +61,7 @@ namespace
 /// A glow nothing has set for this many turns goes, as when its effect went without letting go of it
 constexpr uint8_t k_GlowTurnsUnset = 2;
 /// While this many objects have arcs crawling over them, no more are queued
-constexpr long k_MostLiveArcs = 100;
+constexpr int32_t k_MostLiveArcs = 100;
 } // namespace
 
 void GameParticleWorld::SetTargetGlow(entt::entity target, glm::u8vec3 rgb)

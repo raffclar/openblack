@@ -202,7 +202,7 @@ glm::mat4 boat_launch::RootBetween(const glm::mat4& from, const glm::mat4& to, f
 
 glm::vec3 boat_launch::LaunchPlace(const glm::mat4& root, const glm::vec3& dock)
 {
-	return glm::vec3(Placed(glm::mat4(1.0f), dock) * root[3]);
+	return {Placed(glm::mat4(1.0f), dock) * root[3]};
 }
 
 glm::mat4 boat_launch::LaunchMatrix(const glm::mat4& root, const glm::vec3& dock, float liftedBy)

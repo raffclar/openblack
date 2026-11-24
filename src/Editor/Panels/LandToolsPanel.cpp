@@ -425,6 +425,7 @@ paths::DrawnPaths DrawnPathsIn(const ecs::Registry& registry, const land_save::S
 		if (const auto* stream = registry.TryGet<const Stream>(entity))
 		{
 			std::vector<std::string> texts;
+			texts.reserve(stream->points.size());
 			for (const auto point : stream->points)
 			{
 				texts.push_back(writer::PlaceText(paths::PlaceOf(point)));
@@ -435,6 +436,7 @@ paths::DrawnPaths DrawnPathsIn(const ecs::Registry& registry, const land_save::S
 	std::vector<std::pair<entt::entity, std::vector<std::string>>> footpaths;
 	registry.Each<const Footpath>([&footpaths](entt::entity entity, const Footpath& footpath) {
 		std::vector<std::string> texts;
+		texts.reserve(footpath.nodes.size());
 		for (const auto& node : footpath.nodes)
 		{
 			texts.push_back(writer::PlaceText(node.place));

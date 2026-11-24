@@ -23,7 +23,7 @@ namespace openblack::ecs::save_date
 {
 	std::array<char, 128> text {};
 	const auto length = std::strftime(text.data(), text.size(), "%H:%M:%S %A, %d %B %Y", &time);
-	return std::string(text.data(), length);
+	return {text.data(), length};
 }
 
 } // namespace openblack::ecs::save_date

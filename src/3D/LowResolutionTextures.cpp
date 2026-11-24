@@ -64,7 +64,7 @@ bool HalvedAtLowDetail(std::string_view stem)
 	std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 	const auto listed = [](std::string_view name) { return std::ranges::find(k_Halved, name) != k_Halved.end(); };
 	// An alpha file goes with the picture whose name it adds an "a" to
-	return listed(lower) || (lower.ends_with('a') && listed(std::string_view(lower).substr(0, lower.size() - 1)));
+	return listed(lower) || (lower.ends_with('a') && listed(std::string_view {lower}.substr(0, lower.size() - 1)));
 }
 
 std::optional<std::vector<uint8_t>> Halve(std::span<const uint8_t> picture, uint16_t side)

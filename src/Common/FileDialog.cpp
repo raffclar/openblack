@@ -421,7 +421,7 @@ bool Matches(const Filter& filter, std::string_view fileName)
 		const auto wanted = lower(pattern);
 		if (wanted.starts_with('*'))
 		{
-			return name.ends_with(std::string_view(wanted).substr(1));
+			return name.ends_with(std::string_view {wanted}.substr(1));
 		}
 		return name == wanted;
 	});

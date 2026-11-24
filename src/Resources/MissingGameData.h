@@ -48,7 +48,7 @@ constexpr std::array<std::string_view, 2> k_FilesNotInGameData = {
 [[nodiscard]] constexpr bool IsFileNotInGameData(std::string_view path)
 {
 	const auto normalised = NormaliseGameDataPath(path);
-	return std::ranges::find(k_FilesNotInGameData, std::string_view(normalised)) != k_FilesNotInGameData.end();
+	return std::ranges::find(k_FilesNotInGameData, std::string_view {normalised}) != k_FilesNotInGameData.end();
 }
 
 } // namespace openblack::resources

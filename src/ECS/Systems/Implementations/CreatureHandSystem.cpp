@@ -1172,6 +1172,7 @@ void CreatureHandSystem::LookAtReportedHandOf(PlayerNames player)
 		return;
 	}
 	// After the button let go, the creature does not look at the hand while the lock stays
+	// NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage): a locked creature tells that the hand is there
 	if (const auto* locked = registry.TryGet<const HandLockedCreature>(*HandOf(player)); locked != nullptr && locked->released)
 	{
 		return;

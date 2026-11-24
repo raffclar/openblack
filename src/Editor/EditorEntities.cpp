@@ -258,7 +258,7 @@ std::string_view NameTables::NameOf(PlaceKind kind, int32_t type) const
 	// The creatures' list starts at the first species
 	const auto index = kind == PlaceKind::Creature ? type - 1 : type;
 	const auto& names = Of(kind);
-	return index >= 0 && static_cast<size_t>(index) < names.size() ? std::string_view(names.at(static_cast<size_t>(index)))
+	return index >= 0 && static_cast<size_t>(index) < names.size() ? std::string_view {names.at(static_cast<size_t>(index))}
 	                                                               : std::string_view("Unknown");
 }
 
@@ -479,6 +479,7 @@ std::optional<uint32_t> MeshOf(const PlaceItem& item)
 	case PlaceKind::MobileStatic:
 		return index < info.mobileStatic.size() ? std::optional(resources::HashIdentifier(info.mobileStatic.at(index).meshId))
 		                                        : std::nullopt;
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case PlaceKind::Dispenser:
 	case PlaceKind::MiracleBubble:
 		// Made by the magic system; no model to show while placing

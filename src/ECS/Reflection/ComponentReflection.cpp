@@ -64,7 +64,7 @@ void FindReferences(const entt::meta_any& any, entt::entity target, const std::s
 		{
 			const reflection::FieldInfo* info = data.custom();
 			const auto name = info != nullptr ? info->name : std::to_string(id);
-			const auto fieldPath = path.empty() ? name : path + "." + name;
+			const auto fieldPath = path.empty() ? name : (path + ".").append(name);
 			const auto value = data.get(any);
 			if (info != nullptr && info->refersTo != nullptr)
 			{

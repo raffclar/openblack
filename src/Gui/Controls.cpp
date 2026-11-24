@@ -725,7 +725,7 @@ void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused,
 		return static_cast<int>(_font.GetWidth(text, static_cast<float>(_size)));
 	};
 	_state.scroll = input_method::Scroll(shown, _state.scroll, rect.Width(), measure);
-	const auto text = std::u16string_view(shown.text);
+	const auto text = std::u16string_view {shown.text};
 	const auto scroll = static_cast<size_t>(std::clamp(_state.scroll, 0, static_cast<int>(text.size())));
 	const int left = rect.min.x + 4;
 	const int top = rect.Centre().y - (_size / 2);

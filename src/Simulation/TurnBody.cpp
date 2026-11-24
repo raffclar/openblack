@@ -1403,7 +1403,7 @@ std::optional<SplitTurn> StartTurn(TurnViewInterface& view, MindFrameBudget* bud
 
 std::optional<SplitTurn> ContinueTurn(TurnViewInterface& view, SplitTurn turn, MindFrameBudget* budget)
 {
-	return PlayTurnPart(view, std::move(turn), budget);
+	return PlayTurnPart(view, turn, budget);
 }
 
 void PlayTurn(TurnViewInterface& view)

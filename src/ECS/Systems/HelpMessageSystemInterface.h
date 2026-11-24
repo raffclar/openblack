@@ -52,9 +52,11 @@ public:
 	/// Starts the script with the texts from the first to the last, unless the first is past the last or a story script
 	/// holds the dialogue. The town's need's text and value go before them for the town needs' script. True when it
 	/// started.
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual bool RunMessage(uint32_t first, uint32_t last, help_messages::Script script,
 	                        std::optional<std::pair<uint32_t, float>> townNeed = std::nullopt) = 0;
 	/// Says a set: counts it said, then its texts (a thing's set, the thing's texts) through its script
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) = 0;
 	/// A kind of help counts as given now
 	virtual void TriggerCategory(uint32_t category) = 0;

@@ -350,6 +350,7 @@ std::optional<glm::ivec2> GetFireFightingPos(entt::entity villager, entt::entity
 	float radius = fire::StandBackRadius(reach->objectRadius, reach->safeRadius);
 	radius += RadiusOf(villager);
 	radius += GameFloatRandom(1.0f);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return map_coords::WholeXZ(ecs::thing_map_place::Of(registry, fire) + gutils::GetPosFromAngle(angle, radius));
 }
 
@@ -478,6 +479,7 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 		return result;
 	}
 	// A fireman takes the fire into the blaze it fights instead
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	fires.MergeBlazes(mine, object);
 	return 0;
 }

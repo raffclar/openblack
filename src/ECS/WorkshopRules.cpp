@@ -53,7 +53,7 @@ workshop::SpecialPlace workshop::SpecialPlaceOf(const glm::mat4& point, const gl
 
 glm::vec3 workshop::SpecialPointOf(const glm::mat4& point, const glm::mat4& building)
 {
-	return glm::vec3(x87::Product(point, building)[3]);
+	return {x87::Product(point, building)[3]};
 }
 
 float workshop::ScaleOfValue(uint32_t value)

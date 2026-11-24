@@ -75,7 +75,7 @@ std::optional<PlayerNames> Decide(World& world, State& state, const std::vector<
 				continue;
 			}
 			if (standing.share > bestShare)
-			{
+			{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 				bestShare = standing.share;
 				bestGod = god;
 			}

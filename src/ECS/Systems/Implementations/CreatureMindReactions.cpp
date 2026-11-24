@@ -526,7 +526,9 @@ bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMin
 		// Find the desire of the creature about the other creature. The other creature sees this creature, and finds
 		// its desire about this creature.
 		const auto mine = DesireAboutCreature(creature, mind, other, leftOut);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		ComeAcross(other, *otherMind, creature);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		const auto theirs = DesireAboutCreature(other, *otherMind, creature, {});
 		if (!mine.has_value())
 		{

@@ -60,6 +60,7 @@ namespace openblack::gui
 ///
 /// The lobby gives a ticket for a full room only to an observer, so a join of a full room asks again for an observer's
 /// ticket.
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 class MultiplayerFrontEnd
 {
 public:

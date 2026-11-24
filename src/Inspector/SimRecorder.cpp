@@ -177,7 +177,7 @@ void Walk(const Json& value, const std::string& path, uint32_t turn, std::vector
 	{
 		for (const auto& [key, item] : value.items())
 		{
-			Walk(item, path + "." + key, turn, flags, lists);
+			Walk(item, fmt::format("{}.{}", path, key), turn, flags, lists);
 		}
 	}
 }
@@ -244,7 +244,7 @@ std::string ActionName(uint32_t action, const creature_mind_tables::Tables* tabl
 {
 	if (tables != nullptr && action < tables->actions.size())
 	{
-		return std::string(tables->actions[action].name);
+		return {tables->actions[action].name};
 	}
 	return std::to_string(action);
 }

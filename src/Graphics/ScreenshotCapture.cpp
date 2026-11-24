@@ -174,7 +174,7 @@ std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width
 	bx::Error err;
 	if (!bx::open(&writer, partPath.string().c_str(), false, &err))
 	{
-		return std::string(err.getMessage().getCPtr(), err.getMessage().getLength());
+		return {err.getMessage().getCPtr(), static_cast<size_t>(err.getMessage().getLength())};
 	}
 	// The picture is opaque whatever the frame left in its alpha
 	std::vector<uint8_t> opaque(bgra.begin(), bgra.end());
@@ -189,7 +189,7 @@ std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width
 	bx::close(&writer);
 	if (!err.isOk())
 	{
-		return std::string(err.getMessage().getCPtr(), err.getMessage().getLength());
+		return {err.getMessage().getCPtr(), static_cast<size_t>(err.getMessage().getLength())};
 	}
 	std::error_code renameError;
 	std::filesystem::rename(partPath, path, renameError);

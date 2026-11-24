@@ -289,6 +289,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	// The player's creature's fight under a script's control is always watched; any other only from near enough
 	const bool tooFar =
 	    !(involved && scripted) && fight_view::TooFar({eye.x, eye.z}, {looking.x, looking.z}, arena.centre, arena.radius, 1.0f);
+	// NOLINTBEGIN(clang-analyzer-core.NullDereference): the note calls the lambda while the values are alive
 	fight_transcript::Note(first, tooFar ? "view_refused" : "view_on", [&] {
 		return fight_transcript::Fields {{"how", how},
 		                                 {"why", tooFar ? "too_far" : "shown"},
@@ -301,6 +302,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 		                                 {"focus_y", looking.y},
 		                                 {"focus_z", looking.z}};
 	});
+	// NOLINTEND(clang-analyzer-core.NullDereference)
 	if (tooFar)
 	{
 		// For a fight of the player's creature, the advisors can say one of their lines about the fight instead

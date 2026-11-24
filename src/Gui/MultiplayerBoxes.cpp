@@ -373,7 +373,7 @@ void MultiplayerBoxes::BuildChooseConnection(Dialog& dialog)
 	const auto internetName = _frontEnd->GetInternetName();
 	const auto lines =
 	    ConnectionLines(_frontEnd->HasLanConnection(),
-	                    _frontEnd->HasInternetConnection() ? std::optional(std::u16string_view(internetName)) : std::nullopt,
+	                    _frontEnd->HasInternetConnection() ? std::optional(std::u16string_view {internetName}) : std::nullopt,
 	                    Text(k_LanText), Text(k_DefaultText));
 	list.SetItems(Items(lines));
 	list.SetSelection(_frontEnd->GetConnection());
@@ -684,8 +684,8 @@ void MultiplayerBoxes::SyncRoom()
 	const auto landName = land.has_value() ? maps[*land].name : Text(k_NoLandText);
 	const auto playerName = _frontEnd->GetPlayerName();
 	const auto gameName = ToUtf16(server->hostname);
-	const std::array<TextArgument, 4> captionArguments = {std::u16string_view(playerName), std::u16string_view(gameName),
-	                                                      std::u16string_view(landName), int64_t {server->numplayers}};
+	const std::array<TextArgument, 4> captionArguments = {std::u16string_view {playerName}, std::u16string_view {gameName},
+	                                                      std::u16string_view {landName}, int64_t {server->numplayers}};
 	_caption->text = FormatText(Text(k_CaptionText), captionArguments);
 
 	// The roster: "God 3: name (CURRENT)" in the god's colour, the observers in grey
@@ -769,7 +769,7 @@ void MultiplayerBoxes::SyncRoom()
 	SetItemsIfChanged(*_landInfo, Items(info));
 
 	// The clans of the player, and the information of the clan picked
-	const std::array<TextArgument, 1> nameArgument = {std::u16string_view(playerName)};
+	const std::array<TextArgument, 1> nameArgument = {std::u16string_view {playerName}};
 	_clansLabel->text = FormatText(Text(k_ClansOfText), nameArgument);
 	std::vector<std::u16string> clanNames;
 	for (const auto& clan : _frontEnd->GetMyClans())
@@ -781,7 +781,7 @@ void MultiplayerBoxes::SyncRoom()
 	if (shownClan.has_value())
 	{
 		const auto clanName = ToUtf16(shownClan->name);
-		const std::array<TextArgument, 1> clanArgument = {std::u16string_view(clanName)};
+		const std::array<TextArgument, 1> clanArgument = {std::u16string_view {clanName}};
 		_clanInfoLabel->text = FormatText(Text(k_ClanNamedInfoText), clanArgument);
 		const ClanInfoTexts clanTexts {.description = Text(k_ClanDescriptionText),
 		                               .leader = Text(k_ClanLeaderText),
@@ -806,7 +806,7 @@ void MultiplayerBoxes::SyncRoom()
 	const auto shownSeat = _frontEnd->GetShownSeat();
 	const auto* seat = shownSeat.has_value() && *shownSeat < seats.size() ? &seats[*shownSeat] : own;
 	const auto seatName = seat != nullptr ? ToUtf16(seat->account.name) : playerName;
-	const std::array<TextArgument, 1> seatArgument = {std::u16string_view(seatName)};
+	const std::array<TextArgument, 1> seatArgument = {std::u16string_view {seatName}};
 	_playerLabel->text = FormatText(Text(k_PlayerInfoText), seatArgument);
 	// The game shows only the lines of the lobby's player database under the title
 	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines(_frontEnd->GetShownDetails())));
@@ -901,7 +901,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 	if (message == Message::KickedFromGame)
 	{
 		const auto name = _frontEnd->GetMessageName();
-		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
+		const std::array<TextArgument, 1> nameArgument = {std::u16string_view {name}};
 		shown.text = FormatText(shown.text, nameArgument);
 	}
 	// A map package that did not give the map adds its reason under the vanilla text (deviation 275)
@@ -1118,7 +1118,7 @@ void MultiplayerBoxes::Update(float deltaSeconds)
 	}
 	if (_built != _frontEnd->GetBox() && (_built != Box::Room || _frontEnd->GetBox() != Box::Conditions) &&
 	    (_built != Box::Conditions || _frontEnd->GetBox() != Box::Room))
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		Build();
 	}
 	else if (_builtKind != _frontEnd->GetLobbyKind() && _frontEnd->GetBox() == Box::GameList)
@@ -1200,5 +1200,5 @@ std::vector<DialogRect> MultiplayerBoxes::GetVisibleRects() const
 
 std::u16string_view MultiplayerBoxes::GetMessageText() const
 {
-	return _message.has_value() ? std::u16string_view(_message->text) : std::u16string_view();
+	return _message.has_value() ? std::u16string_view {_message->text} : std::u16string_view();
 }

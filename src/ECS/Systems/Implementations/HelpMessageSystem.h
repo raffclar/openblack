@@ -29,8 +29,10 @@ class HelpMessageSystem final: public HelpMessageSystemInterface
 public:
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	bool RunMessage(uint32_t first, uint32_t last, help_messages::Script script,
 	                std::optional<std::pair<uint32_t, float>> townNeed = std::nullopt) override;
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) override;
 	void TriggerCategory(uint32_t category) override;
 	void HelpQuery() override;

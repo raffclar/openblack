@@ -59,7 +59,7 @@ constexpr float k_MaxFrameSeconds = 0.1f;
 
 glm::vec3 Place(const glm::mat4& placement, const glm::vec3& point)
 {
-	return glm::vec3(placement * glm::vec4(point, 1.0f));
+	return {placement * glm::vec4(point, 1.0f)};
 }
 
 void SendTo(std::array<camera::Zoomer, 3>& zoomers, const glm::vec3& point, float seconds)

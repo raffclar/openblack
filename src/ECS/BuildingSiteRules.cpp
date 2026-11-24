@@ -76,7 +76,7 @@ std::optional<glm::vec3> CrossPlane(glm::vec3 point, glm::vec3 direction, glm::v
 
 glm::vec3 Transform(const glm::mat4& model, glm::vec3 point)
 {
-	return glm::vec3(model * glm::vec4(point, 1.0f));
+	return {model * glm::vec4(point, 1.0f)};
 }
 } // namespace
 

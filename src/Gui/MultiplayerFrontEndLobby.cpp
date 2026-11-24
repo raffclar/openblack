@@ -159,7 +159,7 @@ std::vector<openblack::lobby_api::LobbySummary> MultiplayerFrontEnd::GetShownLob
 
 std::string_view MultiplayerFrontEnd::GetRejoinLobby() const
 {
-	return _services.lobbyRoom != nullptr ? std::string_view(_services.lobbyRoom->List().RejoinId()) : std::string_view();
+	return _services.lobbyRoom != nullptr ? std::string_view {_services.lobbyRoom->List().RejoinId()} : std::string_view();
 }
 
 std::string_view MultiplayerFrontEnd::GetSelectedLobby() const

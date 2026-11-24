@@ -623,6 +623,7 @@ std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp)
 		return std::nullopt;
 	}
 	LogoOpacities logo {};
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	const auto rows = std::min(height, k_LogoSize);
 	const auto columns = std::min(width, k_LogoSize);
 	for (int32_t y = 0; y < rows; ++y)

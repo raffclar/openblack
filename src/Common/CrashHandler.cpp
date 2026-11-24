@@ -98,8 +98,10 @@ HandlerState& State()
 }
 
 /// Set by the first thread to crash; any other thread that crashes meanwhile waits for it to finish and exit
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the crash handler cannot use an object
 std::atomic<bool> s_Handling {false};
 /// Set while this thread writes a report, so a crash inside the handler exits at once instead of recursing
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the crash handler cannot use an object
 thread_local bool t_InHandler = false;
 
 bool DebuggerAttached()
@@ -254,7 +256,7 @@ uint64_t ProgramCounter(const CONTEXT& context)
 std::span<const StackFrame> CaptureStack(HANDLE thread, CONTEXT context)
 {
 	auto& state = State();
-	const HANDLE process = GetCurrentProcess();
+	auto* const process = GetCurrentProcess();
 	SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_FAIL_CRITICAL_ERRORS);
 	const auto searchPath = ExecutableDirectory().string();
 	const bool symbols = SymInitialize(process, searchPath.c_str(), TRUE) != FALSE;
@@ -309,7 +311,7 @@ std::span<const StackFrame> CaptureStack(HANDLE thread, CONTEXT context)
 
 void WriteMinidump(const std::filesystem::path& path, EXCEPTION_POINTERS* exception, DWORD threadId)
 {
-	const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	auto* const file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (file == INVALID_HANDLE_VALUE)
 	{
 		return;
@@ -425,6 +427,7 @@ std::span<const StackFrame> CaptureStack()
 		RtlCaptureContext(&capturedContext);
 		threadContext = &capturedContext;
 		record.ExceptionCode = k_FatalAppExitCode;
+		// NOLINTNEXTLINE(performance-no-int-to-ptr): the exception record needs the address as a pointer
 		record.ExceptionAddress = reinterpret_cast<PVOID>(ProgramCounter(capturedContext));
 		selfPointers = {.ExceptionRecord = &record, .ContextRecord = &capturedContext};
 		exception = &selfPointers;
@@ -553,7 +556,7 @@ DWORD WINAPI ReportOverflow(LPVOID parameter)
 	if (record->ExceptionCode == EXCEPTION_STACK_OVERFLOW)
 	{
 		OverflowReport report {.info = info, .exception = exception};
-		const HANDLE thread = CreateThread(nullptr, 1024 * 1024, ReportOverflow, &report, 0, nullptr);
+		auto* const thread = CreateThread(nullptr, 1024 * 1024, ReportOverflow, &report, 0, nullptr);
 		if (thread != nullptr)
 		{
 			WaitForSingleObject(thread, INFINITE);
@@ -608,6 +611,7 @@ int ReportCrtMessage(int type, std::string_view message, int* returnValue)
 	});
 }
 
+// NOLINTNEXTLINE(readability-non-const-parameter): the report hook of the runtime library needs this type
 int __cdecl OnCrtReport(int type, char* message, int* returnValue)
 {
 	return ReportCrtMessage(type, message != nullptr ? message : "", returnValue);

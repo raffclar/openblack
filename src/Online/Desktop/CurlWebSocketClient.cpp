@@ -46,6 +46,7 @@ struct ListDeleter
 /// The size of the buffer that each receive fills
 constexpr size_t k_ReceiveChunk = 16 * 1024;
 /// The HTTP status of an accepted upgrade to WebSocket
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 constexpr long k_SwitchingProtocols = 101;
 /// The close code of a close frame with no code
 constexpr uint16_t k_NoCode = 1005;
@@ -452,6 +453,7 @@ private:
 				continue;
 			}
 			const auto code = done->data.result;
+			// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 			long status = 0;
 			curl_easy_getinfo(done->easy_handle, CURLINFO_RESPONSE_CODE, &status);
 			if (code == CURLE_OK && status == k_SwitchingProtocols)
@@ -547,6 +549,7 @@ private:
 				continue;
 			}
 			const auto wanted =
+			    // NOLINTNEXTLINE(google-runtime-int): curl takes a short
 			    static_cast<short>(link->outgoing.empty() ? CURL_WAIT_POLLIN : CURL_WAIT_POLLIN | CURL_WAIT_POLLOUT);
 			sockets.push_back({.fd = socket, .events = wanted, .revents = 0});
 		}
@@ -655,7 +658,7 @@ WebSocketId CurlWebSocketClient::Connect(WebSocketRequest request, WebSocketHand
 	curl_slist* list = nullptr;
 	for (const auto& [name, value] : request.headers)
 	{
-		list = curl_slist_append(list, (name + ": " + value).c_str());
+		list = curl_slist_append(list, (name + ": ").append(value).c_str());
 	}
 	if (!request.subprotocols.empty())
 	{

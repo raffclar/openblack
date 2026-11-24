@@ -92,8 +92,8 @@ constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// A tree is added beside another no sooner than this many turns after the last; trying so many turns round it, a
 /// sixteenth of a half turn apart, and so many distances at each, from 5 m
 constexpr uint32_t k_TreeAddingGapTurns = 40;
-constexpr float k_TreeAddingTurns = 32.0f;
-constexpr float k_TreeAddingTries = 5.0f;
+constexpr uint32_t k_TreeAddingTurns = 32;
+constexpr uint32_t k_TreeAddingTries = 5;
 constexpr float k_TreeAddingStepAngle = std::numbers::pi_v<float> / 16.0f;
 constexpr uint32_t k_TreeAddingNearest = 5;
 constexpr uint32_t k_TreeAddingDistances = 5;
@@ -717,10 +717,10 @@ std::optional<entt::entity> ForestSystem::PlantBeside(entt::entity tree)
 	float angle = random.GameFloatRand(k_TwoPi);
 	// Round the tree at a step of a sixteenth of a half turn, each time at a whole number of metres from 5 to 9 and four
 	// more, two apart and wrapping round 10: 5, 7, 9, 1 and 3, say
-	for (float outer = 0.0f; outer < k_TreeAddingTurns; outer += 1.0f)
+	for (uint32_t outer = 0; outer < k_TreeAddingTurns; ++outer)
 	{
 		auto distance = random.GameRand(k_TreeAddingDistances) + k_TreeAddingNearest;
-		for (float inner = 0.0f; inner < k_TreeAddingTries; inner += 1.0f)
+		for (uint32_t inner = 0; inner < k_TreeAddingTries; ++inner)
 		{
 			const auto spot = base + gutils::GetPosFromAngle(angle, static_cast<float>(distance));
 			const glm::vec2 xz = map_coords::ToMetres(spot);

@@ -293,7 +293,7 @@ bool Board::Add(const Request& request, float screenWidth, const WidthFn& width,
 	const float pixels = size * pixelScale;
 
 	// Its lines: at the line breaks, the last of them taking the rest
-	const auto text = std::u16string_view(request.text).substr(0, k_MaxCharacters);
+	const auto text = std::u16string_view {request.text}.substr(0, k_MaxCharacters);
 	size_t start = 0;
 	while (label.lines.size() + 1 < k_MaxLines)
 	{

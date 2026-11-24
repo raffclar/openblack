@@ -162,8 +162,8 @@ std::vector<StuckTracker::Longest> StuckTracker::LongestRuns() const
 	for (const auto& [key, turns] : _longest)
 	{
 		const auto colon = key.find(':');
-		const auto slot = std::string_view(key).substr(0, colon);
-		const auto name = colon == std::string::npos ? std::string_view() : std::string_view(key).substr(colon + 1);
+		const auto slot = std::string_view {key}.substr(0, colon);
+		const auto name = colon == std::string::npos ? std::string_view() : std::string_view {key}.substr(colon + 1);
 		runs.push_back({.key = key, .turns = turns, .limit = LimitFor(_limits, slot, name)});
 	}
 	std::ranges::stable_sort(runs, std::ranges::greater {}, &Longest::turns);

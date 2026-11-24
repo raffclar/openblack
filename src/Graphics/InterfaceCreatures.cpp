@@ -71,7 +71,7 @@ glm::vec3 PointFromScreen(const glm::mat4& view, const glm::mat4& projection, gl
 	auto along = glm::inverse(projection) * glm::vec4(clip, 0.5f, 1.0f);
 	along /= along.w;
 	const glm::vec3 inCamera = glm::vec3(along) * (depth / along.z);
-	return glm::vec3(glm::inverse(view) * glm::vec4(inCamera, 1.0f));
+	return {glm::inverse(view) * glm::vec4(inCamera, 1.0f)};
 }
 
 glm::vec3 MoveToPoint(const glm::vec3& point, const glm::mat4& model, std::span<const glm::mat4> bones, float feetHeight)

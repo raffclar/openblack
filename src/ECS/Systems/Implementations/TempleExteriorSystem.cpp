@@ -122,6 +122,7 @@ void TempleExteriorSystem::UpdateTurn()
 				    registry.Assign<Mesh>(lantern, resources::HashIdentifier(MeshId::ObjectTownLight), static_cast<int8_t>(0),
 				                          static_cast<int8_t>(1));
 				    const auto light = ecs::archetypes::VillageLightArchetype::Create(position, VillageLight::Kind::Town);
+				    // NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 				    registry.Assign<TempleLantern>(lantern, entity, light);
 			    }
 		    }

@@ -50,6 +50,7 @@ struct PresentationPart
                                       std::string_view field);
 
 /// The hash of the synced state, and the hash of each of its parts
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct Hash
 {
 	uint64_t hash {0};

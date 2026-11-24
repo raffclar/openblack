@@ -228,6 +228,7 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                                    "CREATE_NEW_ANIMAL(\"10.00,-9.00\", 8, -1, -1, 3)",
 	                                    "CREATE_NEW_ANIMAL(\"-4.00,12.00\", 4, -1, -1, 2)",
 	                                    "CREATE_NEW_TREE(-1, \"6.00,14.00\", 5, 1, 0.000000, 0.800000, 1.000000)",
+	                                    // NOLINTNEXTLINE(bugprone-suspicious-missing-comma): the parts make one line
 	                                    "CREATE_MOBILE_STATIC(\"-14.00,-10.00\", 2, 0.000000, 0.000000, 0.500000, 0.000000, "
 	                                    "1.000000)",
 	                                    "CREATE_POT(\"0.00,-18.00\", 12, 0, 1000)",

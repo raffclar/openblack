@@ -46,7 +46,7 @@ glm::ivec2 ScaledPointer::Move(glm::ivec2 movement, float scale, glm::ivec2 scre
 
 glm::ivec2 ScaledPointer::Position() const
 {
-	return glm::ivec2(glm::floor(_position));
+	return {glm::floor(_position)};
 }
 
 } // namespace openblack::input::pointer_speed

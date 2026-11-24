@@ -90,7 +90,7 @@ std::string_view TextOf(const fight_transcript::Entry& entry, std::string_view n
 {
 	const auto* field = FieldOf(entry, name);
 	const auto* text = field != nullptr ? std::get_if<std::string>(&field->value) : nullptr;
-	return text != nullptr ? std::string_view(*text) : std::string_view();
+	return text != nullptr ? std::string_view {*text} : std::string_view();
 }
 } // namespace
 

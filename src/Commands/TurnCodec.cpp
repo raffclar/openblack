@@ -728,6 +728,7 @@ void WriteAction(Writer& out, const Action& action)
 }
 
 /// Reads one command. Returns the error of the command, or None.
+// NOLINTNEXTLINE(google-readability-function-size,readability-function-size): one case for each command
 DecodeError ReadAction(Reader& in, Action& action)
 {
 	switch (static_cast<CommandTag>(in.Byte()))

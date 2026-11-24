@@ -47,6 +47,7 @@ class TextDatabase;
 ///
 /// The menu fades in over half a second and out over a fifth. Quitting first asks whether the player is sure, in a
 /// smaller opaque box over the menu with a Yes and a No arrow.
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 class GameMenu
 {
 public:

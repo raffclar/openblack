@@ -136,6 +136,7 @@ void HelpMessageSystem::Remember(Started started)
 	}
 }
 
+// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 bool HelpMessageSystem::RunMessage(uint32_t first, uint32_t last, messages::Script script,
                                    std::optional<std::pair<uint32_t, float>> townNeed)
 {
@@ -163,6 +164,7 @@ bool HelpMessageSystem::RunMessage(uint32_t first, uint32_t last, messages::Scri
 	return true;
 }
 
+// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 bool HelpMessageSystem::RunMessageSet(size_t set, std::optional<messages::Texts> thing)
 {
 	if (set >= messages::k_SetCount || !StopRunningHelp())

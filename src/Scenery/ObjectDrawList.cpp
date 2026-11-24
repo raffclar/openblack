@@ -97,6 +97,7 @@ bool object_draw_list::BlockInView(const glm::mat4& viewProjection, float nearPl
 bool object_draw_list::BlockViewMemo::InView(const glm::mat4& viewProjection, float nearPlane, const Block& block)
 {
 	// The same camera has the same bits, so the memo compares the bits and not the values
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	if (_camera == 0 || std::memcmp(&_viewProjection, &viewProjection, sizeof(glm::mat4)) != 0 ||
 	    std::bit_cast<uint32_t>(_nearPlane) != std::bit_cast<uint32_t>(nearPlane))
 	{

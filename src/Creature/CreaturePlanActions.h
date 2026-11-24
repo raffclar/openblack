@@ -529,6 +529,7 @@ constexpr float k_TeleportFromHomeMetres = 150.0f;
 [[nodiscard]] const Executor* For(std::string_view action);
 
 /// What the agenda needs to know of where the creature is
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct Situation
 {
 	/// Where the creature drinks, none when it finds no place to drink

@@ -1466,6 +1466,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		if (commands.effect == creature_mind::Effect::Observed && commands.effectObject.has_value())
 		{
 			const auto thing = static_cast<entt::entity>(*commands.effectObject);
+			// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 			if (const auto belief = BeliefOf(registry, thing, entity))
 			{
 				mind.observedKinds.insert(belief->type);

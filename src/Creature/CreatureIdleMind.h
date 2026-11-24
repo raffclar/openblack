@@ -641,6 +641,7 @@ struct Step
 	std::optional<Saved> saved;
 };
 
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct IdleMind
 {
 	Activity activity {Activity::None};
@@ -966,6 +967,7 @@ constexpr float k_WatchCameraTurn = 1.5707963f;
 }
 
 /// What the mind tells the body
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct Commands
 {
 	std::optional<size_t> playOnce;

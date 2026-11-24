@@ -473,7 +473,7 @@ void EditorWindow::PickAt(EditorContext& context, glm::vec2 screen) noexcept
 			selection.Toggle(*picked);
 		}
 		else if (_pickAdd)
-		{
+		{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 			selection.Add(*picked);
 		}
 		else if (tool != Tool::Select && selection.IsSelected(*picked))

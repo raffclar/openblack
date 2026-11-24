@@ -482,7 +482,7 @@ void ShaderManager::LoadShaders()
 	std::map<std::string_view, ShaderProgram*> made;
 	for (const auto& shader : k_Shaders)
 	{
-		bgfx::RendererType::Enum type = bgfx::getRendererType();
+		const bgfx::RendererType::Enum type = bgfx::getRendererType();
 		auto vs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.vertexShaderName.data());
 		assert(bgfx::isValid(vs));
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());

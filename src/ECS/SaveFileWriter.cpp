@@ -78,6 +78,7 @@ void BackgroundWriter::Run(const std::stop_token& stop)
 		{
 			written = next.job();
 		}
+		// NOLINTNEXTLINE(bugprone-empty-catch): a job that throws only gives no file
 		catch (const std::exception& /*error*/)
 		{
 			// A job that throws did not write its file

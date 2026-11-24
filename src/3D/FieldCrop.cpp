@@ -203,6 +203,7 @@ Settle Advance(Settle settle, float target, float seconds)
 
 float Sink(float height)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return std::max(height, k_DeepestSink);
 }
 

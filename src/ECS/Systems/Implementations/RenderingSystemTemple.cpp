@@ -254,7 +254,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 		// write their bones into: preparing the hand for drawing writes the hand's bones there, and the options room
 		// sets the door matrices again after drawing the hand to put the doors back. The side room's door is presumably
 		// drawn with a bone in its slot instead, which throws it out of its doorway.
-		// TODO: which bone it is turned by, and where that puts it, needs the game run under a debugger. Until then the
+		// TODO(temple): which bone it is turned by, and where that puts it, needs the game run under a debugger. Until then the
 		// side rooms' doors are drawn only while they swing.
 		drawDesc->second.hideShutJoints = sideRoomMeshIds.contains(meshId);
 		// The game draws each primitive of the temple's meshes by its material, blended or not, in their order. The

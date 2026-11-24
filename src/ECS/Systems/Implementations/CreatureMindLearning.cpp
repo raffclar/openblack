@@ -191,7 +191,6 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
 using creature_mind_model::TreeKind;
-using creature_plan_actions::Target;
 
 namespace openblack::ecs::systems::mind_detail
 {

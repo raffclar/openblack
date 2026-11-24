@@ -21,7 +21,7 @@ namespace openblack::filesystem
 class MemoryStream: public Stream
 {
 public:
-	MemoryStream(std::vector<uint8_t>&& data);
+	explicit MemoryStream(std::vector<uint8_t>&& data);
 
 	[[nodiscard]] std::size_t Position() const override;
 	[[nodiscard]] std::size_t Size() const override;

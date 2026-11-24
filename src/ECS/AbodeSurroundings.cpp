@@ -45,7 +45,7 @@ std::optional<glm::vec3> abode_surroundings::FindPoint(std::span<const graphics:
 
 glm::vec3 abode_surroundings::PlacePoint(const glm::mat4& placement, glm::vec3 point)
 {
-	return glm::vec3(placement * glm::vec4(point, 1.0f));
+	return {placement * glm::vec4(point, 1.0f)};
 }
 
 bool abode_surroundings::InSameCell(glm::vec3 a, glm::vec3 b)

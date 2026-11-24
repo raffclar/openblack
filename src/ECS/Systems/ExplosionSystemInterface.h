@@ -71,6 +71,7 @@ public:
 	virtual void AddRubble(const glm::vec3& centre, const glm::mat3& rotation, float scale) = 0;
 	/// A puff of smoke or dust of a size at a point, its kind's colour unless given one (0xRRGGBB): the dust a tree taking
 	/// root again throws up, the smoke a dead body leaves as it goes
+	// NOLINTNEXTLINE(google-default-arguments): each override keeps the default of the interface
 	virtual void AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind,
 	                      std::optional<uint32_t> colour = std::nullopt) = 0;
 	/// The camera shakes while it is in a radius of a point. The strength decreases to zero over the whole milliseconds

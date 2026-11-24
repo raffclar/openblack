@@ -206,6 +206,7 @@ public:
 		{
 			std::optional<Result> result;
 			Wait(api, std::function<void()>([&result, &work] { result.emplace(std::invoke(work)); }));
+			// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.UndefReturn): Wait returns after the work sets the result
 			return std::move(*result);
 		}
 	}

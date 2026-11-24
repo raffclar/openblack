@@ -349,6 +349,7 @@ bool HelpTextSystem::RunText(bool singleLine, uint32_t text, int32_t withInterac
 bool HelpTextSystem::RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction)
 {
 	RecordStoryLine(text, withInteraction, number);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction, number) : false;
 }
 

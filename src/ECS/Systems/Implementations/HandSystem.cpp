@@ -476,7 +476,7 @@ hand_send_wait::OwnAction HandSystem::GetOwnAction() const
 		own.keepsThing = false;
 	}
 	else if (hasGrab && Locator::handGrabSystem::value().WaitsForUseLetGo())
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		// The hand used what it holds on a thing, and the interface waits for the let go of the button. Both buttons end
 		// the wait.
 		own.action = hand_send_wait::FrameAction::Other;

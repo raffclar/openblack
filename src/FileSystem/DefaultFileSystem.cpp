@@ -178,13 +178,13 @@ void DefaultFileSystem::SetGamePath(const std::filesystem::path& path)
 	{
 #ifdef _WIN32
 		DWORD dataLen = 0;
-		LSTATUS status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir",
-		                             RRF_RT_REG_SZ, nullptr, nullptr, &dataLen);
+		const LSTATUS status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir",
+		                                   RRF_RT_REG_SZ, nullptr, nullptr, &dataLen);
 		if (status == ERROR_SUCCESS)
 		{
 			std::vector<char> data(dataLen);
-			status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir", RRF_RT_REG_SZ,
-			                     nullptr, data.data(), &dataLen);
+			RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir", RRF_RT_REG_SZ, nullptr,
+			            data.data(), &dataLen);
 
 			_gamePath = std::filesystem::path(data.data());
 		}

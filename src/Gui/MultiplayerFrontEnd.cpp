@@ -34,7 +34,6 @@
 
 using namespace openblack::gui;
 using namespace openblack::gui::multiplayer;
-using openblack::ecs::systems::LobbyErrorKind;
 
 namespace
 {

@@ -131,6 +131,7 @@ private:
 	/// Off to a goal at a height above the land there, in its kind's move state, into a final state once there
 	void SetupMoveTo(components::Animal& animal, glm::vec2 goal, float goalHeight, components::AnimalState finalState);
 	/// A goal in 16.16 map units must go to SetupMoveToFixed. Do not let it change to metres without a scale.
+	// NOLINTNEXTLINE(modernize-use-equals-delete): the deleted overload stays beside the function that it guards
 	void SetupMoveTo(components::Animal& animal, glm::ivec2 goal, float goalHeight,
 	                 components::AnimalState finalState) = delete;
 	/// The same with a goal in 16.16 map units

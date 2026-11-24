@@ -1147,6 +1147,7 @@ void Renderer::DrawPassAnimals(const DrawSceneDesc& desc, auto& draws) const
 			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
 		}
 		inSegments(placers->second, [&](uint32_t first, uint32_t count) {
+			// NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage): the lambda uses values set before the call
 			drawInstances(meshId, placers->second, placers->second.materialBlending, first, count, nullptr, nullptr,
 			              std::nullopt, &group);
 		});
@@ -1161,6 +1162,7 @@ void Renderer::DrawPassAnimals(const DrawSceneDesc& desc, auto& draws) const
 			continue;
 		}
 		inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
+			// NOLINTNEXTLINE(clang-analyzer-core.NullDereference): the lambda uses values set before the call
 			drawAnimal(entity, instance, false);
 			drawVillager(entity, instance);
 			drawPosedStill(entity, instance, false);
@@ -1223,6 +1225,7 @@ void Renderer::DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) 
 			if (placers.bonePalette && placers.filled > 0 && !(IsMirrorScene(desc.viewId) && placers.hiddenFromReflection))
 			{
 				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					// NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage): the lambda uses values set before the call
 					drawInstances(meshId, placers, placers.materialBlending, first, count, &palettePose);
 				});
 			}

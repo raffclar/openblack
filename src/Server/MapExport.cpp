@@ -177,7 +177,7 @@ std::variant<std::filesystem::path, std::string> WriteCustomMapPackage(const std
 	}
 	const auto& map = std::get<CustomMapRead>(read);
 	const auto package =
-	    custom_map_package::Make(map.file, name.empty() ? std::string_view(map.file) : name, players, map.bytes);
+	    custom_map_package::Make(map.file, name.empty() ? std::string_view {map.file} : name, players, map.bytes);
 	if (!package.has_value())
 	{
 		return "the map package of " + customMap.generic_string() + " could not be made: the script must load the landscape " +

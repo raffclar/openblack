@@ -154,7 +154,7 @@ void Fill(Canvas& canvas, const tree_shadows::AlphaMask& mask, std::array<Corner
 	}
 	// Then the other two in the order that the game gives them
 	if (b.column > c.column)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		std::swap(b, c);
 	}
 	else if (b.column == c.column && ((a.column <= b.column) ? (b.row < c.row) : (b.row > c.row)))

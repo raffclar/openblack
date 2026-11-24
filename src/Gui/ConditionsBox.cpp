@@ -140,7 +140,7 @@ void ConditionsBox::Open(Figures figures, bool fromGameOver)
 	for (const auto& condition : _figures.conditions)
 	{
 		const auto name =
-		    condition.number < _names.size() ? std::u16string_view(_names.at(condition.number)) : std::u16string_view();
+		    condition.number < _names.size() ? std::u16string_view {_names.at(condition.number)} : std::u16string_view();
 		items.push_back({.text = LineText(name, condition.target),
 		                 .mouseCell = std::nullopt,
 		                 .mouseMirrored = false,

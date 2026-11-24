@@ -771,6 +771,7 @@ void Search::Step(Obstacles& obstacles, int32_t depth)
 			const auto& goalCircle = obstacles.At(*_goal.circle).circle;
 			auto met = _goal.metAt;
 			if (glm::dot(leaving - _goal.metAt, goalCircle.centre - _goal.metAt) / goalCircle.radius < k_Allowance ||
+			    // NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 			    obstacles.RunsInto(*_goal.circle, _goal.way, met, target).has_value())
 			{
 				Remove(best);

@@ -251,6 +251,7 @@ bool StartLoving(entt::entity villager, entt::entity mate, VillagerStates state)
 	                                                InfoOf(Entities().Get<const Villager>(villager)).havingSexTime);
 	auto& mateAction = Entities().Get<LivingAction>(mate);
 	SetTopState(mateAction, state);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	SetLover(mate, villager);
 	mateAction.turnsUntilStateChange = turns;
 	auto& action = Entities().Get<LivingAction>(villager);
@@ -495,6 +496,7 @@ void villager_breeding::GoAndHaveSexWith(entt::entity villager, entt::entity mat
 {
 	WalkToMeet(villager, mate, VillagerStates::StartHavingSex, k_MeetingGap);
 	SetLover(villager, mate);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	SetLover(mate, villager);
 }
 
@@ -738,6 +740,7 @@ uint32_t villager_breeding::StartHavingSex(LivingAction& action)
 			return 1;
 		}
 		Face(villager, mate);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		Face(mate, villager);
 		if (StartLoving(villager, mate, VillagerStates::HavingSex))
 		{

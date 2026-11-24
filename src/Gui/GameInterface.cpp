@@ -2158,7 +2158,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		}
 		if (screenArea != _textInputArea)
 		{
-			SDL_Rect rect {.x = screenArea.x, .y = screenArea.y, .w = screenArea.z, .h = screenArea.w};
+			const SDL_Rect rect {.x = screenArea.x, .y = screenArea.y, .w = screenArea.z, .h = screenArea.w};
 			SDL_SetTextInputRect(&rect);
 			_textInputArea = screenArea;
 		}

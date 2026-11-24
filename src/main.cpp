@@ -353,7 +353,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		if (result["help"].as<bool>())
 		{
 			// The help of a build without the developer tools shows only the options of the player
-			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << '\n' << std::flush;
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}
@@ -477,6 +477,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				throw cxxopts::exceptions::option_has_no_value("game-path");
 			}
 		}
+		// NOLINTNEXTLINE(readability-misleading-indentation): the preprocessor branch above gives this indent
 		else
 		{
 			args.gamePath = result["game-path"].as<std::string>();
@@ -559,7 +560,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				if (!picks.has_value())
 				{
 					std::cerr << "The winning conditions of --sim-conditions are not NAME=VALUE,... with each condition once."
-					          << std::endl;
+					          << '\n';
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
@@ -617,7 +618,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				auto slots = openblack::computer_player::ParseSlotList(result["sim-random-alignment-slots"].as<std::string>());
 				if (!slots.has_value())
 				{
-					std::cerr << "--sim-random-alignment-slots needs god slots from 0 with a comma between them" << std::endl;
+					std::cerr << "--sim-random-alignment-slots needs god slots from 0 with a comma between them" << '\n';
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
@@ -645,7 +646,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				        : std::nullopt;
 				if (!turns.has_value())
 				{
-					std::cerr << "--sim-world-states needs --sim-world-state-turns with a list such as 100,250" << std::endl;
+					std::cerr << "--sim-world-states needs --sim-world-state-turns with a list such as 100,250" << '\n';
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
@@ -728,7 +729,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    openblack::generated_land::ChoicesOf(std::string(openblack::generated_land::k_PathPrefix) + text);
 			if (!args.startGeneratedLand.has_value())
 			{
-				std::cerr << "--landgen needs a seed, then choices such as 7;trees=4000, not " << text << std::endl;
+				std::cerr << "--landgen needs a seed, then choices such as 7;trees=4000, not " << text << '\n';
 				returnCode = EXIT_FAILURE;
 				return false;
 			}
@@ -875,7 +876,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			if (const auto error = openblack::developer_tools::InspectorOptionsError(needInspector); error.has_value())
 			{
-				std::cerr << *error << std::endl;
+				std::cerr << *error << '\n';
 				returnCode = EXIT_FAILURE;
 				return false;
 			}
@@ -981,8 +982,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	}
 	catch (cxxopts::exceptions::parsing& err)
 	{
-		std::cerr << err.what() << std::endl;
-		std::cerr << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+		std::cerr << err.what() << '\n';
+		std::cerr << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << '\n';
 
 		returnCode = EXIT_FAILURE;
 		return false;
@@ -1009,7 +1010,7 @@ int main(int argc, char* argv[]) noexcept
 	// The version goes to the standard output alone, with no banner, so that a tool can read it
 	if (AsksForVersion(argc, argv))
 	{
-		std::cout << "openblack " << openblack::build_version::Text() << std::endl;
+		std::cout << "openblack " << openblack::build_version::Text() << '\n' << std::flush;
 		return EXIT_SUCCESS;
 	}
 
@@ -1104,7 +1105,7 @@ int main(int argc, char* argv[]) noexcept
 			openblack::crash_handler::ReportFatal(openblack::crash_report::CrashKind::UncaughtException, e.what(), {}, 0,
 			                                      openblack::crash_report::ReadableTypeName(typeid(e)));
 		}
-		std::cerr << e.what() << std::endl;
+		std::cerr << e.what() << '\n';
 		openblack::ShowFatalMessage("Fatal error", e.what());
 		return EXIT_FAILURE;
 	}

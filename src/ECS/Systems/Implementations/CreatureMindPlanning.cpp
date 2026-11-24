@@ -190,7 +190,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
-using creature_mind_model::TreeKind;
 using creature_plan_actions::Target;
 
 namespace town_compassion = openblack::creature_town_compassion;
@@ -683,11 +682,10 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const float height = creature_mode::CreatureHeight(body != nullptr ? body->size : 1.0f);
-	return creature_plan_actions::Situation::Fishing {.shoal = point,
-	                                                  .standAt = standAt,
-	                                                  .arriveWithin = std::max(height, k_FishingArrival),
-	                                                  .holdingFood = holdingFood,
-	                                                  .height = height};
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
+	const float arriveWithin = std::max(height, k_FishingArrival);
+	return creature_plan_actions::Situation::Fishing {
+	    .shoal = point, .standAt = standAt, .arriveWithin = arriveWithin, .holdingFood = holdingFood, .height = height};
 }
 } // namespace openblack::ecs::systems::mind_detail
 

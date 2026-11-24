@@ -320,6 +320,7 @@ public:
 	[[nodiscard]] const SentBlocks& Sent() const { return _sent; }
 
 	/// The server's world state at the start of a turn, once all its parts came
+	// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 	struct WorldState
 	{
 		uint32_t turn {0};
