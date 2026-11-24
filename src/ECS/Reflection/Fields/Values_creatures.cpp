@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "Creature/CreatureScriptPlay.h"
+#include "Creature/CreatureSkin.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureSpells.h"
 #include "Creature/CreatureStomp.h"
@@ -42,6 +43,17 @@ void openblack::ecs::reflection::RegisterFields_Values_creatures(entt::meta_ctx&
 	Reflect<openblack::creature_script_play::Request>(context, ValueOnly {})
 	    .Field<&openblack::creature_script_play::Request::animation>("animation")
 	    .Field<&openblack::creature_script_play::Request::plays>("plays");
+	Reflect<openblack::creature_skin::PaintSources>(context, ValueOnly {})
+	    .Field<&openblack::creature_skin::PaintSources::rig>("rig")
+	    .Field<&openblack::creature_skin::PaintSources::baseMesh>("baseMesh")
+	    .Field<&openblack::creature_skin::PaintSources::variantMesh>("variantMesh")
+	    .Field<&openblack::creature_skin::PaintSources::weight>("weight")
+	    .Field<&openblack::creature_skin::PaintSources::lowResolution>("lowResolution")
+	    .Field<&openblack::creature_skin::PaintSources::art>("art")
+	    .Field<&openblack::creature_skin::PaintSources::tattoos>("tattoos")
+	    .Field<&openblack::creature_skin::PaintSources::masks>("masks")
+	    .Field<&openblack::creature_skin::PaintSources::wounds>("wounds")
+	    .Field<&openblack::creature_skin::PaintSources::blood>("blood");
 	Reflect<openblack::creature_spell_mind::Cheat>(context, ValueOnly {})
 	    .Field<&openblack::creature_spell_mind::Cheat::desire>("desire")
 	    .Field<&openblack::creature_spell_mind::Cheat::turns>("turns")
