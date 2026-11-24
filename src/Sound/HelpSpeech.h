@@ -124,6 +124,9 @@ public:
 	                            const std::function<bool(entt::entity, const SilentPlayback&)>& isPlaying);
 	/// Stops what the voice is saying from a bank, by `stop` of each of its sounds
 	void Stop(SpeechVoice voice, SpeechBank bank, const std::function<void(entt::entity)>& stop);
+	/// Forgets the lines of the voice that say the sample: the scripts no longer find the voice saying it. The caller
+	/// stops the sound.
+	void Forget(SpeechVoice voice, SpeechSample sample);
 	void Clear() { _lines.clear(); }
 	[[nodiscard]] size_t GetCount() const noexcept { return _lines.size(); }
 

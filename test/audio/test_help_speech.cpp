@@ -121,3 +121,37 @@ TEST(HelpSpeech, WithTheDeviceLostAVoiceSaysItsLineForTheLengthOfItsSample)
 	nowMs = 8000;
 	EXPECT_FALSE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
 }
+
+TEST(HelpSpeech, AStoppedLineIsNoLongerSaidByItsVoice)
+{
+	SpeechVoices voices;
+	const SpeechSample family {.bank = SpeechBank::Villagers, .sample = 1, .sound = 101};
+	const SpeechSample advisor {.bank = SpeechBank::HelpSprites, .sample = 7, .sound = 207};
+	const auto isPlaying = [](entt::entity, const SilentPlayback&) { return true; };
+	voices.Add(SpeechVoice::First, family, static_cast<entt::entity>(5), {}, false);
+	voices.Add(SpeechVoice::Second, family, static_cast<entt::entity>(6), {}, false);
+	voices.Add(SpeechVoice::Second, advisor, static_cast<entt::entity>(7), {}, false);
+
+	voices.Forget(SpeechVoice::Second, family);
+	EXPECT_FALSE(voices.IsSaying(SpeechVoice::Second, family, isPlaying));
+	// The other voice and the other lines of the voice go on
+	EXPECT_TRUE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
+	EXPECT_TRUE(voices.IsSaying(SpeechVoice::Second, advisor, isPlaying));
+}
+
+TEST(HelpSpeech, ALineCutShortEndsOnlyWhilePlaying)
+{
+	SilentPlayback line {.startMs = 1000, .lengthMs = 3000.0f};
+	// Not started yet: no change
+	EXPECT_FALSE(CutShort(line, 900));
+	EXPECT_FLOAT_EQ(line.lengthMs, 3000.0f);
+	// Playing: it ends now, and the scripts find the advisors talking for the short time after
+	EXPECT_TRUE(CutShort(line, 1500));
+	EXPECT_FLOAT_EQ(line.lengthMs, 500.0f);
+	EXPECT_FALSE(line.IsPlaying(1500));
+	EXPECT_TRUE(TalkingForScripts(line, 1699, 200));
+	EXPECT_FALSE(TalkingForScripts(line, 1700, 200));
+	// Ended: no change
+	EXPECT_FALSE(CutShort(line, 1600));
+	EXPECT_FLOAT_EQ(line.lengthMs, 500.0f);
+}

@@ -53,6 +53,18 @@ struct SilentPlayback
 	return since < 0 || static_cast<float>(since) < line.lengthMs + static_cast<float>(afterMs);
 }
 
+/// A line that plays at this time ends now: its length becomes the time since its start. A line that did not start yet,
+/// or that ended, does not change. Returns whether the line ended now.
+constexpr bool CutShort(SilentPlayback& line, uint32_t nowMs)
+{
+	if (static_cast<int32_t>(nowMs - line.startMs) < 0 || !line.IsPlaying(nowMs))
+	{
+		return false;
+	}
+	line.lengthMs = static_cast<float>(nowMs - line.startMs);
+	return true;
+}
+
 /// Whether a sound plays: as the device tells while the device works, or by its sample's length once the device is lost
 [[nodiscard]] constexpr bool PlaysOn(bool sounding, bool deviceLost, const SilentPlayback& playback, uint32_t nowMs)
 {

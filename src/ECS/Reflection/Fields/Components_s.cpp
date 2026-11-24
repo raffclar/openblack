@@ -182,7 +182,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .RunField<&components::SoundTag::turns>("turns")
 	    .Field<&components::SoundTag::owner>("owner")
 	    .Field<&components::SoundTag::loops>("loops")
-	    .RunField<&components::SoundTag::silenced>("silenced");
+	    .RunField<&components::SoundTag::silenced>("silenced")
+	    .Field<&components::SoundTag::heardFromObject>("heardFromObject");
 	Reflect<components::SpellCaster>(context)
 	    .Field<&components::SpellCaster::kind>("kind")
 	    .Field<&components::SpellCaster::player>("player")

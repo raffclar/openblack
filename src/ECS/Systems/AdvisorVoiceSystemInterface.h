@@ -34,6 +34,9 @@ public:
 	virtual void Say(int advisor, uint32_t line, float hoverX) = 0;
 	/// The advisor is cut short
 	virtual void Interrupt(int advisor, help::AdvisorVoices::InterruptedBy by) = 0;
+	/// The sound of the advisors' bank's line stops, as the voice rules stop the first voice that keeps it for the
+	/// advisors. The advisor is not told: it finds its line silent when it next looks.
+	virtual void StopLineSound(uint32_t line) = 0;
 	/// Once a frame, before the scripts' dialogue: a line whose delay is over starts
 	virtual void Update() = 0;
 

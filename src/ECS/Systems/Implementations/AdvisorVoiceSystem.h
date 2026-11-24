@@ -30,6 +30,7 @@ public:
 	void Stop(int advisor) override { _voices.Stop(advisor); }
 	void Say(int advisor, uint32_t line, float hoverX) override { _voices.Say(advisor, line, false, hoverX); }
 	void Interrupt(int advisor, help::AdvisorVoices::InterruptedBy by) override { _voices.Interrupt(advisor, by); }
+	void StopLineSound(uint32_t line) override;
 	void Update() override { _voices.Update(); }
 	[[nodiscard]] help::AdvisorVoices& GetVoices() override { return _voices; }
 	[[nodiscard]] const help::AdvisorVoices& GetVoices() const override { return _voices; }

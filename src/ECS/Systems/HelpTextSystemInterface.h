@@ -119,6 +119,9 @@ public:
 	virtual void InterruptAdvisors() = 0;
 	/// Both advisors are cut short by the player's Escape, which picks among more interruption lines
 	virtual void InterruptAdvisorsByEscape() = 0;
+	/// The advisors' voice of a help text stops, when the text's line is in the advisors' bank: the voice rules stop the
+	/// first voice that keeps the line for the advisors, and the scripts find the advisors quiet a short time after
+	virtual void StopAdvisorSpeech(uint32_t text) = 0;
 	/// Who says a help text, a narrator of the help texts' script; a number past the last gives the first text's
 	[[nodiscard]] virtual int32_t GetNarrator(uint32_t text) const = 0;
 	/// The words of a help text, as the game keeps them; a number past the last gives the first text's, and there are none

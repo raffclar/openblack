@@ -115,3 +115,8 @@ void SpeechVoices::Stop(SpeechVoice voice, SpeechBank bank, const std::function<
 		return true;
 	});
 }
+
+void SpeechVoices::Forget(SpeechVoice voice, SpeechSample sample)
+{
+	std::erase_if(_lines, [voice, sample](const Line& line) { return line.voice == voice && line.sample == sample; });
+}

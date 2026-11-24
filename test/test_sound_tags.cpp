@@ -63,6 +63,8 @@ public:
 		audio::Follows follows {audio::Follows::Nothing};
 		/// The voice rules give it an owner that no other sound has
 		bool ownSound {false};
+		/// It plays from a place in the world, not at the centre
+		bool placed {true};
 	};
 	std::map<entt::entity, Emitter> emitters;
 	/// The number of times a system moved an emitter
@@ -81,9 +83,11 @@ public:
 	                           entt::entity owner) override
 	{
 		const auto entity = static_cast<entt::entity>(++_made);
-		emitters.emplace(
-		    entity,
-		    Emitter {.sound = id, .position = worldPosition.value_or(glm::vec3(0.0f)), .playType = playType, .owner = owner});
+		emitters.emplace(entity, Emitter {.sound = id,
+		                                  .position = worldPosition.value_or(glm::vec3(0.0f)),
+		                                  .playType = playType,
+		                                  .owner = owner,
+		                                  .placed = worldPosition.has_value()});
 		return entity;
 	}
 	entt::entity CreateOwnSoundEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition,
@@ -345,6 +349,34 @@ TEST_F(SoundTags, AScriptsSoundOnAnObjectPlaysFromIt)
 	played.stopped = true;
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(PlayingOf(Audio(), k_Sound).size(), 1u);
+}
+
+// A script's tag without the 3D flag is heard at the centre wherever the camera is, and only while its object stays
+TEST_F(SoundTags, AScriptsSoundNotFromItsObjectIsHeardEverywhere)
+{
+	const auto box = CreateObjectAt({500.0f, 0.0f, 0.0f});
+	const auto tag = _tags.AttachObjectSound(box, k_Sound, false, false);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Get<ecs::components::SoundTag>(tag).heardFromObject);
+	// Far beyond the sound's reach of the camera, it plays
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	auto& played = Audio().emitters.begin()->second;
+	EXPECT_TRUE(played.played);
+	EXPECT_FALSE(played.placed);
+	EXPECT_EQ(played.playType, audio::PlayType::Once);
+	EXPECT_EQ(played.owner, tag);
+	// It does not follow its object while it plays
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(Audio().moves, 0);
+	// When it is finished, the next turn starts it again
+	played.stopped = true;
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(PlayingOf(Audio(), k_Sound).size(), 1u);
+	// The tag goes with its object
+	Locator::entitiesRegistry::value().Destroy(box);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(tag));
 }
 
 // A creature with a script's sound starts its creed hum: both play, each from its own tag
