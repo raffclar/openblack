@@ -308,6 +308,20 @@ TEST(ScriptWeather, AWeatherThingGivesTheSpeedOfItsStorm)
 	EXPECT_EQ(openblack::ecs::script_weather::ThingSpeed(nullptr), 0.0f);
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptWeather, AWeatherThingStandsOnTheLandAtTheMapPositionOfItsStorm)
+{
+	// The map position cuts the fraction of a map unit towards 0, and the height of the storm has no effect
+	const auto place = weather::ThingPlace({0.5f, 300.0f, -0.5f});
+	EXPECT_EQ(place.x, 3276);
+	EXPECT_EQ(place.z, -3276);
+	EXPECT_EQ(place.altitude, 0.0f);
+	// The same cut applies to a point far from the corner of the map
+	const auto far = weather::ThingPlace({2464.363f, 24.128f, 2069.785f});
+	EXPECT_EQ(far.x, static_cast<int32_t>(2464.363f * 6553.6f));
+	EXPECT_EQ(far.z, static_cast<int32_t>(2069.785f * 6553.6f));
+}
+
 TEST(ScriptWeather, AStormEndsWhenItsEdgeIsInTheCircle)
 {
 	// The Land 3 command: a circle of 220 round the home town

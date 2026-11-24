@@ -137,8 +137,8 @@ public:
 	virtual void RemoveMiracleStorm(entt::entity storm) = 0;
 
 	// Scripts' weather things
-	/// A weather thing a script makes at a point, with the storm it brings there: the thing, which follows its storm
-	/// each turn and goes once the storm has ended, unless a script still holds it
+	/// A weather thing a script makes at a point, with the storm it brings there: the thing, which stands on the land
+	/// under its storm each turn and goes once the storm has ended, unless a script still holds it
 	virtual entt::entity CreateWeatherThing(const ScriptStorm& storm) = 0;
 	/// A script changes the storm a weather thing brought: the change is made to the storm as it is, keeping its age, or to
 	/// the storm as it last was, brought back new, once it has ended. Its waits to its next lightning are drawn afresh.
@@ -147,10 +147,10 @@ public:
 	/// Whether the wind blows a weather thing's storm along. False when the thing is not a weather thing.
 	virtual bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) = 0;
 	/// A weather thing's storm sets off for a place, at its speed; false for a thing that is no weather thing. A storm that
-	/// has ended takes no notice.
+	/// ended in this turn also takes the place. A thing that lost its storm takes no notice.
 	virtual bool MoveWeatherThing(entt::entity thing, glm::vec3 destination) = 0;
 	/// How fast a weather thing's storm travels to where it is going, metres a second; false for a thing that is no
-	/// weather thing. A storm that has ended takes no notice.
+	/// weather thing. A storm that ended in this turn also takes the speed. A thing that lost its storm takes no notice.
 	virtual bool SetWeatherThingSpeed(entt::entity thing, float speed) = 0;
 	/// The speed that a script reads of a weather thing, metres a second: the speed of its storm, or 0 once the thing has
 	/// lost its storm. None for a thing that is no weather thing.
