@@ -774,13 +774,16 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 		{
 			return;
 		}
-		// The skins as painted this frame, before the body is drawn with them
+		// The skins as painted this frame, before the body is drawn with them. A texture takes up its skin only when
+		// the texels of the skin changed after the texture took them.
 		entry.textures.resize(skin.skins.size());
+		entry.textureStamps.resize(skin.skins.size());
 		entry.drawn.clear();
 		for (size_t i = 0; i < skin.skins.size(); ++i)
 		{
 			const auto& painted = skin.skins[i];
 			auto& texture = entry.textures[i];
+			auto& textureStamp = entry.textureStamps[i];
 			// The skins are at half size at the two lowest detail levels
 			const auto side = l3d_skin::SideOf(painted.texels.size());
 			if (texture && texture->GetResolution().x != side)
@@ -789,6 +792,7 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 			}
 			if (!texture)
 			{
+				textureStamp.reset();
 				texture = TakeCreatureSkinTexture(side);
 				// Out of textures, as with thousands of creatures: this one keeps its species' skin as it was made
 				if (!texture)
@@ -803,7 +807,13 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 					continue;
 				}
 			}
-			texture->Update(painted.texels.data(), static_cast<uint32_t>(painted.texels.size() * sizeof(painted.texels[0])));
+			const painted_skin::Stamp skinStamp {.registryResets = stamp.registryResets, .revision = painted.revision};
+			if (painted_skin::NeedsUpload(textureStamp, skinStamp))
+			{
+				texture->Update(painted.texels.data(),
+				                static_cast<uint32_t>(painted.texels.size() * sizeof(painted.texels[0])));
+				textureStamp = skinStamp;
+			}
 			entry.drawn.emplace_back(painted.id, texture.get());
 		}
 		entry.stamp = stamp;

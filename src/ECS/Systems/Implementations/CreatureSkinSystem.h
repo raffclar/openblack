@@ -62,6 +62,7 @@ public:
 		const creature_tattoo::Masks* masks;
 		const components::CreatureMarks* marks;
 		const creature::CreatureRig* rig;
+		entt::id_type rigId;
 	};
 
 private:

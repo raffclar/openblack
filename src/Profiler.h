@@ -76,6 +76,7 @@ public:
 		EditorUpdate,
 		GameLogic,
 		SceneDraw,
+		CreatureSkinUpload,
 		FootprintPass,
 		ObjectShadowPass,
 		GroundShadowPass,
@@ -150,6 +151,7 @@ public:
 	    "Editor",               //
 	    "Game Logic",           //
 	    "Encode Draw Scene",    //
+	    "Creature Skin Upload", //
 	    "Footprint Pass",       //
 	    "Object Shadow Pass",   //
 	    "Ground Shadow Pass",   //
