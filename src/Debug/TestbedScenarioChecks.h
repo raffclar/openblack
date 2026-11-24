@@ -183,6 +183,10 @@ enum class Verdict : uint8_t
 /// not decided
 [[nodiscard]] int ExitCodeOf(Verdict verdict);
 
+/// The last line of the report when the game ends before the checks have a verdict. The frame limit counts frames, and
+/// a fast build plays more frames in one turn, so the line gives the turn that the game got to. None for other verdicts.
+[[nodiscard]] std::optional<std::string> EndNote(Verdict verdict, uint32_t worldTurn);
+
 /// Whether a value holds for the check's limits
 [[nodiscard]] bool Holds(const Check& check, double value);
 

@@ -1725,10 +1725,17 @@ void Runner::UpdateChecks(float seconds)
 	PublishChecks(_benchmark.reportChecks);
 }
 
-void Runner::PublishChecks(bool quit)
+void Runner::PublishChecks(bool quit, bool gameEnds)
 {
 	_checksReported = true;
 	auto report = checks::MakeReport(_checks, _scenario->id);
+	if (gameEnds)
+	{
+		if (auto note = checks::EndNote(report.verdict, Locator::time::value().GetTurn()))
+		{
+			report.lines.push_back(std::move(*note));
+		}
+	}
 	for (const auto& line : report.lines)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Scenario check: {}", line);
@@ -1754,7 +1761,7 @@ void Runner::EndChecks()
 		const auto turns = _checksClock.Elapsed(Locator::time::value().GetTurn());
 		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
 	}
-	PublishChecks(_benchmark.reportChecks);
+	PublishChecks(_benchmark.reportChecks, true);
 }
 
 void Runner::UpdateTurnsAsked()
