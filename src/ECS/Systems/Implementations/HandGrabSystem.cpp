@@ -1506,12 +1506,12 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	}
 
 	// The people and animals about the hand see it pick something up. The time of this reaction starts at once, so it
-	// ends also when no living thing takes it up. This is true for the hand of each player.
-	const auto handPosition = _world->ReportedHandPlace();
+	// ends also when no living thing takes it up. This is true for the hand of each player. The reaction is at the point
+	// under the cursor that the last report of the player gave, not at the hand.
 	_world->CreateReaction({.initiator = _world->Hand(),
 	                        .type = Reaction::ReactToHandPickUp,
 	                        .player = player,
-	                        .position = handPosition,
+	                        .position = PickUpReactionPlace(),
 	                        .timedFromStart = true});
 	// A burning thing keeps burning in the hand, out of its blaze; the people round it flee one that isn't a villager
 	_world->FireStartedMoving(object, !registry.AllOf<Villager>(object));
@@ -1591,6 +1591,11 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	registry.SetDirty();
 }
 
+glm::vec3 HandGrabSystem::PickUpReactionPlace() const
+{
+	return _world->ReportedCollidePoint().value_or(glm::vec3(0.0f));
+}
+
 void HandGrabSystem::TakeSeedBack(HandGrab& grab, entt::entity seed)
 {
 	// The miracles hold the seed, not the hand: the grab ends, and the frames draw the seed as the held miracle
@@ -1623,7 +1628,7 @@ void HandGrabSystem::TakeSeedBack(HandGrab& grab, entt::entity seed)
 	_world->CreateReaction({.initiator = _world->Hand(),
 	                        .type = Reaction::ReactToHandPickUp,
 	                        .player = player,
-	                        .position = _world->ReportedHandPlace(),
+	                        .position = PickUpReactionPlace(),
 	                        .timedFromStart = true});
 	if (_world->IsLocalHand())
 	{

@@ -245,6 +245,11 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 			    break;
 		    case player_turn::Part::Influence:
 			    NotePlayerInfluence(player);
+			    // Then the advisors of this computer can see the hand of the player near the point under the cursor
+			    if (Locator::guidanceSystem::has_value())
+			    {
+				    Locator::guidanceSystem::value().WatchPlayer(player);
+			    }
 			    break;
 		    }
 	    },

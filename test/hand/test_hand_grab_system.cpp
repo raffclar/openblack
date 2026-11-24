@@ -862,6 +862,26 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	EXPECT_TRUE(_world->reactions.front().timedFromStart);
 }
 
+// The pick-up reaction is at the point under the cursor that the last report of the player gave, also when the hand is far
+// from that point
+TEST_F(HandGrabSystemWithWorld, ThePickUpReactionIsAtThePointUnderTheCursor)
+{
+	const auto rock = _world->AddRock({0.0f, 0.0f, 0.0f});
+	_world->underCursor = rock;
+	_world->reportedCollide = glm::vec3(30.0f, 2.0f, 40.0f);
+	_world->reportedPlaces[_world->hand] = glm::vec3(-300.0f, 20.0f, -400.0f);
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 20 && !_system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(_system->GetHeld().has_value());
+	const auto pickUp =
+	    std::ranges::find(_world->reactions, Reaction::ReactToHandPickUp, &decltype(_world->reactions)::value_type::type);
+	ASSERT_NE(pickUp, _world->reactions.end());
+	EXPECT_EQ(pickUp->position, glm::vec3(30.0f, 2.0f, 40.0f));
+}
+
 // The debug tools let go at once with no command. In a network game, each computer does this let go in its own turn, so
 // the start must not come from the place that one computer drew.
 TEST_F(HandGrabSystemWithWorld, InANetworkGameTheLetGoOfTheToolsDoesNotStartFromTheDrawnPlace)
