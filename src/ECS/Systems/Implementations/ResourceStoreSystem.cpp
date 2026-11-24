@@ -92,6 +92,7 @@
 #include "ECS/TownCensus.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "ECS/WorshipSites.h"
@@ -1184,6 +1185,40 @@ BuildingSite* StandardSite(entt::entity object)
 	return fixed && !ownWay ? ecs::construction::BroughtWoodSite(object) : nullptr;
 }
 
+/// The site that gives or takes a resource for a thing, if the site does it and not the thing:
+/// - An abode with a site uses the site only for wood or for any resource. It keeps food itself.
+/// - A storage pit never gives through its site. It gives from its own piles.
+/// - Any other thing with a site uses the site for all resources.
+BuildingSite* UsesSiteFor(entt::entity object, ResourceType type, bool take)
+{
+	auto* site = StandardSite(object);
+	const auto& registry = Entities();
+	if (site == nullptr || !registry.AllOf<Abode>(object))
+	{
+		return site;
+	}
+	if (take && registry.AllOf<StoragePit>(object))
+	{
+		return nullptr;
+	}
+	return type == ResourceType::Wood || type == ResourceType::Any ? site : nullptr;
+}
+
+/// The kind of a building's site, for the resources that the site takes and gives
+building_site::SiteWoodKind SiteKindOf(entt::entity building)
+{
+	const auto& registry = Entities();
+	if (registry.AllOf<Workshop>(building))
+	{
+		return building_site::SiteWoodKind::Workshop;
+	}
+	if (IsWorshipSite(building))
+	{
+		return building_site::SiteWoodKind::WorshipSite;
+	}
+	return registry.AllOf<Temple>(building) ? building_site::SiteWoodKind::Temple : building_site::SiteWoodKind::Other;
+}
+
 TownResourceTally* TallyOf(entt::entity town)
 {
 	auto& registry = Entities();
@@ -1252,6 +1287,14 @@ uint32_t ResourceStoreSystem::GetResource(entt::entity object, ResourceType type
 	{
 		return 0;
 	}
+	// A scaffold holds wood by its value, as much as a store gets for it
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return type == ResourceType::Wood && Locator::infoConstants::has_value()
+		           ? ecs::workshop::WoodOfScaffold(ecs::workshop::ValueOfScale(ScaleOf(object)),
+		                                           Locator::infoConstants::value().scaffold.woodValue)
+		           : 0u;
+	}
 	// A rock holds wood by its size. No store takes a rock as wood.
 	if (const auto* row = RockRow(object))
 	{
@@ -1294,8 +1337,16 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 	{
 		return 0;
 	}
-	// A building with a site takes wood, and only wood, into the site's one pile, made for the first wood
-	if (auto* site = StandardSite(object))
+	// A scaffold gives wood to its site. The site takes only wood. A scaffold with no site takes nothing.
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(object))
+	{
+		return ecs::store_rules::ScaffoldStores(type, registry.Valid(scaffold->site))
+		           ? AddResource(scaffold->site, ResourceType::Wood, amount, at)
+		           : 0u;
+	}
+	// A building with a site takes wood, and only wood, into the site's one pile, made for the first wood. An abode
+	// with a site keeps the food that it gets, as it does with no site.
+	if (auto* site = UsesSiteFor(object, type, false))
 	{
 		return AddToSite(object, *site, type, amount, MapPlaceOf(at));
 	}
@@ -1366,8 +1417,9 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	{
 		return 0;
 	}
-	// A building with a site gives wood from the site's one pile
-	if (auto* site = StandardSite(object))
+	// A building with a site gives wood from the site's one pile. An abode with a site gives food from its own count. A
+	// storage pit gives food and wood from its own piles, also when it has a site.
+	if (auto* site = UsesSiteFor(object, type, true))
 	{
 		return TakeFromSite(object, *site, type, amount, std::nullopt);
 	}
@@ -1451,43 +1503,43 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
                                         std::optional<map_coords::MapCoords> at)
 {
 	auto& registry = Entities();
-	if (type != ResourceType::Wood && type != ResourceType::Any)
+	const auto kind = SiteKindOf(building);
+	if (!building_site::SiteTakesIn(kind, type, at.has_value()))
 	{
 		return 0;
 	}
-	// A workshop's site gives the wood to the workshop, which keeps it on its wood pile. The town does not count it.
-	if (registry.AllOf<Workshop>(building))
+	// A workshop's site gives the resource to the workshop, which keeps wood on its wood pile. The town does not count
+	// it.
+	if (kind == building_site::SiteWoodKind::Workshop)
 	{
 		return AddToStore(building, type, amount, std::nullopt, false, std::nullopt);
 	}
 	// A worship site's site keeps the wood in its one pile, made for the first wood brought
-	if (IsWorshipSite(building))
+	if (kind == building_site::SiteWoodKind::WorshipSite)
 	{
 		ecs::construction::MakeSitePiles(building, site);
 		const auto pile = site.piles.front();
 		return registry.Valid(pile) ? AddToPile(pile, type, amount, false) : 0u;
 	}
 	uint32_t added = 0;
-	if (registry.AllOf<Temple>(building))
+	if (kind == building_site::SiteWoodKind::Temple)
 	{
-		// A temple's site puts it on its pile nearest where it is brought, making its piles again if none is left
-		if (at.has_value())
+		// A temple's site puts it on its pile nearest where it is brought, making its piles again if none is left. The
+		// pile takes all resources as wood.
+		auto pile = NearestSitePile(site, *at);
+		if (pile == entt::null)
 		{
-			auto pile = NearestSitePile(site, *at);
-			if (pile == entt::null)
-			{
-				ecs::construction::MakeSitePiles(building, site);
-				pile = NearestSitePile(site, *at);
-			}
-			if (pile != entt::null)
-			{
-				added = AddToPile(pile, type, amount, false);
-			}
+			ecs::construction::MakeSitePiles(building, site);
+			pile = NearestSitePile(site, *at);
+		}
+		if (pile != entt::null)
+		{
+			added = AddToPile(pile, type, amount, false);
 		}
 	}
-	else if (type == ResourceType::Wood)
+	else
 	{
-		// Any other site takes wood, and only wood, into its one pile, made for the first wood
+		// All other sites take wood into the one pile, made for the first wood
 		ecs::construction::MakeSitePiles(building, site);
 		if (LivePile(site.piles.front()) != nullptr)
 		{
@@ -1496,8 +1548,6 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
 	}
 	if (auto* tally = TallyOf(ecs::construction::TownOfSite(building)))
 	{
-		const auto kind =
-		    registry.AllOf<Temple>(building) ? building_site::SiteWoodKind::Temple : building_site::SiteWoodKind::Other;
 		tally->woodAtSites = building_site::WoodAtSitesAfter(tally->woodAtSites, kind, added, 0);
 	}
 	return added;
@@ -1506,18 +1556,18 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
 uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& site, ResourceType type, uint32_t amount,
                                            std::optional<glm::vec3> handPoint)
 {
-	auto& registry = Entities();
-	if (type != ResourceType::Wood && type != ResourceType::Any)
+	const auto kind = SiteKindOf(building);
+	if (!building_site::SiteGivesOut(kind, type, handPoint.has_value()))
 	{
 		return 0;
 	}
-	// A workshop's site takes the wood from the workshop
-	if (registry.AllOf<Workshop>(building))
+	// A workshop's site takes the resource from the workshop
+	if (kind == building_site::SiteWoodKind::Workshop)
 	{
-		return type == ResourceType::Wood ? TakeFromWorkshop(building, type, amount, std::nullopt) : 0u;
+		return TakeFromWorkshop(building, type, amount, std::nullopt);
 	}
 	// A worship site's site gives from its one pile
-	if (IsWorshipSite(building))
+	if (kind == building_site::SiteWoodKind::WorshipSite)
 	{
 		auto* pot = LivePile(site.piles.front());
 		if (pot == nullptr)
@@ -1528,13 +1578,13 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 		pot->amount -= taken;
 		return taken;
 	}
-	if (registry.AllOf<Temple>(building) && handPoint.has_value())
+	if (kind == building_site::SiteWoodKind::Temple && handPoint.has_value())
 	{
 		// A hand takes only wood, from the pile nearest the point of the hand. The town counts that much less wood at its
 		// sites. An emptied pile stays where it is.
 		uint32_t removed = 0;
 		const auto pile = NearestSitePile(site, map_coords::FromMetres({handPoint->x, handPoint->z}));
-		if (auto* pot = LivePile(pile); pot != nullptr && type == ResourceType::Wood)
+		if (auto* pot = LivePile(pile))
 		{
 			removed = std::min(amount, pot->amount);
 			pot->amount -= removed;
@@ -1550,9 +1600,9 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 		}
 		return removed;
 	}
-	if (registry.AllOf<Temple>(building))
+	if (kind == building_site::SiteWoodKind::Temple)
 	{
-		// Its piles in turn, each giving what it has; an emptied pile stays where it is
+		// Its piles in turn, each giving what it has, whatever resource is asked for. An emptied pile stays where it is.
 		uint32_t removed = 0;
 		for (const auto pile : site.piles)
 		{
@@ -1574,9 +1624,9 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 		}
 		return removed;
 	}
-	// Any other site gives wood from its one pile, and its town counts that much less wood at its sites
+	// All other sites give wood from the one pile, and the town counts that much less wood at its sites
 	uint32_t removed = 0;
-	if (auto* pot = LivePile(site.piles.front()); pot != nullptr && type == ResourceType::Wood)
+	if (auto* pot = LivePile(site.piles.front()))
 	{
 		removed = std::min(amount, pot->amount);
 		pot->amount -= removed;
