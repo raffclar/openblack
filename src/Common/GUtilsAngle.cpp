@@ -88,7 +88,8 @@ uint16_t gutils::LHArcTan(int32_t dx, int32_t dz)
 {
 	const auto& table = ArcTanTable();
 	const auto t = [&table](int32_t num, int32_t den) {
-		// NOLINTNEXTLINE(clang-analyzer-core.DivideZero): only an x of INT_MIN can give a zero divisor
+		// Only an x of INT_MIN gives a zero divisor. A guard changes the original result.
+		// NOLINTNEXTLINE(clang-analyzer-core.DivideZero)
 		return static_cast<int32_t>(table.at((static_cast<uint32_t>(num) << 8u) / static_cast<uint32_t>(den)));
 	};
 	const int32_t x = Wrap(-static_cast<int64_t>(dx));
