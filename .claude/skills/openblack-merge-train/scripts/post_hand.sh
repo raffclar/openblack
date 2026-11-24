@@ -9,5 +9,5 @@ git add -u
 for m in "$@"; do o=${m%%:*}; n=${m#*:}; sed -i -E "s/^\| $o \|/| $n |/" docs/vanilla-bugs.md; done
 python "$HERE/sort_rows.py" docs/vanilla-bugs.md
 git add docs/vanilla-bugs.md
-git commit -q -m "Merge $BR into batch $B" -m "$OB_TRAIN_TRAILER" && git log -1 --format="%an | %s" && git status --porcelain | head -3
+git commit -q -m "Merge $BR into batch $B" && git log -1 --format="%an | %s" && git status --porcelain | head -3
 grep -oE '^\| [0-9]+ ' docs/vanilla-bugs.md | tail -4 | tr '\n' ' '
