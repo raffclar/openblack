@@ -817,10 +817,7 @@ void CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMi
 	auto* const outerLog = std::exchange(_comeAcrossLog, &kept.comeAcross);
 	const auto& registry = Locator::entitiesRegistry::value();
 	// The tests can come across things and change the beliefs. Thus the code takes the things to examine first.
-	const auto held = mind.beliefs.HeldInListOrder();
-	kept.things.clear();
-	kept.things.reserve(held.size());
-	std::ranges::transform(held, std::back_inserter(kept.things), &creature_object_beliefs::Belief::thing);
+	mind.beliefs.ThingsInListOrder(kept.things);
 	kept.suiting.reserve(kept.things.size());
 	const KindStores kinds(registry);
 	for (const auto believedThing : kept.things)

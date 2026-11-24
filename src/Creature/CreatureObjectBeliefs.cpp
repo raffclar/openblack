@@ -375,6 +375,15 @@ std::vector<const Belief*> Store::HeldInListOrder() const
 	return HeldAt(Orders().inListOrder);
 }
 
+void Store::ThingsInListOrder(std::vector<entt::entity>& things) const
+{
+	const auto& places = Orders().inListOrder;
+	things.clear();
+	things.reserve(places.size());
+	std::ranges::transform(places, std::back_inserter(things),
+	                       [this](const Place& at) { return _contents.pools.at(at.kind).slots.at(at.slot)->thing; });
+}
+
 std::vector<Belief> Store::All() const
 {
 	std::vector<Belief> all;

@@ -103,6 +103,24 @@ float gutils::GetDistanceInMetres(glm::vec2 a, glm::vec2 b)
 	return GetDistanceInMetres(map_coords::FromMetres(a), map_coords::FromMetres(b));
 }
 
+bool gutils::SurelyNotNearer(glm::vec2 a, glm::vec2 b, float bound)
+{
+	// Map positions of points in this range do not overflow, and neither do their distances. The test is false for NaN.
+	constexpr float k_Far = 100'000.0f;
+	const auto inRange = [](float value) { return value > -k_Far && value < k_Far; };
+	if (!(inRange(a.x) && inRange(a.y) && inRange(b.x) && inRange(b.y)))
+	{
+		return false;
+	}
+	// The distance through map positions can be shorter than the true length. The truncation of the map positions and of
+	// the distance takes less than 0.1 metres. The table of the square root takes less than 1/512 of the length. The
+	// margins below are much larger than both.
+	constexpr float k_LengthMargin = 1.0f / 64.0f;
+	constexpr float k_MetresMargin = 1.0f;
+	const float side = std::max(std::abs(b.x - a.x), std::abs(b.y - a.y));
+	return side - side * k_LengthMargin - k_MetresMargin >= bound;
+}
+
 float gutils::GetDistanceInMetres(glm::ivec2 a, glm::ivec2 b)
 {
 	return GetDistanceInMetres(MapCoords {a.x, a.y, 0.0f}, MapCoords {b.x, b.y, 0.0f});
