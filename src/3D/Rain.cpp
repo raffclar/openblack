@@ -113,7 +113,7 @@ float BlockReach(bool maximumDetail) noexcept
 	return maximumDetail ? std::numeric_limits<float>::infinity() : k_BlockReach;
 }
 
-std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera, bool maximumDetail)
+std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera)
 {
 	if (wettest <= k_LeastRain)
 	{
@@ -126,9 +126,7 @@ std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera, 
 		return std::nullopt;
 	}
 	const auto offset = camera - centre;
-	const float straight = std::sqrt((offset.x * offset.x) + (offset.y * offset.y));
-	// With the player's "maximum detail" option, the rain does not thin out past the near distance
-	const float distance = maximumDetail ? std::min(straight, k_Thinning) : straight;
+	const float distance = std::sqrt((offset.x * offset.x) + (offset.y * offset.y));
 	if (!(distance <= k_Farthest))
 	{
 		return std::nullopt;

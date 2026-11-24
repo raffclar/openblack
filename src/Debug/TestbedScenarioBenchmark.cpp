@@ -116,11 +116,12 @@ void AddMaximumDetailView(std::vector<Scenario>& all)
 		                   "lake, past two lines of trees, to a fish farm on the lake's southern shore and a tiger in the "
 		                   "far shallows. The two scenarios show the same view, with the \"maximum detail\" option off and "
 		                   "on.",
-		    .expected = on ? "The rain streaks show over all the land in view, as thick far away as near the camera. The "
-		                     "fish of the farm swim and show. The tiger keeps its ground shadow and its reflection in the "
-		                     "water. All the trees stay in the view."
-		                   : "As in the game: the rain thins out from 100 units and stops at 400 units. The far fish do "
-		                     "not show. The far tiger has no ground shadow and no reflection. The far trees fade out.",
+		    .expected =
+		        on ? "The rain is as in the game: it thins out from 100 units and stops at 400 units, so no far rain "
+		             "shows. The fish of the farm swim and show. The tiger keeps its ground shadow and its reflection in the "
+		             "water. All the trees stay in the view."
+		           : "As in the game: the rain thins out from 100 units and stops at 400 units. The far fish do "
+		             "not show. The far tiger has no ground shadow and no reflection. The far trees fade out.",
 		    .environment =
 		        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false, .maximumDetail = on},
 		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -500.0f}, .look = {0.0f, 0.0f, 300.0f}},

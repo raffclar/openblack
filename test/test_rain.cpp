@@ -108,22 +108,9 @@ TEST(Rain, TilesThinOutWithDistance)
 	EXPECT_EQ(far->alphaTop, 3);
 }
 
-// With the "maximum detail" option, a far block has the rain of a block 100 units away
-TEST(Rain, MaximumDetailDoesNotThinTheRain)
+// The snow's blocks have no reach with the "maximum detail" option. The rain keeps the game's reach.
+TEST(Rain, MaximumDetailReachIsForTheSnowOnly)
 {
-	const auto atHundred = rain::TileOf({0.0f, 0.0f}, 100, {100.0f, 0.0f});
-	ASSERT_TRUE(atHundred.has_value());
-	EXPECT_EQ(atHundred->streaks, 128);
-	EXPECT_EQ(atHundred->alpha, 88);
-	EXPECT_EQ(atHundred->alphaTop, 11);
-	for (const float away : {100.0f, 250.0f, 401.0f, 3000.0f})
-	{
-		EXPECT_EQ(rain::TileOf({0.0f, 0.0f}, 100, {away, 0.0f}, true), atHundred);
-	}
-	// Near the camera the option changes nothing
-	EXPECT_EQ(rain::TileOf({0.0f, 0.0f}, 100, {50.0f, 0.0f}, true), rain::TileOf({0.0f, 0.0f}, 100, {50.0f, 0.0f}));
-	// A weak rain still shows no streaks
-	EXPECT_FALSE(rain::TileOf({0.0f, 0.0f}, 5, {0.0f, 0.0f}, true).has_value());
 	EXPECT_EQ(rain::BlockReach(false), rain::k_BlockReach);
 	EXPECT_TRUE(std::isinf(rain::BlockReach(true)));
 }
