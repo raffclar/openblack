@@ -59,6 +59,7 @@
 #include "Gui/SkirmishBoxRules.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandKnock.h"
+#include "Input/ControllerDevices.h"
 #include "Input/InputLock.h"
 #include "LandChange.h"
 #include "LaunchSwitches.h"
@@ -695,6 +696,9 @@ private:
 	bool _serverSilent {false};
 	/// The releases of the buttons of the hand during the silence. The hand gets them when the silence ends.
 	std::vector<SDL_Event> _heldHandReleases;
+	/// The controllers that the player plugs in
+	input::ControllerDevices _controllers;
+	bool _controllersOpened {false};
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
 	/// Tests: the player pressed Back in the land information box at the turn that the command line gives

@@ -42,6 +42,8 @@ struct InputEvent
 		Release,
 		/// Letters that the keyboard types, as the text box with the focus gets them
 		Text,
+		/// A button of a game controller going down, then up: the name is SDL's ("a", "b", "dpdown")
+		Pad,
 	};
 	/// When the game sees the pointer's moves and buttons
 	enum class Timing : uint8_t

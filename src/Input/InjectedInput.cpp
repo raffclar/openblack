@@ -11,10 +11,12 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <utility>
 
 #include <SDL_events.h>
+#include <SDL_gamecontroller.h>
 
 namespace
 {
@@ -22,6 +24,8 @@ namespace
 constexpr uint32_t k_InjectedMouse = 0x0B1A0B1Au;
 /// The device the game's own mouse events come from when it takes their state as they are pumped, as from a real mouse
 constexpr uint32_t k_PumpedMouse = 0x0B1A0B1Bu;
+/// The controller that the game's own controller events come from: no controller SDL knows has this number
+constexpr int32_t k_InjectedController = 0x0B1A0B1A;
 /// Kept in a key event's spare field
 constexpr uint32_t k_InjectedKey = 0x0B1A0B1Au;
 /// The last byte of the letters of a text event that the game made. The game's text events hold at most 30 bytes and
@@ -55,6 +59,10 @@ void openblack::input::MarkInjected(SDL_Event& event)
 	case SDL_TEXTINPUT:
 		event.text.text[sizeof(event.text.text) - 1] = k_InjectedText;
 		break;
+	case SDL_CONTROLLERBUTTONDOWN:
+	case SDL_CONTROLLERBUTTONUP:
+		event.cbutton.which = k_InjectedController;
+		break;
 	default:
 		break;
 	}
@@ -76,6 +84,9 @@ bool openblack::input::IsInjected(const SDL_Event& event)
 		return event.key.keysym.unused == k_InjectedKey;
 	case SDL_TEXTINPUT:
 		return event.text.text[sizeof(event.text.text) - 1] == k_InjectedText;
+	case SDL_CONTROLLERBUTTONDOWN:
+	case SDL_CONTROLLERBUTTONUP:
+		return event.cbutton.which == k_InjectedController;
 	default:
 		return false;
 	}
@@ -161,6 +172,29 @@ uint16_t openblack::input::ModifiersOfHeldKeys(const std::bitset<SDL_NUM_SCANCOD
 		}
 	}
 	return mod;
+}
+
+std::optional<uint8_t> openblack::input::ControllerButtonNamed(std::string_view name)
+{
+	constexpr std::array<std::pair<std::string_view, uint8_t>, 15> k_Buttons {{
+	    {"a", SDL_CONTROLLER_BUTTON_A},
+	    {"b", SDL_CONTROLLER_BUTTON_B},
+	    {"x", SDL_CONTROLLER_BUTTON_X},
+	    {"y", SDL_CONTROLLER_BUTTON_Y},
+	    {"back", SDL_CONTROLLER_BUTTON_BACK},
+	    {"guide", SDL_CONTROLLER_BUTTON_GUIDE},
+	    {"start", SDL_CONTROLLER_BUTTON_START},
+	    {"leftstick", SDL_CONTROLLER_BUTTON_LEFTSTICK},
+	    {"rightstick", SDL_CONTROLLER_BUTTON_RIGHTSTICK},
+	    {"leftshoulder", SDL_CONTROLLER_BUTTON_LEFTSHOULDER},
+	    {"rightshoulder", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER},
+	    {"dpup", SDL_CONTROLLER_BUTTON_DPAD_UP},
+	    {"dpdown", SDL_CONTROLLER_BUTTON_DPAD_DOWN},
+	    {"dpleft", SDL_CONTROLLER_BUTTON_DPAD_LEFT},
+	    {"dpright", SDL_CONTROLLER_BUTTON_DPAD_RIGHT},
+	}};
+	const auto found = std::ranges::find(k_Buttons, name, &std::pair<std::string_view, uint8_t>::first);
+	return found != k_Buttons.end() ? std::optional(found->second) : std::nullopt;
 }
 
 SDL_Event openblack::input::MakeInjectedKey(const InjectedKey& key)

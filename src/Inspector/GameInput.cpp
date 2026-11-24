@@ -18,6 +18,7 @@
 #include <tuple>
 
 #include <SDL_events.h>
+#include <SDL_gamecontroller.h>
 #include <SDL_keyboard.h>
 #include <SDL_mouse.h>
 
@@ -279,6 +280,25 @@ std::string GameInput::Apply(const InputEvent& event)
 	case InputEvent::Kind::Release:
 		Release();
 		return {};
+	case InputEvent::Kind::Pad:
+	{
+		const auto button = input::ControllerButtonNamed(event.name);
+		if (!button.has_value())
+		{
+			return "no controller button " + event.name;
+		}
+		// Down, then up, as the events of a real controller come
+		for (const bool down : {true, false})
+		{
+			SDL_Event pad {};
+			pad.type = down ? SDL_CONTROLLERBUTTONDOWN : SDL_CONTROLLERBUTTONUP;
+			pad.cbutton.button = *button;
+			pad.cbutton.state = down ? SDL_PRESSED : SDL_RELEASED;
+			input::MarkInjected(pad);
+			input::Device().PushEvent(pad);
+		}
+		return {};
+	}
 	case InputEvent::Kind::Text:
 	{
 		// The letters go in pieces of at most 30 bytes, each cut between two whole UTF-8 characters. The last byte of

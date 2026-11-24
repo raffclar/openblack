@@ -14,6 +14,7 @@
 #include <iterator>
 
 #include <LobbiesJson.h>
+#include <SDL_gamecontroller.h>
 #include <SDL_keycode.h>
 #include <fmt/format.h>
 
@@ -985,6 +986,29 @@ KeyAction KeyActionOf(KeyScreen screen, const KeyPress& press) noexcept
 		break;
 	}
 	return KeyAction::None;
+}
+
+ControllerAction ControllerActionOf(int button, bool listHasFocus) noexcept
+{
+	switch (button)
+	{
+	case SDL_CONTROLLER_BUTTON_A:
+		return ControllerAction::Accept;
+	case SDL_CONTROLLER_BUTTON_B:
+		return ControllerAction::Back;
+	case SDL_CONTROLLER_BUTTON_DPAD_UP:
+		return listHasFocus ? ControllerAction::ListUp : ControllerAction::FocusPrevious;
+	case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+		return listHasFocus ? ControllerAction::ListDown : ControllerAction::FocusNext;
+	case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+	case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+		return ControllerAction::FocusPrevious;
+	case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+	case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+		return ControllerAction::FocusNext;
+	default:
+		return ControllerAction::None;
+	}
 }
 
 } // namespace openblack::gui::lobby_screens

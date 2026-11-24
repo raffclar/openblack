@@ -287,6 +287,8 @@ public:
 	}
 	[[nodiscard]] const std::vector<Item>& GetItems() const noexcept { return _items; }
 	[[nodiscard]] std::optional<size_t> GetSelection() const noexcept { return _selection; }
+	/// Whether the up and down keys move a selection in the list: a list that shows its selection
+	[[nodiscard]] bool TakesSelectionKeys() const noexcept { return _showSelection; }
 	void SetSelection(std::optional<size_t> selection) noexcept { _selection = selection; }
 	[[nodiscard]] float GetScroll() const noexcept { return _scroll; }
 	/// Scrolls the list so that the selected item shows, the least distance that is necessary. With no selection the

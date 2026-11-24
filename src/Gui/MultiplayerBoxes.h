@@ -95,6 +95,9 @@ public:
 	void Wheel(glm::ivec2 point, int steps);
 	void TextInput(std::u16string_view text);
 	void KeyDown(int key, bool shift);
+	/// A button of a controller goes down. True when a control acted, so that the game plays the click sound. Only the
+	/// screens of the lobby sessions take the controller.
+	bool ControllerButtonDown(int button);
 	void Update(float deltaSeconds);
 	void Draw(const DialogPainter& painter) const;
 
