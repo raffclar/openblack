@@ -309,7 +309,7 @@ glm::uvec2 GameActionMap::GetMousePosition() const
 {
 	if (_inputStep.has_value())
 	{
-		return glm::uvec2(glm::max(_stepMice.at(*_inputStep).position, glm::ivec2(0)));
+		return {glm::max(_stepMice.at(*_inputStep).position, glm::ivec2(0))};
 	}
 	return _mousePosition;
 }

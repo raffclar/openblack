@@ -212,7 +212,7 @@ public:
 	[[nodiscard]] virtual float GetPointerSpeedMultiplier() const { return 1.0f; }
 	/// Where the pointer the game follows is in the window, and its buttons held as SDL's masks: the mouse's, the scripted
 	/// pointer's, or none held while the player's devices are kept out
-	[[nodiscard]] virtual glm::ivec2 GetPointerPosition() const { return glm::ivec2(GetMousePosition()); }
+	[[nodiscard]] virtual glm::ivec2 GetPointerPosition() const { return {GetMousePosition()}; }
 	[[nodiscard]] virtual uint32_t GetPointerButtons() const { return 0; }
 	/// Whether the pointer is known yet: the player's cursor has been over the window, or a script or the debug inspector
 	/// holds the pointer. Until then the pointer the game reports only rests in the middle of the window
@@ -265,7 +265,7 @@ public:
 	virtual void PinCursor([[maybe_unused]] bool pinned) {}
 	/// Where the cursor's image is drawn: where it was pinned, else at the pointer. openblack draws the hand as the cursor
 	/// and no separate image
-	[[nodiscard]] virtual glm::ivec2 GetCursorImagePosition() const { return glm::ivec2(GetMousePosition()); }
+	[[nodiscard]] virtual glm::ivec2 GetCursorImagePosition() const { return {GetMousePosition()}; }
 
 	virtual void Frame() = 0;
 	virtual void ProcessEvent(const SDL_Event& event) = 0;
