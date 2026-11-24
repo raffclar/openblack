@@ -179,6 +179,7 @@ struct BgfxCallback: public bgfx::CallbackI
 		}
 		if (len > 0)
 		{
+			// NOLINTNEXTLINE(clang-analyzer-unix.Malloc): the code makes the new buffer only for a length more than zero
 			out[len] = '\0';
 			if (len > 0 && out[len - 1] == '\n')
 			{
