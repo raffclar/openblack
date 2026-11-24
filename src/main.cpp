@@ -299,7 +299,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
 		("sentry-test-trap", "Developers: after the start, stop the game with a trap of the processor (in the web game, a trap of the WebAssembly code), to test the crash reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
-		("turn-beside-draw", "Developers: on: the turns of the next frame play on another thread beside the end of the draw of this frame, on all lands (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later. off: the turns always play in their frame. auto (the default): beside the draw on the map for 32 gods only. Give the value after a \"=\". With no value, the switch is on.", cxxopts::value<std::string>()->default_value("auto")->implicit_value("on"));
+		("turn-beside-draw", "Developers: on: the turns of the next frame play on another thread beside the end of the draw of this frame, on all lands (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later. off: the turns always play in their frame. auto (the default): beside the draw on the map for 32 gods only. Give the value after a \"=\" or as the next word. With no value, the switch is on.", cxxopts::value<std::string>()->default_value("auto")->implicit_value("on"));
 #endif
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
@@ -334,6 +334,18 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			if (ownArguments.empty() || !openblack::launch_switches::IsSwitchArgument(argument))
 			{
 				ownArguments.push_back(argument);
+			}
+		}
+		// An option with an optional value takes the value that follows it as well as the value after a "="
+		std::vector<std::string> joinedStorage;
+		{
+			const std::vector<std::string_view> texts(ownArguments.begin(), ownArguments.end());
+			joinedStorage =
+			    openblack::developer_tools::JoinOptionalValues(texts, openblack::developer_tools::k_OptionalValueOptions);
+			ownArguments.clear();
+			for (auto& text : joinedStorage)
+			{
+				ownArguments.push_back(text.data());
 			}
 		}
 		// A build without the developer tools ignores the developer options and their values. The game log tells which.
