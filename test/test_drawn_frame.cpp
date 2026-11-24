@@ -83,3 +83,20 @@ TEST(DrawnFrame, TheModelsChangedOnlyWhenTheCountOfChangesMoved)
 	EXPECT_FALSE(frame.ModelsChanged(5));
 	EXPECT_TRUE(frame.ModelsChanged(6));
 }
+
+TEST(DrawnFrame, TheEffectsGiveOnlyTheSymbolsOfBeliefOfThisFrame)
+{
+	graphics::DrawnFrame frame;
+	auto& effects = frame.effects;
+	// The frames of earlier frames keep their memory, but the draw does not read them
+	effects.townBeliefs.resize(3);
+	effects.townBeliefs[0].centre = entt::entity {7};
+	effects.townBeliefs[1].centre = entt::entity {9};
+	effects.townBeliefCount = 2;
+	const auto shown = effects.TownBeliefs();
+	ASSERT_EQ(shown.size(), 2U);
+	EXPECT_EQ(shown[0].centre, entt::entity {7});
+	EXPECT_EQ(shown[1].centre, entt::entity {9});
+	effects.townBeliefCount = 0;
+	EXPECT_TRUE(effects.TownBeliefs().empty());
+}

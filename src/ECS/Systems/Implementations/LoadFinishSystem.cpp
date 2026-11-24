@@ -217,13 +217,13 @@ void LoadFinishSystem::WarmUpFirstFrame()
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
 	bool shown = false;
-	const auto warmUp = [&renderer, &shown](const graphics::RendererInterface::DrawSceneDesc& desc) {
+	const auto warmUp = [&renderer, &shown, this](const graphics::RendererInterface::DrawSceneDesc& desc) {
 		bool partsLeft = true;
 		for (uint32_t part = 0; partsLeft; ++part)
 		{
 			partsLeft = false;
-			const bool partShown = RenderLoadingFrame(true, [&renderer, &desc, &partsLeft, part]() {
-				partsLeft = renderer.WarmUpScene(desc, part);
+			const bool partShown = RenderLoadingFrame(true, [&renderer, &desc, &partsLeft, part, this]() {
+				partsLeft = renderer.WarmUpScene(_hooks.drawnFrame(), desc, part);
 				// The interface draws over the scene too, and the cinema bars are its first draw
 				gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
 				// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through
@@ -321,6 +321,8 @@ void LoadFinishSystem::StartLandPipelines()
 	desc.drawSprites = false;
 	desc.drawVegetation = false;
 	desc.drawBoundingBoxes = false;
-	RenderLoadingFrame(true, [&renderer, &desc]() { [[maybe_unused]] const bool partsLeft = renderer.WarmUpScene(desc, 0); });
+	RenderLoadingFrame(true, [&renderer, &desc, this]() {
+		[[maybe_unused]] const bool partsLeft = renderer.WarmUpScene(_hooks.drawnFrame(), desc, 0);
+	});
 	renderer.SetPipelinePrefetch(false);
 }

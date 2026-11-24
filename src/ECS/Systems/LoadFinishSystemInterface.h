@@ -29,6 +29,8 @@ struct LoadFinishHooks
 	std::function<bool()> handDrawn;
 	/// How the game draws its scene into the window at the given time, with or without the hand
 	std::function<graphics::RendererInterface::DrawSceneDesc(uint32_t time, bool drawHand)> sceneDrawDesc;
+	/// The drawn copy that the descriptions of `sceneDrawDesc` draw. A warm-up fills its effects.
+	std::function<graphics::DrawnFrame&()> drawnFrame;
 };
 
 /// The work that the game does behind the loading screen at the end of a load, so that the first frames of the land

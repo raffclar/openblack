@@ -76,6 +76,7 @@ public:
 		EditorUpdate,
 		GameLogic,
 		DrawnFrameFill,
+		DrawnEffectsFill,
 		SceneDraw,
 		FootprintPass,
 		ObjectShadowPass,
@@ -151,6 +152,7 @@ public:
 	    "Editor",               //
 	    "Game Logic",           //
 	    "Drawn Frame Fill",     //
+	    "Drawn Effects Fill",   //
 	    "Encode Draw Scene",    //
 	    "Footprint Pass",       //
 	    "Object Shadow Pass",   //

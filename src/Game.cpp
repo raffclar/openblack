@@ -347,6 +347,7 @@ Game::Game(Arguments&& args) noexcept
 		        game_detail::FillDrawnFrame(*_drawnFrame, config, time);
 		        return game_detail::SceneDrawDesc(config, *_drawnFrame, drawHand);
 	        },
+	    .drawnFrame = [this]() -> graphics::DrawnFrame& { return *_drawnFrame; },
 	});
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
@@ -1337,6 +1338,8 @@ bool Game::RunFrame() noexcept
 			}
 			else
 			{
+				// The effects step their walks and copy what they draw before the checksum reads the world beside the draw
+				Locator::rendererInterface::value().FillDrawnEffects(*_drawnFrame, drawDesc);
 				Locator::syncChecksumSystem::value().StartHashBesideDraw();
 				Locator::rendererInterface::value().DrawScene(drawDesc);
 			}
