@@ -195,6 +195,8 @@ struct Environment
 	/// The trees' shadows are drawn each frame and move with the trees, as the debug menu's Dynamic Tree Shadows box
 	/// draws them
 	bool dynamicTreeShadows {false};
+	/// The player's "maximum detail" option is on or off, as the debug menu's Model Detail choice sets it
+	std::optional<bool> maximumDetail;
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
 	/// The switch of the Soccer Add-On is on while the scenario runs, so that the towns play football

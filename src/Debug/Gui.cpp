@@ -1079,6 +1079,22 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
+			if (ImGui::BeginMenu("Model Detail"))
+			{
+				// The game shows less detail far away. Maximum shows the most detail at all distances, but far villagers
+				// still change into their small shadows.
+				if (ImGui::MenuItem("Original", nullptr, !config.maximumDetail))
+				{
+					config.maximumDetail = false;
+				}
+				if (ImGui::MenuItem("Maximum", nullptr, config.maximumDetail))
+				{
+					config.maximumDetail = true;
+				}
+
+				ImGui::EndMenu();
+			}
+
 			if (ImGui::BeginMenu("Shadows"))
 			{
 				ImGui::Checkbox("Creature Shadows", &config.drawCreatureShadows);

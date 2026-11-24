@@ -98,6 +98,10 @@ struct EngineConfig
 	/// waits on after its bolt goes. On by default. The debug menu choice "Original" turns it off: then thunder is heard
 	/// as the game plays it.
 	bool farThunder {true};
+	/// The player's "maximum detail" option. Models, the land and effects show their most detailed form at all distances.
+	/// Far villagers still change into their small shadows. Off by default: then the detail changes with the distance
+	/// as in the game. Only the draw reads it, never the synced game.
+	bool maximumDetail {false};
 	bool drawWater {true};
 	bool drawIsland {true};
 	bool drawEntities {true};

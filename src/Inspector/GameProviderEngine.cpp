@@ -215,6 +215,31 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		}
 		return QueryResult::Value({{"away", true}, {"seconds", seconds->get<double>()}});
 	});
+	auto maximumDetail =
+	    Query("maximum_detail",
+	          "Tools: the player's \"maximum detail\" option, as the debug menu's Model Detail choice sets it. "
+	          "Without on, it only tells",
+	          {{.name = "on",
+	            .type = "boolean",
+	            .description = "True shows the most detail at all distances, false the game's own detail",
+	            .required = false}});
+	maximumDetail.writes = true;
+	provider->Add(std::move(maximumDetail), [](const QueryContext& context) {
+		if (!Locator::config::has_value())
+		{
+			return QueryResult::Error("engine.maximum_detail needs the config");
+		}
+		auto& config = Locator::config::value();
+		if (const auto on = context.params.find("on"); on != context.params.end())
+		{
+			if (!on->is_boolean())
+			{
+				return QueryResult::Error("engine.maximum_detail needs on as true or false");
+			}
+			config.maximumDetail = on->get<bool>();
+		}
+		return QueryResult::Value({{"on", config.maximumDetail}});
+	});
 	auto skyPictures = Query("sky_pictures",
 	                         "Tools: the pictures of the sky's dome that the debug menu shows, the game's own pictures or the "
 	                         "larger pictures of the sky pack in the profile folder. Without upscaled, it only tells",
@@ -261,6 +286,7 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		          {"bounding_boxes", config.drawBoundingBoxes}}},
 		        {"shadows", {{"creatures", config.drawCreatureShadows}, {"dynamic_trees", config.dynamicTreeShadows}}},
 		        {"wireframe", config.wireframe},
+		        {"maximum_detail", config.maximumDetail},
 		        {"unlocked_bonus_creatures", UnlockedBonusCreatureNames(config.unlockedBonusCreatures)},
 		        {"time_of_day", config.timeOfDay},
 		        {"resolution", {config.resolution.x, config.resolution.y}},

@@ -192,6 +192,8 @@ struct Arguments
 	/// Tests: the wait before each request of a piece of a map that the lobby room downloads
 	uint32_t mapPieceDelayMs {0};
 	bool dynamicTreeShadows {false};
+	/// The player's "maximum detail" option is on from the start (see EngineConfig::maximumDetail)
+	bool maximumDetail {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
 	bool noDraw {false};
