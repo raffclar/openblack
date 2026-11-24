@@ -19,6 +19,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Pot.h"
@@ -240,7 +241,7 @@ TEST_F(SitePileTakeTest, AScaffoldHoldsWoodByItsValueAndGivesWoodToItsSite)
 {
 	_info->scaffold.woodValue = 100;
 	Locator::infoConstants::reset();
-	Locator::infoConstants::emplace(*_info);
+	Locator::infoConstants::emplace(*(_info.get()));
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto scaffold = registry.Create();
 	registry.Assign<Transform>(scaffold,
@@ -256,4 +257,63 @@ TEST_F(SitePileTakeTest, AScaffoldHoldsWoodByItsValueAndGivesWoodToItsSite)
 	EXPECT_EQ(_stores.AddResource(scaffold, ResourceType::Wood, 10, std::nullopt), 10u);
 	EXPECT_EQ(Holds(_abodePile), 110u);
 	EXPECT_EQ(registry.Get<const Abode>(_abode).foodAmount, 0u);
+}
+
+// An abode's site takes and gives only wood. A script's "any" resource gets nothing from the site or into it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, AnAbodeSiteTakesAndGivesNoAnyResource)
+{
+	EXPECT_EQ(_stores.AddResource(_abode, ResourceType::Any, 30, std::nullopt), 0u);
+	EXPECT_EQ(_stores.RemoveResource(_abode, ResourceType::Any, 30), 0u);
+	EXPECT_EQ(_stores.RemoveResource(_abodePile, ResourceType::Any, 30), 0u);
+	EXPECT_EQ(Holds(_abodePile), 100u);
+	const auto& abode = Locator::entitiesRegistry::value().Get<const Abode>(_abode);
+	EXPECT_EQ(abode.foodAmount, 0u);
+	EXPECT_EQ(abode.woodAmount, 0u);
+	EXPECT_FLOAT_EQ(WoodAtSites(), 500.0f);
+}
+
+// A temple's site puts all resources that come to a point on its nearest pile, and the town counts them as wood at its
+// sites. It takes nothing that comes to no point.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, ATempleSiteTakesAllResourcesThatComeToAPoint)
+{
+	const auto atFirstPile = map_coords::FromMetres({1.0f, 0.0f});
+	EXPECT_EQ(_stores.AddToTownsSite(_temple, _town, ResourceType::Food, 30, atFirstPile), 30u);
+	EXPECT_EQ(_stores.AddToTownsSite(_temple, _town, ResourceType::Any, 20, atFirstPile), 20u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 150u);
+	EXPECT_EQ(Holds(_templePiles.at(1)), 100u);
+	EXPECT_FLOAT_EQ(WoodAtSites(), 550.0f);
+
+	EXPECT_EQ(_stores.AddResource(_temple, ResourceType::Wood, 20, std::nullopt), 0u);
+	EXPECT_EQ(_stores.AddResource(_temple, ResourceType::Any, 20, std::nullopt), 0u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 150u);
+}
+
+// With no hand, a temple's site gives from its piles in turn, whatever resource is asked for
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, WithNoHandATempleSiteGivesAllResourcesFromItsPiles)
+{
+	EXPECT_EQ(_stores.RemoveResource(_templePiles.at(1), ResourceType::Food, 30), 30u);
+	EXPECT_EQ(_stores.RemoveResource(_templePiles.at(1), ResourceType::Any, 120), 120u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 0u);
+	EXPECT_EQ(Holds(_templePiles.at(1)), 50u);
+	EXPECT_FLOAT_EQ(WoodAtSites(), 500.0f);
+}
+
+// A building with no site has no count for "none" or "any". It answers 0 and its counts do not change.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, ABuildingWithNoSiteHasNothingForNoneOrAny)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto abode = registry.Create();
+	registry.Assign<Abode>(abode, Abode {.type = AbodeNumber {}, .townId = k_TownId, .foodAmount = 70, .woodAmount = 90});
+	for (const auto type : {ResourceType::None, ResourceType::Any})
+	{
+		EXPECT_EQ(_stores.GetResource(abode, type), 0u);
+		EXPECT_EQ(_stores.AddResource(abode, type, 30, std::nullopt), 0u);
+		EXPECT_EQ(_stores.RemoveResource(abode, type, 30), 0u);
+	}
+	EXPECT_EQ(registry.Get<const Abode>(abode).foodAmount, 70u);
+	EXPECT_EQ(registry.Get<const Abode>(abode).woodAmount, 90u);
 }

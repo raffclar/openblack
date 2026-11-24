@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "Enums.h"
 
 /// The rules of a building site and its builders: how many builders it wants, how much it wants them, where they stand
 /// round the building, whether one should fetch wood first, how much wood a stroke uses and how far it raises the
@@ -268,6 +269,44 @@ enum class SiteWoodKind : uint8_t
 		counted -= static_cast<float>(removed);
 	}
 	return counted;
+}
+
+/// Whether a building site takes a resource that it gets:
+/// - A temple's site takes all resources that come to a point. It takes nothing that comes to no point.
+/// - A workshop's site gives all resources to its workshop. The workshop keeps only wood.
+/// - All other sites take only wood. A script's "any" resource gets nothing.
+[[nodiscard]] constexpr bool SiteTakesIn(SiteWoodKind kind, ResourceType type, bool atPoint)
+{
+	switch (kind)
+	{
+	case SiteWoodKind::Temple:
+		return atPoint;
+	case SiteWoodKind::Workshop:
+		return true;
+	case SiteWoodKind::WorshipSite:
+	case SiteWoodKind::Other:
+		break;
+	}
+	return type == ResourceType::Wood;
+}
+
+/// Whether a building site gives a resource that something asks of it:
+/// - A temple's site gives only wood to a hand. To all other askers it gives from its piles, for all resources.
+/// - A workshop's site asks its workshop, which gives food and wood.
+/// - All other sites give only wood. A script's "any" resource gets nothing.
+[[nodiscard]] constexpr bool SiteGivesOut(SiteWoodKind kind, ResourceType type, bool toHand)
+{
+	switch (kind)
+	{
+	case SiteWoodKind::Temple:
+		return !toHand || type == ResourceType::Wood;
+	case SiteWoodKind::Workshop:
+		return type == ResourceType::Food || type == ResourceType::Wood;
+	case SiteWoodKind::WorshipSite:
+	case SiteWoodKind::Other:
+		break;
+	}
+	return type == ResourceType::Wood;
 }
 
 /// Whether a town removes its site at a building on its turn: the site has no use once the building has gone, or once
