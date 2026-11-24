@@ -31,6 +31,7 @@ struct ThreadPart
 	uint32_t work {0};
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): each thread keeps its own part
 thread_local ThreadPart t_Part;
 
 } // namespace

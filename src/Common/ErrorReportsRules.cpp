@@ -66,7 +66,7 @@ std::filesystem::path DatabaseFolder(std::string_view logFile)
 	const auto log = LogAttachment(logFile);
 	if (!log.has_value())
 	{
-		return std::filesystem::path(k_DatabaseFolderName);
+		return {k_DatabaseFolderName};
 	}
 	return log->parent_path() / k_DatabaseFolderName;
 }

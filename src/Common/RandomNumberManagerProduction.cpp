@@ -17,6 +17,7 @@ namespace
 {
 /// Counts the seedings of every manager, so that a seeding number is never the same for two seedings. The general
 /// generator of a thread outlives the manager it drew from, and must start again when another manager takes its place.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the generators of all threads count the seeds here
 std::atomic<uint32_t> g_Seedings {0};
 } // namespace
 

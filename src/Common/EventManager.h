@@ -36,6 +36,7 @@ private:
 	class _EventFamily
 	{
 	private:
+		// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): each event type takes a number
 		inline static std::atomic<int> s_Identifier = 0;
 
 	public:
