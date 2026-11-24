@@ -496,7 +496,7 @@ private:
 	void DrawFloatingNumbers(glm::u16vec2 resolution);
 	void DrawLearningTexts(glm::u16vec2 resolution);
 	/// The tooltip by the hand, its words and then its mouse
-	void DrawToolTip(glm::u16vec2 resolution);
+	void DrawToolTip(glm::u16vec2 resolution, Canvas& canvas, DialogPainter& painter);
 	/// The creature's status panel, at the left of the screen
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
@@ -515,6 +515,7 @@ private:
 	int DrawVideo(glm::u16vec2 resolution);
 	/// The tooltip's glow: a soft box of atmos.raw added round a rectangle
 	void DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour);
+	void DrawGlow(Canvas& canvas, glm::vec2 min, glm::vec2 max, glm::vec4 colour);
 	/// The scripts' dialogue: its see-through box above the bottom cinema bar with the "Continue" cue, then the hand's
 	/// helper icons, then the dialogue's words
 	/// Whether a dialog box is open over the game: the menu, a question box or another box with a frame
@@ -624,6 +625,8 @@ private:
 	Canvas _logoCanvas {graphics::RenderPass::LogoEffectOverlay};
 	DialogPainter _painter;
 	DialogPainter _menuCreaturePainter;
+	/// Draws over the falling spell's film and the creature that the film shows
+	DialogPainter _filmOverlayPainter;
 	DialogPainter _logoPainter;
 	std::unique_ptr<graphics::Texture2D> _sponsorLogo;
 	std::unique_ptr<graphics::Texture2D> _sponsorLabel;
