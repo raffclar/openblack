@@ -150,6 +150,11 @@ bool openblack::computer_hand::Busy(const HandAction& action)
 	return !action.steps.empty();
 }
 
+bool openblack::computer_hand::PutsMoveInFront(const HandAction& action)
+{
+	return Busy(action) && action.moveFirst && MoveFirst(action.steps.front().kind).has_value();
+}
+
 void openblack::computer_hand::Add(HandAction& action, StepKind kind, std::vector<Argument> arguments)
 {
 	action.steps.push_back({.kind = kind, .arguments = std::move(arguments)});
@@ -185,9 +190,9 @@ bool openblack::computer_hand::Process(HandAction& action, const World& world)
 		return true;
 	}
 	const auto& front = action.steps.front();
-	auto move = MoveFirst(front.kind);
-	if (action.moveFirst && move.has_value())
+	if (PutsMoveInFront(action))
 	{
+		auto move = MoveFirst(front.kind);
 		// A miracle that is felt as angry is cast from near its target rather than over it
 		if (front.kind == StepKind::CastSpellAtObject || front.kind == StepKind::CastSpellAtPos)
 		{

@@ -35,6 +35,8 @@ float TurnOf(const TempleDoors& doors, uint32_t joint)
 
 void RunFor(TempleDoors& doors, float seconds)
 {
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float elapsed = 0.0f; elapsed < seconds - 1e-4f; elapsed += 0.05f)
 	{
 		doors.Update(0.05f);

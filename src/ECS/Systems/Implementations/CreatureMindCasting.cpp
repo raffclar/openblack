@@ -490,6 +490,7 @@ bool CreatureMindSystem::SeemsFriendly(entt::entity creature, entt::entity other
 		return false;
 	}
 	return creature_mind::SeemsFriendly(DesireAboutCreature(creature, *mine, other, {}),
+	                                    // NOLINTNEXTLINE(readability-suspicious-call-argument): the order is correct
 	                                    DesireAboutCreature(other, *theirs, creature, {}));
 }
 

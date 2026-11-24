@@ -157,6 +157,7 @@ TEST(GeneratedLand, ThePathKeepsEachChoiceThatIsNotAtItsFirstValue)
 	{
 		for (const auto value : {range.lowest, range.highest})
 		{
+			// NOLINTNEXTLINE(misc-const-correctness): the member pointer changes the value
 			generated_land::Choices choices {.seed = 11};
 			choices.*range.member = value;
 			EXPECT_EQ(generated_land::ChoicesOf(generated_land::PathOf(choices)), choices) << range.key;

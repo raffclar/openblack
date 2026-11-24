@@ -195,6 +195,8 @@ struct Environment
 	/// The trees' shadows are drawn each frame and move with the trees, as the debug menu's Dynamic Tree Shadows box
 	/// draws them
 	bool dynamicTreeShadows {false};
+	/// The player's "maximum detail" option is on or off, as the debug menu's Model Detail choice sets it
+	std::optional<bool> maximumDetail;
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
 	/// The switch of the Soccer Add-On is on while the scenario runs, so that the towns play football
@@ -711,6 +713,7 @@ constexpr size_t k_ChatAnnouncement = 4;
 /// The names that a Chat command gives the first gods
 constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
 
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct Command
 {
 	enum class Kind : uint8_t

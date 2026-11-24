@@ -491,7 +491,7 @@ void MagicSystem::SeedOutOfHandWithSpell(bool followsSpell)
 	{
 		const auto holder = HolderOf(entity);
 		transform->position =
-		    magic::PlaceOutOfHand(holder.has_value() ? ReportedHandOf(*holder) : std::nullopt, transform->position);
+		    magic::PlaceOutOfHand(holder.has_value() ? WorldHandOf(*holder) : std::nullopt, transform->position);
 	}
 	LetGoOfSeed(false);
 }

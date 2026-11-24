@@ -920,12 +920,13 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 		{
 			places.push_back({.corner = block.GetMapPosition(), .at = block.GetBlockPosition()});
 		}
-		frame.detail =
-		    land_detail::ClassifyFrame({.origin = drawDesc.camera->GetOrigin(),
-		                                .forward = drawDesc.camera->GetForward(),
-		                                .lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel)),
-		                                .coarseLand = config.detail.coarseLand},
-		                               places);
+		frame.detail = land_detail::ClassifyFrame(
+		    {.origin = drawDesc.camera->GetOrigin(),
+		     .forward = drawDesc.camera->GetForward(),
+		     .lines = land_detail::Finest(config.landDetailLines.value_or(land_detail::For(config.detailLevel)),
+		                                  config.maximumDetail),
+		     .coarseLand = config.detail.coarseLand},
+		    places);
 	}
 
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();

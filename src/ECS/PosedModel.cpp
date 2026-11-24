@@ -214,7 +214,7 @@ private:
 		}
 		// The model's matrix alone places the corner, as a model that follows the land has no bones
 		const auto& position = _mesh->GetSubMeshes()[corner->first]->GetBodyGeometry().positions[corner->second];
-		return glm::vec3(_model * glm::vec4(position, 1.0f));
+		return {_model * glm::vec4(position, 1.0f)};
 	}
 
 	const graphics::L3DSubMesh::BodyGeometry& _geometry;

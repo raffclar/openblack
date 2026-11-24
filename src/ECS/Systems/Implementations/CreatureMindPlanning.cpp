@@ -190,7 +190,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
-using creature_mind_model::TreeKind;
 using creature_plan_actions::Target;
 
 namespace town_compassion = openblack::creature_town_compassion;
@@ -683,11 +682,10 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const float height = creature_mode::CreatureHeight(body != nullptr ? body->size : 1.0f);
-	return creature_plan_actions::Situation::Fishing {.shoal = point,
-	                                                  .standAt = standAt,
-	                                                  .arriveWithin = std::max(height, k_FishingArrival),
-	                                                  .holdingFood = holdingFood,
-	                                                  .height = height};
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
+	const float arriveWithin = std::max(height, k_FishingArrival);
+	return creature_plan_actions::Situation::Fishing {
+	    .shoal = point, .standAt = standAt, .arriveWithin = arriveWithin, .holdingFood = holdingFood, .height = height};
 }
 } // namespace openblack::ecs::systems::mind_detail
 
@@ -1627,12 +1625,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 	}
 
-	// The lists of the actions of each desire keep their memory from one desire to the next. So does the list of the
-	// believed things that an action can act on.
-	std::vector<creature_planner::ActionCandidate> candidates;
-	std::vector<const creature_plan_actions::Executor*> executors;
-	BelievedFacts believed;
-	std::vector<creature_planner::ObjectCandidate> believedFound;
+	// The lists of the actions of each desire keep their memory from one desire to the next, and from one plan to the
+	// next. So does the list of the believed things that an action can act on.
+	auto lists = std::exchange(_planLists, {});
+	auto& candidates = lists.candidates;
+	auto& executors = lists.executors;
+	auto& believed = lists.believed;
+	auto& believedFound = lists.believedFound;
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
@@ -1747,18 +1746,28 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				best = object;
 			}
 		};
+		// Whether the executor of an action can act on a thing
+		const auto executorSuits = [&](const creature_plan_actions::Executor& executor, entt::entity thing) {
+			return (executor.target == Target::None || Accepts(registry, executor.target, thing, creature)) &&
+			       !(executor.notWhatItHolds && heldByItself(thing));
+		};
 		// Whether an action can act on a thing
 		const auto suitsPart = [&](const creature_planner::ActionCandidate& candidate, uint32_t part) {
-			const auto* executor = executorOf(candidate);
-			const auto thing = static_cast<entt::entity>(part);
-			return (executor->target == Target::None || Accepts(registry, executor->target, thing, creature)) &&
-			       !(executor->notWhatItHolds && heldByItself(thing));
+			return executorSuits(*executorOf(candidate), static_cast<entt::entity>(part));
 		};
 		// The facts about the believed things that one action finds are for the next actions of this desire only
 		believed.foundAt.reset();
 		const auto findObject =
 		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
-			const auto suits = [&](entt::entity thing) { return suitsPart(candidate, entt::to_integral(thing)); };
+			// The executor of the action is the same for each thing, thus the search finds it one time
+			const creature_plan_actions::Executor* executor = nullptr;
+			const auto suits = [&](entt::entity thing) {
+				if (executor == nullptr)
+				{
+					executor = executorOf(candidate);
+				}
+				return executorSuits(*executor, thing);
+			};
 			// The parts and the things are examined in their order, as when the function first makes the full list
 			std::optional<creature_planner::ObjectCandidate> best;
 			if (activity.has_value())
@@ -1842,6 +1851,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		mind.planner.best.at(d) = best;
 		mind.plannedActions.at(d).assign(actions.begin(), actions.end());
 	}
+	_planLists = std::move(lists);
 
 	// When the planner examines only one desire, the creature starts the plan immediately, if there is a plan
 	if (only.has_value())

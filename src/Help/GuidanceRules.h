@@ -233,6 +233,21 @@ struct OneOffRule
 	return draw <= chance;
 }
 
+/// The advisors look for the hands of the other players near the point under the cursor once in this many turns
+constexpr uint32_t k_HandWatchTurns = 10000;
+/// A hand of another player nearer than this many metres to the point under the cursor is near
+constexpr float k_HandWatchReach = 100.0f;
+/// Whether the advisors look for the hands of the other players at a turn
+[[nodiscard]] constexpr bool HandWatchTurn(uint32_t turn)
+{
+	return turn % k_HandWatchTurns == 0;
+}
+/// Whether a hand of another player at a distance from the point under the cursor is near
+[[nodiscard]] constexpr bool HandWatches(float distance)
+{
+	return distance < k_HandWatchReach;
+}
+
 /// Whether the computer's clock says it is night: before six in the morning, from eleven at night, and also the quarter
 /// hour from 20:45 (as the game reckons it)
 [[nodiscard]] bool ClockSaysNight(int hour, int minute);

@@ -31,7 +31,6 @@ using namespace openblack;
 using namespace std::chrono_literals;
 using online::PushAuth;
 using online::PushClose;
-using online::WebSocketClosed;
 using online::WebSocketEnd;
 using test_fakes::FakeWebSocketClient;
 

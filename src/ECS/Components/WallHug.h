@@ -148,5 +148,6 @@ struct entt::type_name<openblack::ecs::components::MoveStateTagComponent<S>>
 		const auto& name = openblack::ecs::components::detail::k_MoveStateTagName<S>;
 		return {name.data(), name.size()};
 	}
+	// NOLINTNEXTLINE(google-explicit-constructor): the tag converts to its name where a name is necessary
 	[[nodiscard]] constexpr operator std::string_view() const noexcept { return value(); }
 };

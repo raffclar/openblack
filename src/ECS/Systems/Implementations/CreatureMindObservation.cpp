@@ -191,7 +191,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
-using creature_mind_model::TreeKind;
 using creature_plan_actions::Target;
 
 namespace
@@ -637,7 +636,7 @@ glm::vec3 mind_detail::HeadPoint(const ecs::Registry& registry, entt::entity cre
 	}
 	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
 	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
-	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
+	return {creature::PosedBone(points->head, pose.bones, pose.placement)[3]};
 }
 
 void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)

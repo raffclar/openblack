@@ -169,6 +169,7 @@ import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -215,6 +216,9 @@ TICKET_LOBBY = {"lobby": None}
 # The input of the first client starts after this many frames (50 s at 20 ms), when both clients loaded and the game
 # started
 INPUT_OFFSET_FRAMES = 2500
+# The clients play their input from this game turn. Turns come from the server, so a slow build plays the same input at the
+# same turn; a count of frames would put it before the game starts or after its end.
+INPUT_START_TURN = 500
 # The input closes the information box of the land this many frames before its first event, and holds the Escape key for
 # BOX_KEY_FRAMES. The box closes as the key goes down, so the hand is free well before the input starts.
 BOX_CLOSE_LEAD_FRAMES = 100
@@ -1067,9 +1071,11 @@ def set_camera(pid, camera):
 
 
 def inspector_call(pid, query, request):
-    """One request to the inspector of a client, its answer (none when it fails)"""
+    """One request to the inspector of a client, its answer (none when it fails). A request that is a text goes as it is: "@path"
+    names a file that holds the JSON."""
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    done = subprocess.run([sys.executable, INSPECTOR_ADAPTER, "--pid", str(pid), "--call", query, json.dumps(request)],
+    text = request if isinstance(request, str) else json.dumps(request)
+    done = subprocess.run([sys.executable, INSPECTOR_ADAPTER, "--pid", str(pid), "--call", query, text],
                           timeout=120, capture_output=True, text=True, creationflags=flags)
     try:
         return json.loads(done.stdout).get("result")
@@ -3627,6 +3633,41 @@ def shifted_input(path, folder, extra=0, camera=None, close_box=False):
     return out
 
 
+# The first event of an input that a client plays by turns comes this many frames after the replay starts, when the box of
+# the land is closed and the camera is in place
+INPUT_LEAD_FRAMES = 10
+
+
+def turn_input(path, extra=0, camera=None):
+    """The events of a recorded input and its camera (JSON text, or none), for a client that plays the input from a game
+    turn. The frames count from the start of the replay, so the speed of the build does not move the input against the
+    turns of the game. A camera that the caller gives takes the place of the camera of the file."""
+    with open(path, encoding="utf-8") as file:
+        value = json.load(file)
+    events = value.get("events", []) if isinstance(value, dict) else value
+    for event in events:
+        event["frame"] = event["frame"] + INPUT_LEAD_FRAMES + extra
+    if not camera and isinstance(value, dict) and value.get("camera"):
+        camera = json.dumps(value["camera"])
+    return events, camera
+
+
+def start_turn_input(pid, plan, call=None):
+    """Plays the input of a client from now on, through the inspector: the box of the land closes, the camera goes where the
+    input needs it, and the events replay. Whether the replay was scheduled."""
+    call = call or inspector_call
+    close_land_info_box(pid, call)
+    events, camera = plan
+    if camera and not set_camera(pid, camera):
+        return False
+    # The events of a long input do not fit on a command line, so the request goes in a file
+    with tempfile.TemporaryDirectory() as folder:
+        request = os.path.join(folder, "replay.json")
+        with open(request, "w", encoding="utf-8") as file:
+            json.dump({"params": {"events": events}}, file)
+        return call(pid, "input.replay", "@" + request) is not None
+
+
 def max_turn_ms(record):
     """The longest turn of a client in milliseconds, from the turn times in its run record (none without a time). The
     turn time does not include the time of the step that records the run (max_record_ms gives it)."""
@@ -4064,6 +4105,9 @@ def main():
                                            "turn and gives it to each client with the start; every computer gives its "
                                            "commands before the same turns. The observers join the room before the start.")
     parser.add_argument("--opening", default="cow")
+    parser.add_argument("--input-turn", type=int, default=INPUT_START_TURN,
+                        help="the game turn from which each client plays its input (--input); the speed of the build "
+                        "does not change it. 0 plays the input from a frame count after the load, as older runs did")
     parser.add_argument("--frame-ms", type=float, default=20.0,
                         help="the frame time of the clients (1 to 1000); 0 for their real frame time")
     parser.add_argument("--server-frame-ms", type=float, help="the frame time of the server (its own default with none)")
@@ -4570,6 +4614,9 @@ def main():
     give_done = None
     kick_done = None
     hand_steps = HandSteps()
+    # The inputs that clients play from a game turn: the plan of each client, and the clients that started theirs
+    turn_inputs = {}
+    turn_inputs_started = set()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
     leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
     for leash in leashes:
@@ -4689,7 +4736,10 @@ def main():
             elif options.hash_parts:
                 command.append("--sim-hash-parts")
             client_input = client_inputs[index]
-            if client_input:
+            if client_input and options.input_turn > 0:
+                turn_inputs[index] = turn_input(client_input, options.input2_delay_frames * index, client_cameras[index])
+                command += ["--inspect-port", "0"]
+            elif client_input:
                 command += ["--sim-input", shifted_input(client_input, client_dir, options.input2_delay_frames * index,
                                                          client_cameras[index], options.web_close_box)]
             else:
@@ -4702,7 +4752,8 @@ def main():
                     or (options.pause_shots and index == 0)
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
                     or options.editor_check or options.forest_camera or options.editor_desync):
-                command += ["--inspect-port", "0"]
+                if "--inspect-port" not in command:
+                    command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
                 command += ["--join-creature", os.path.abspath(creatures[index])]
@@ -4908,6 +4959,15 @@ def main():
                     and not any(hand_steps.busy(index) for index in range(len(clients))) and reached_turn(
                         os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
+            for index, plan in turn_inputs.items():
+                if (index not in turn_inputs_started and index < len(clients) and clients[index].poll() is None
+                        and reached_turn(os.path.join(client_dirs[index], "client.log"), clients[index].pid,
+                                         options.input_turn)):
+                    turn_inputs_started.add(index)
+                    if not start_turn_input(clients[index].pid, plan):
+                        print(f"the input of client {index + 1} did not start at turn {options.input_turn}; "
+                              f"see {client_dirs[index]}")
+                        return 1
             for index, client in enumerate(clients):
                 camera = client_cameras[index]
                 if (camera and options.camera_again_after is not None and index not in cameras_again

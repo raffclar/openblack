@@ -42,8 +42,8 @@ TEST(OracleComputerCreaturePlay, ThrowFoodAsInTheGame)
 	size_t different = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
-		const auto at = [&](const char* name) { return table->Bits(row, *table->Column(name)); };
-		const auto floatAt = [&](const char* name) { return table->Float(row, *table->Column(name)); };
+		const auto at = [&](const char* name) { return table->Bits(row, table->Column(name).value()); };
+		const auto floatAt = [&](const char* name) { return table->Float(row, table->Column(name).value()); };
 		const glm::vec3 hand {floatAt("hand_x"), floatAt("hand_y"), floatAt("hand_z")};
 		// The place of the creature: its map position in metres, at the land height plus its altitude
 		const glm::vec3 creature {map_coords::ToMetres(static_cast<int32_t>(at("coords_x"))),
@@ -73,10 +73,10 @@ TEST(OracleComputerCreaturePlay, CastWishAsInTheGame)
 	size_t different = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
-		const auto seen = static_cast<float>(table->Bits(row, *table->Column("seen")));
-		const float ours =
-		    CastLetGoWish(table->Float(row, *table->Column("freedom")), seen, table->Float(row, *table->Column("needed")));
-		const auto game = table->Bits(row, *table->Column("wish"));
+		const auto seen = static_cast<float>(table->Bits(row, table->Column("seen").value()));
+		const float ours = CastLetGoWish(table->Float(row, table->Column("freedom").value()), seen,
+		                                 table->Float(row, table->Column("needed").value()));
+		const auto game = table->Bits(row, table->Column("wish").value());
 		if (!Same(ours, game) && ++different <= 20)
 		{
 			ADD_FAILURE() << "row " << row << ": the game gives " << oracle::Hex(std::bit_cast<float>(game)) << ", ours gives "
@@ -96,11 +96,12 @@ TEST(OracleComputerCreaturePlay, CastLetGoAsInTheGame)
 	size_t letGo = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
-		const auto at = [&](const char* name) { return static_cast<int32_t>(table->Bits(row, *table->Column(name))); };
+		const auto at = [&](const char* name) { return static_cast<int32_t>(table->Bits(row, table->Column(name).value())); };
 		const map_coords::MapCoords hand {.x = at("hand_x"), .z = at("hand_z"), .altitude = 0.0f};
 		const map_coords::MapCoords creature {.x = at("coords_x"), .z = at("coords_z"), .altitude = 0.0f};
-		const bool ours = LetsGoAtCast(table->Float(row, *table->Column("freedom")), table->Float(row, *table->Column("wish")),
-		                               gutils::GetDistanceInMetres(hand, creature), table->Float(row, *table->Column("size")));
+		const bool ours =
+		    LetsGoAtCast(table->Float(row, table->Column("freedom").value()), table->Float(row, table->Column("wish").value()),
+		                 gutils::GetDistanceInMetres(hand, creature), table->Float(row, table->Column("size").value()));
 		const bool game = at("let_go") != 0;
 		letGo += game ? 1 : 0;
 		if (ours != game && ++different <= 20)

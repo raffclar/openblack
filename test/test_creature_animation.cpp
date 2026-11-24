@@ -831,7 +831,9 @@ bool SameBits(const std::vector<skeletal_animation::Pose>& a, const std::vector<
 {
 	return a.size() == b.size() &&
 	       std::equal(a.begin(), a.end(), b.begin(), [](const skeletal_animation::Pose& x, const skeletal_animation::Pose& y) {
+		       // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		       return std::memcmp(&x.rotation, &y.rotation, sizeof(x.rotation)) == 0 &&
+		              // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		              std::memcmp(&x.translation, &y.translation, sizeof(x.translation)) == 0;
 	       });
 }
@@ -856,6 +858,7 @@ TEST(KeyframeTurns, TheStoreGivesTheBitsOfANewTurn)
 					euler.z = -euler.z;
 				}
 				const auto made = skeletal_animation::RotationYXZ(euler);
+				// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 				EXPECT_EQ(std::memcmp(&kept[slot], &made, sizeof(made)), 0) << frame << " " << slot << " " << mirrored;
 			}
 		}
@@ -871,11 +874,14 @@ TEST(KeyframeTurns, TheStoreMakesTheTurnsAgainWhenTheAnglesChange)
 	fixture.animation.frames[2].eulerAngles[0].y = 0.0f;
 	const auto zero = turns.Of(fixture.animation, 2, false)[0];
 	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[2].eulerAngles[0]);
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&zero, &made, sizeof(made)), 0);
 	fixture.animation.frames[2].eulerAngles[0] = glm::vec3(0.5f, 1.0f, -1.5f);
 	const auto after = turns.Of(fixture.animation, 2, false)[0];
 	const auto madeAfter = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&after, &madeAfter, sizeof(madeAfter)), 0);
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_NE(std::memcmp(&after, &before, sizeof(before)), 0);
 	// Another count of frames at the same place in memory starts the store of the animation again
 	fixture.animation.frames.pop_back();
@@ -918,6 +924,7 @@ TEST(KeyframeTurns, AMarkedAnimationGivesTheBitsOfANewTurn)
 			for (size_t slot = 0; slot < kept.size(); ++slot)
 			{
 				const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[frame].eulerAngles[slot]);
+				// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 				EXPECT_EQ(std::memcmp(&kept[slot], &made, sizeof(made)), 0) << round << " " << frame << " " << slot;
 			}
 		}
@@ -937,12 +944,14 @@ TEST(KeyframeTurns, NewContentsAtThePlaceOfAMarkedAnimationGetNewTurns)
 	fixture.animation = changed;
 	const auto unmarked = turns.Of(fixture.animation, 2, false)[0];
 	const auto made = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&unmarked, &made, sizeof(made)), 0);
 	changed.frames[2].eulerAngles[0] = glm::vec3(-0.25f, 0.75f, 2.0f);
 	fixture.animation = changed;
 	marks.Mark(fixture.animation);
 	const auto marked = turns.Of(fixture.animation, 2, false)[0];
 	const auto madeMarked = skeletal_animation::RotationYXZ(glm::vec3(-0.25f, 0.75f, 2.0f));
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&marked, &madeMarked, sizeof(madeMarked)), 0);
 }
 
@@ -1016,6 +1025,7 @@ TEST(KeyframeTurns, AKeptAnimationGivesTheBitsOfANewTurnAfterARemoval)
 	ASSERT_EQ(turns.Size(), 1u);
 	const auto kept = turns.Of(copies.back(), 2, false)[0];
 	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[2].eulerAngles[0]);
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
 	EXPECT_EQ(turns.Size(), 1u);
 }
@@ -1035,10 +1045,13 @@ TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
 		const auto b = turns.Of(second, 1, false)[0];
 		const auto c = turns.Of(first, 0, false)[0];
 		const auto aMade = made(first, 1);
+		// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		EXPECT_EQ(std::memcmp(&a, &aMade, sizeof(a)), 0) << round;
 		const auto bMade = made(second, 1);
+		// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		EXPECT_EQ(std::memcmp(&b, &bMade, sizeof(b)), 0) << round;
 		const auto cMade = made(first, 0);
+		// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		EXPECT_EQ(std::memcmp(&c, &cMade, sizeof(c)), 0) << round;
 	}
 	EXPECT_EQ(turns.Size(), 2u);
@@ -1061,6 +1074,7 @@ TEST(KeyframeTurns, CallsForManyAnimationsGiveTheTurnsOfEach)
 			const auto index = (round % 2 == 0) ? i : animations.size() - 1 - i;
 			const auto kept = turns.Of(animations[index], 1, false)[0];
 			const auto made = skeletal_animation::RotationYXZ(animations[index].frames[1].eulerAngles[0]);
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << round << " " << index;
 		}
 	}
@@ -1083,6 +1097,7 @@ TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)
 	// The last copy gets its turns again
 	const auto kept = turns.Of(copies.back(), 3, false)[1];
 	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[3].eulerAngles[1]);
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
 	EXPECT_EQ(turns.Size(), 1u);
 }
@@ -1108,6 +1123,7 @@ TEST(KeyframeTurns, ACopyOrAMoveOfAnAnimationHasNoPlaceAndAnAssignmentKeepsThePl
 	EXPECT_EQ(fixture.animation.turnsPlace.index, place);
 	const auto kept = turns.Of(fixture.animation, 0, false)[0];
 	const auto made = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
 	EXPECT_EQ(turns.Size(), 2u);
 }
@@ -1129,6 +1145,7 @@ TEST(KeyframeTurns, ANewAnimationAtTheAddressOfAnOldOneUsesThePlaceOfTheAddress)
 	ASSERT_EQ(slot->turnsPlace.index, skeletal_animation::TurnsPlace::k_None);
 	const auto kept = turns.Of(*slot, 1, false)[0];
 	const auto made = skeletal_animation::RotationYXZ(glm::vec3(-0.25f, 0.75f, 2.0f));
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
 	EXPECT_EQ(turns.Size(), 1u);
 	// Another animation gets a place of its own
@@ -1247,6 +1264,7 @@ TEST(SkeletalAnimation, BonePlacesHaveTheBitsOfTheWholeSample)
 				}
 				ASSERT_TRUE(places[i].has_value()) << seed << " " << time;
 				const auto whole = glm::vec3(matrices[bones.at(i)][3]);
+				// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 				EXPECT_EQ(std::memcmp(&*places[i], &whole, sizeof(whole)), 0) << seed << " " << time << " " << bones.at(i);
 			}
 		}
@@ -1263,5 +1281,6 @@ TEST(SkeletalAnimation, BonePlacesOfAnAnimationWithNoFramesAreTheRest)
 	const auto places = skeletal_animation::BonePlacesInCycle(empty, fixture.stand, 0, fixture.skeleton, bone);
 	ASSERT_TRUE(places.front().has_value());
 	const auto whole = glm::vec3(matrices[3][3]);
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&*places.front(), &whole, sizeof(whole)), 0);
 }

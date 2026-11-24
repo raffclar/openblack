@@ -193,7 +193,7 @@ void Press(State& state, Key key, bool shift)
 
 int CharacterAt(const State& state, int left, int x, const Measure& measure)
 {
-	const auto shown = std::u16string_view(state.text).substr(static_cast<size_t>(ClampToText(state, state.scroll)));
+	const auto shown = std::u16string_view {state.text}.substr(static_cast<size_t>(ClampToText(state, state.scroll)));
 	for (size_t count = 1; count <= shown.size(); ++count)
 	{
 		if (left + measure(shown.substr(0, count)) + 4 > x)
@@ -238,7 +238,7 @@ void MouseUp(State& state, int character)
 
 void Scroll(State& state, int width, const Measure& measure)
 {
-	const auto text = std::u16string_view(state.text);
+	const auto text = std::u16string_view {state.text};
 	const auto room = width - 9;
 	// The furthest it need scroll: the first character from which the rest of the text fits
 	int furthest = 0;

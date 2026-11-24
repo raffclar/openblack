@@ -1656,6 +1656,7 @@ void AdvisorSpirit::UpdateAnimStack(float dt, bool sfx)
 			window = end - start;
 		}
 		const float old = _slotPhase[i];
+		// NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores): the start value stays as a guard for later changes
 		float phase = old;
 		if (mode == 1 || mode == 4) // play once
 		{

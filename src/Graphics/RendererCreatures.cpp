@@ -668,7 +668,7 @@ void Renderer::SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairL
 		program->SetUniformValue("u_hairLight", &u_hairLight);
 		program->SetUniformValue("u_hairAdded", &u_hairAdded);
 		program->SetUniformValue("u_hairView", &hairView);
-		program->SetUniformValue("u_haze", &haze[0]);
+		program->SetUniformValue("u_haze", haze.data());
 		program->SetUniformValue("u_hazeColour", &haze[1]);
 		SubmitLandQuad(viewId, *program, {texel, row}, {texel + 1.0f, row + 1.0f}, {texel, 0.0f}, {texel, 0.0f},
 		               BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);

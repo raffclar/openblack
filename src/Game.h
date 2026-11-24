@@ -59,6 +59,7 @@
 #include "Gui/SkirmishBoxRules.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandKnock.h"
+#include "Input/ControllerDevices.h"
 #include "Input/InputLock.h"
 #include "LandChange.h"
 #include "LaunchSwitches.h"
@@ -131,6 +132,7 @@ struct ScenarioRequest
 	bool checks {false};
 };
 
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct Arguments
 {
 	std::string executablePath;
@@ -191,6 +193,8 @@ struct Arguments
 	/// Tests: the wait before each request of a piece of a map that the lobby room downloads
 	uint32_t mapPieceDelayMs {0};
 	bool dynamicTreeShadows {false};
+	/// The player's "maximum detail" option is on from the start (see EngineConfig::maximumDetail)
+	bool maximumDetail {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
 	bool noDraw {false};
@@ -559,6 +563,7 @@ public:
 	[[nodiscard]] escape_key::Situation EscapeSituation(uint16_t keyModifiers) const;
 
 private:
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the old callers find the game through this pointer
 	static Game* s_Instance;
 
 	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
@@ -691,6 +696,9 @@ private:
 	bool _serverSilent {false};
 	/// The releases of the buttons of the hand during the silence. The hand gets them when the silence ends.
 	std::vector<SDL_Event> _heldHandReleases;
+	/// The controllers that the player plugs in
+	input::ControllerDevices _controllers;
+	bool _controllersOpened {false};
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
 	/// Tests: the player pressed Back in the land information box at the turn that the command line gives

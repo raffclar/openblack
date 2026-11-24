@@ -42,7 +42,7 @@ class CreatureObjectActionSystem final: public CreatureObjectActionSystemInterfa
 public:
 	void ProcessTurn() override;
 	void BeginTurn() override;
-	void CreatureTurn(entt::entity creature) override;
+	void CreatureTurn(entt::entity entity) override;
 	void ActionTurn(entt::entity creature) override;
 	void AfterPoseTurn(entt::entity creature) override;
 	void UpdateHeld() override;

@@ -1053,6 +1053,7 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.fishing.has_value() && situation.home.has_value();
 	case Build::PutFishBySite:
 		return situation.fishing.has_value();
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case Build::SleepAtHome:
 		// Only with a temple, and not too far from home
 		return situation.home.has_value() && situation.homeDistance.has_value() &&
@@ -1172,6 +1173,7 @@ bool creature_plan_actions::Buildable(const Executor& executor, const Situation&
 	case Build::GoHome:
 		// The agendas of these actions need only the home
 		return situation.home.has_value();
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case Build::LookAtHand:
 		// The agenda needs nothing. A script can make the creature look at the hand when the hand does not move.
 		return true;

@@ -59,7 +59,7 @@ std::optional<ImportedFootpath> ReadFootpath(const VanillaWorld& world, uint32_t
 		auto read = ReadNode(world, node, why);
 		if (!read.has_value())
 		{
-			why = "the footpath " + std::to_string(number) + " with " + why;
+			why = "the footpath " + std::to_string(number).append(" with ").append(why);
 			return std::nullopt;
 		}
 		footpath.nodes.push_back(std::move(*read));

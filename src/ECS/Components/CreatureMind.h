@@ -40,6 +40,7 @@ namespace openblack::ecs::components
 {
 
 /// What a creature wants, what it is doing about it, and what it looks at
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct CreatureMindState
 {
 	/// The last stage of growing up

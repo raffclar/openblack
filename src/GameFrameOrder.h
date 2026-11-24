@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <span>
@@ -322,14 +323,7 @@ struct GraphicsWindow
 template <typename Do>
 bool PlayFrame(Do&& step)
 {
-	for (const auto& place : k_Frame)
-	{
-		if (!step(place.step))
-		{
-			return false;
-		}
-	}
-	return true;
+	return std::ranges::all_of(k_Frame, [&step](const auto& place) { return step(place.step); });
 }
 
 static_assert(k_Frame.size() == static_cast<size_t>(Step::_Count), "Each step has one place in the frame");

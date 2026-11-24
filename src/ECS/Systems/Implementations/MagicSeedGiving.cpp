@@ -19,12 +19,12 @@
 #include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
-#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -139,16 +139,15 @@ std::optional<PlayerNames> MagicSystem::HolderOf(entt::entity seed) const
 	return std::nullopt;
 }
 
-std::optional<glm::vec3> MagicSystem::ReportedHandOf(PlayerNames player) const
+std::optional<glm::vec3> MagicSystem::WorldHandOf(PlayerNames player) const
 {
-	const auto hand = LeftHandOf(player);
-	const auto* reported = hand != entt::null ? EntityRegistry().TryGet<const ReportedHand>(hand) : nullptr;
+	const auto hand = ecs::PlayerHandOf(player);
 	// All the values are zero until the first report, and off the land
-	if (reported == nullptr || reported->handPoint == glm::vec3(0.0f))
+	if (!hand.has_value() || *hand == glm::vec3(0.0f))
 	{
 		return std::nullopt;
 	}
-	return reported->handPoint;
+	return hand;
 }
 
 entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedType, int powerUp, float multiplier)
@@ -160,7 +159,7 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 		return entt::null;
 	}
 	// The seed starts at the hand of this computer, or where the last report put the hand of another player
-	const auto start = ActsOnOwnHand() ? _hand.handPosition : ReportedHandOf(player).value_or(glm::vec3(0.0f));
+	const auto start = ActsOnOwnHand() ? _hand.handPosition : WorldHandOf(player).value_or(glm::vec3(0.0f));
 	const auto entity = archetypes::SpellSeedArchetype::Create(start, seedType, player, powerUp, multiplier);
 	if (entity == entt::null)
 	{

@@ -2216,14 +2216,10 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in, SavedForm form)
 		in.ReadPlainList(queue);
 	}
 	_objectEffects.RestoreQueues(std::move(queues));
-	if (in.Failed())
-	{
-		return false;
-	}
 	// A load stops every sound. A particle keeps the record of its sound, so its rules do not start the sound again,
 	// and the sound stays silent while the particle lives. A sound that waits to travel to the listener plays when it
 	// arrives.
-	return true;
+	return !in.Failed();
 }
 
 void ParticleRuleSystem::RestoreSink(EffectId id, particles::SpellSink* sink)

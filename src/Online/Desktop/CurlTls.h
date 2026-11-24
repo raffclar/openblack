@@ -31,10 +31,14 @@ constexpr std::string_view k_Tls12Ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE
 /// The TLS 1.3 cipher suites, which are all AEAD suites
 constexpr std::string_view k_Tls13Ciphers = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256";
 /// The time to connect, and the time for all of a request
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 constexpr long k_ConnectTimeoutMs = 10'000;
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 constexpr long k_RequestTimeoutMs = 30'000;
 /// A large transfer stops when it gets fewer bytes than this in each second for the time of the stall limit
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 constexpr long k_StallBytesPerSecond = online::k_LargeStallBytesPerSecond;
+// NOLINTNEXTLINE(google-runtime-int): curl takes a long
 constexpr long k_StallSeconds = online::k_LargeStallSeconds;
 /// The largest answer that the client keeps
 constexpr size_t k_MostAnswerBytes = 16 * 1024 * 1024;

@@ -228,6 +228,7 @@ TEST(InspectorSplash, SplashAtAPositionWithinARadius)
 	Inspector inspector;
 	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {
 	    .rings = [&rings]() { return std::span<const water_rings::Ring>(rings); },
+	    // NOLINTNEXTLINE(performance-no-automatic-move): the lambda must copy the value on each call
 	    .effects = [&effects]() { return effects; },
 	}));
 
@@ -258,6 +259,7 @@ TEST(InspectorEffects, AnEffectShowsItsSize)
 	const std::vector<ParticleEffectInfo> effects {FakeEffect(7, "SF_Splash", glm::vec3(0.0f), 10), dust};
 	Inspector inspector;
 	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {
+	    // NOLINTNEXTLINE(performance-no-automatic-move): the lambda must copy the value on each call
 	    .effects = [&effects]() { return effects; },
 	}));
 
@@ -304,6 +306,7 @@ TEST(InspectorBelief, TheSymbolsOfBeliefThatRoseLast)
 	    .count = 40,
 	};
 	Inspector inspector;
+	// NOLINTNEXTLINE(performance-no-automatic-move): the lambda must copy the value on each call
 	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {.belief = [&seen]() { return seen; }}));
 
 	const auto found = Ask(inspector, R"({"query": "particles.belief"})");

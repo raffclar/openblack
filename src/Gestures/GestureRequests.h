@@ -180,6 +180,7 @@ struct HandContext
 	/// The hand has space for a miracle: it holds nothing
 	bool handReady {false};
 	/// The miracle selection, while it is open
+	// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 	struct Selection
 	{
 		/// The gesture that opened it

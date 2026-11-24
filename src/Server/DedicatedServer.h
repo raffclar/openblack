@@ -128,6 +128,7 @@ struct NetworkSettings
 };
 
 /// What the command line of the dedicated server gives
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct ServerSettings
 {
 	/// The folder of the game's data

@@ -876,6 +876,12 @@ bool GameInterface::ProcessMultiplayerEvent(const SDL_Event& event)
 	case SDL_KEYDOWN:
 		_multiplayerBoxes->KeyDown(event.key.keysym.sym, (event.key.keysym.mod & KMOD_SHIFT) != 0);
 		return true;
+	case SDL_CONTROLLERBUTTONDOWN:
+		if (_multiplayerBoxes->ControllerButtonDown(event.cbutton.button))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
 	default:
 		return false;
 	}
@@ -2158,7 +2164,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		}
 		if (screenArea != _textInputArea)
 		{
-			SDL_Rect rect {.x = screenArea.x, .y = screenArea.y, .w = screenArea.z, .h = screenArea.w};
+			const SDL_Rect rect {.x = screenArea.x, .y = screenArea.y, .w = screenArea.z, .h = screenArea.w};
 			SDL_SetTextInputRect(&rect);
 			_textInputArea = screenArea;
 		}

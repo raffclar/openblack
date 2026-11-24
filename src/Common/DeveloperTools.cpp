@@ -64,6 +64,42 @@ bool IsDeveloperOption(std::string_view name, std::span<const DeveloperOption> o
 	return std::ranges::any_of(options, [name](const DeveloperOption& option) { return option.name == name; });
 }
 
+std::vector<std::string> JoinOptionalValues(std::span<const std::string_view> arguments,
+                                            std::span<const OptionalValueOption> options)
+{
+	std::vector<std::string> joined;
+	joined.reserve(arguments.size());
+	bool optionsEnded = false;
+	for (size_t index = 0; index < arguments.size(); ++index)
+	{
+		const auto argument = arguments[index];
+		if (index == 0 || optionsEnded)
+		{
+			joined.emplace_back(argument);
+			continue;
+		}
+		if (argument == "--")
+		{
+			optionsEnded = true;
+			joined.emplace_back(argument);
+			continue;
+		}
+		const auto option = std::ranges::find_if(options, [argument](const OptionalValueOption& candidate) {
+			return argument.size() == candidate.name.size() + 2 && argument.starts_with("--") &&
+			       argument.substr(2) == candidate.name;
+		});
+		if (option != options.end() && index + 1 < arguments.size() &&
+		    std::ranges::find(option->values, arguments[index + 1]) != option->values.end())
+		{
+			joined.push_back(std::string(argument) + "=" + std::string(arguments[index + 1]));
+			++index;
+			continue;
+		}
+		joined.emplace_back(argument);
+	}
+	return joined;
+}
+
 FilteredArguments FilterDeveloperOptions(std::span<const std::string_view> arguments, std::span<const DeveloperOption> options)
 {
 	FilteredArguments filtered;

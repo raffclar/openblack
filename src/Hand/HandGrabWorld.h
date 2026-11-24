@@ -278,6 +278,19 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> ReportedCollidePoint() const { return PickedPoint(); }
 	/// Where the last report of its player put a hand
 	[[nodiscard]] virtual glm::vec3 ReportedPlaceOf([[maybe_unused]] entt::entity hand) const { return ReportedHandPlace(); }
+	/// The hand of a god that a computer mind plays: the place where the input of the turn puts it. This is where the
+	/// mind put the hand after its last step. None for a hand that the reports of a person move.
+	[[nodiscard]] virtual std::optional<glm::vec3> MindTurnPlaceOf([[maybe_unused]] entt::entity hand) const
+	{
+		return std::nullopt;
+	}
+	/// The hand of a god that a computer mind plays: the place where the frames draw what it holds. In a turn with a step
+	/// of the mind, this is the place of the hand before the step. In other turns, it is the place of the turn. None for
+	/// a hand that the reports of a person move.
+	[[nodiscard]] virtual std::optional<glm::vec3> MindDrawnPlaceOf([[maybe_unused]] entt::entity hand) const
+	{
+		return std::nullopt;
+	}
 	/// The players of a network game, other than the first, whose gods have hands of their own, in the order of the
 	/// players
 	[[nodiscard]] virtual std::vector<PlayerNames> OtherHandPlayers() const { return {}; }

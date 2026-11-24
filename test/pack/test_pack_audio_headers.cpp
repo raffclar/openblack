@@ -102,6 +102,7 @@ PackResult ExpectSameAsAFullRead(const std::string& bytes)
 		EXPECT_EQ(a.size(), b.size());
 		for (size_t i = 0; i < a.size() && i < b.size(); ++i)
 		{
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			EXPECT_EQ(std::memcmp(&a[i], &b[i], sizeof(AudioBankSampleHeader)), 0);
 		}
 	}

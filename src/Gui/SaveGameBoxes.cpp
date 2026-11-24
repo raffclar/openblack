@@ -120,7 +120,7 @@ void SaveGameBoxes::AskName(std::u16string_view name)
 
 std::u16string_view SaveGameBoxes::GetQuestion() const noexcept
 {
-	return _question.has_value() ? std::u16string_view(_question->text) : std::u16string_view();
+	return _question.has_value() ? std::u16string_view {_question->text} : std::u16string_view();
 }
 
 std::u16string_view SaveGameBoxes::GetName() const

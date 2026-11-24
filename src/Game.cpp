@@ -282,6 +282,7 @@ bool InNetworkGame()
 
 const std::string k_WindowTitle = "openblack";
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the old callers find the game through this pointer
 Game* Game::s_Instance = nullptr;
 
 Game::Game(Arguments&& args) noexcept
@@ -381,6 +382,7 @@ Game::Game(Arguments&& args) noexcept
 	config.showPing = args.showPing;
 	config.mapPieceDelayMs = args.mapPieceDelayMs;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
+	config.maximumDetail = args.maximumDetail;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.footballAddOn = args.footballAddOn;
 	// The settings of this computer give what the command line did not

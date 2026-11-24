@@ -188,6 +188,7 @@ void BufferPages::WriteKeptAgain() const
 		for (const auto& [first, bytes] : page->kept)
 		{
 			const auto* memory = _device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size()));
+			// NOLINTNEXTLINE(clang-analyzer-core.NullDereference): the lambda captures the memory by value
 			std::visit([this, first, memory](auto handle) { _device.Update(handle, first, memory); }, page->handle);
 		}
 	}

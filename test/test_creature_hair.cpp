@@ -361,8 +361,10 @@ TEST(CreatureHair, LongAndShortStrandsMoveTheSame)
 		Step(shortStrand, root, physics, seconds);
 		for (size_t i = 0; i < shortStrand.positions.size(); ++i)
 		{
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			ASSERT_EQ(std::memcmp(&longStrand.positions[i], &shortStrand.positions[i], sizeof(glm::vec3)), 0)
 			    << step << " " << i;
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			ASSERT_EQ(std::memcmp(&longStrand.velocities[i], &shortStrand.velocities[i], sizeof(glm::vec3)), 0)
 			    << step << " " << i;
 		}
@@ -383,7 +385,9 @@ TEST(CreatureHair, AStepWithTheKeptSpeedIsTheSame)
 			const auto root = CeilingRoot({0.3f * static_cast<float>(step), 2.0f, 0.0f});
 			Step(found, root, physics, seconds);
 			Step(given, root, physics, seconds, KeptSpeed(physics, seconds));
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			ASSERT_EQ(std::memcmp(found.positions.data(), given.positions.data(), 6 * sizeof(glm::vec3)), 0) << step;
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			ASSERT_EQ(std::memcmp(found.velocities.data(), given.velocities.data(), 6 * sizeof(glm::vec3)), 0) << step;
 		}
 	}

@@ -145,6 +145,7 @@ public:
 	bool SpellEvent(const particles::SpellEventInfo& /*event*/) override { return false; }
 	[[nodiscard]] int PowerUpLevel() const override { return -1; }
 };
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the effects take a sink that is not const
 NoMiracle g_NoMiracle;
 } // namespace
 

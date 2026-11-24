@@ -78,6 +78,7 @@ enum class Kind : uint8_t
 	Line,
 };
 
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct Question
 {
 	Kind kind {Kind::YesNo};

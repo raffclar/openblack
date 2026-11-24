@@ -206,7 +206,7 @@ protected:
 
 	[[nodiscard]] std::string ReadFight(uint32_t fight) const
 	{
-		std::ifstream file(_folder / ("fight-" + std::to_string(fight) + ".jsonl"));
+		const std::ifstream file(_folder / ("fight-" + std::to_string(fight) + ".jsonl"));
 		std::stringstream text;
 		text << file.rdbuf();
 		return text.str();

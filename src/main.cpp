@@ -193,6 +193,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		    cxxopts::value<std::vector<std::string>>()->default_value("all=debug"))
 		("background", "Tools: keep the window out of the way of the desk: it never takes the focus, never comes to the front, never holds or moves the mouse, and it stays in a window (the display mode is ignored). Input from the inspector still works.")
 		("dynamic-tree-shadows", "Trees cast their shadows as they are drawn each frame, swaying with them, rather than baked into the land as the game does.")
+		("maximum-detail", "Start with the \"maximum detail\" option on: models, the land and effects show their most detailed form at all distances. Far villagers still change into their small shadows.")
 		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
 		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
@@ -299,7 +300,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
 		("sentry-test-trap", "Developers: after the start, stop the game with a trap of the processor (in the web game, a trap of the WebAssembly code), to test the crash reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
-		("turn-beside-draw", "Developers: on: the turns of the next frame play on another thread beside the end of the draw of this frame, on all lands (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later. off: the turns always play in their frame. auto (the default): beside the draw on the map for 32 gods only. Give the value after a \"=\". With no value, the switch is on.", cxxopts::value<std::string>()->default_value("auto")->implicit_value("on"));
+		("turn-beside-draw", "Developers: on: the turns of the next frame play on another thread beside the end of the draw of this frame, on all lands (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later. off: the turns always play in their frame. auto (the default): beside the draw on the map for 32 gods only. Give the value after a \"=\" or as the next word. With no value, the switch is on.", cxxopts::value<std::string>()->default_value("auto")->implicit_value("on"));
 #endif
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
@@ -336,6 +337,18 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				ownArguments.push_back(argument);
 			}
 		}
+		// An option with an optional value takes the value that follows it as well as the value after a "="
+		std::vector<std::string> joinedStorage;
+		{
+			const std::vector<std::string_view> texts(ownArguments.begin(), ownArguments.end());
+			joinedStorage =
+			    openblack::developer_tools::JoinOptionalValues(texts, openblack::developer_tools::k_OptionalValueOptions);
+			ownArguments.clear();
+			for (auto& text : joinedStorage)
+			{
+				ownArguments.push_back(text.data());
+			}
+		}
 		// A build without the developer tools ignores the developer options and their values. The game log tells which.
 		if constexpr (!openblack::developer_tools::k_Built)
 		{
@@ -353,7 +366,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		if (result["help"].as<bool>())
 		{
 			// The help of a build without the developer tools shows only the options of the player
-			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << '\n' << std::flush;
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}
@@ -477,6 +490,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				throw cxxopts::exceptions::option_has_no_value("game-path");
 			}
 		}
+		// NOLINTNEXTLINE(readability-misleading-indentation): the preprocessor branch above gives this indent
 		else
 		{
 			args.gamePath = result["game-path"].as<std::string>();
@@ -559,7 +573,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				if (!picks.has_value())
 				{
 					std::cerr << "The winning conditions of --sim-conditions are not NAME=VALUE,... with each condition once."
-					          << std::endl;
+					          << '\n';
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
@@ -617,7 +631,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				auto slots = openblack::computer_player::ParseSlotList(result["sim-random-alignment-slots"].as<std::string>());
 				if (!slots.has_value())
 				{
-					std::cerr << "--sim-random-alignment-slots needs god slots from 0 with a comma between them" << std::endl;
+					std::cerr << "--sim-random-alignment-slots needs god slots from 0 with a comma between them" << '\n';
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
@@ -645,7 +659,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				        : std::nullopt;
 				if (!turns.has_value())
 				{
-					std::cerr << "--sim-world-states needs --sim-world-state-turns with a list such as 100,250" << std::endl;
+					std::cerr << "--sim-world-states needs --sim-world-state-turns with a list such as 100,250" << '\n';
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
@@ -728,7 +742,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    openblack::generated_land::ChoicesOf(std::string(openblack::generated_land::k_PathPrefix) + text);
 			if (!args.startGeneratedLand.has_value())
 			{
-				std::cerr << "--landgen needs a seed, then choices such as 7;trees=4000, not " << text << std::endl;
+				std::cerr << "--landgen needs a seed, then choices such as 7;trees=4000, not " << text << '\n';
 				returnCode = EXIT_FAILURE;
 				return false;
 			}
@@ -784,6 +798,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.mapPieceDelayMs = result["map-piece-delay-ms"].as<uint32_t>();
 		}
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
+		args.maximumDetail = result.count("maximum-detail") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;
 		if (result.count("unlock-bonus-creatures") != 0)
@@ -875,7 +890,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			if (const auto error = openblack::developer_tools::InspectorOptionsError(needInspector); error.has_value())
 			{
-				std::cerr << *error << std::endl;
+				std::cerr << *error << '\n';
 				returnCode = EXIT_FAILURE;
 				return false;
 			}
@@ -981,8 +996,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	}
 	catch (cxxopts::exceptions::parsing& err)
 	{
-		std::cerr << err.what() << std::endl;
-		std::cerr << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+		std::cerr << err.what() << '\n';
+		std::cerr << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << '\n';
 
 		returnCode = EXIT_FAILURE;
 		return false;
@@ -1009,7 +1024,7 @@ int main(int argc, char* argv[]) noexcept
 	// The version goes to the standard output alone, with no banner, so that a tool can read it
 	if (AsksForVersion(argc, argv))
 	{
-		std::cout << "openblack " << openblack::build_version::Text() << std::endl;
+		std::cout << "openblack " << openblack::build_version::Text() << '\n' << std::flush;
 		return EXIT_SUCCESS;
 	}
 
@@ -1104,7 +1119,7 @@ int main(int argc, char* argv[]) noexcept
 			openblack::crash_handler::ReportFatal(openblack::crash_report::CrashKind::UncaughtException, e.what(), {}, 0,
 			                                      openblack::crash_report::ReadableTypeName(typeid(e)));
 		}
-		std::cerr << e.what() << std::endl;
+		std::cerr << e.what() << '\n';
 		openblack::ShowFatalMessage("Fatal error", e.what());
 		return EXIT_FAILURE;
 	}

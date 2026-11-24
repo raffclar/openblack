@@ -218,6 +218,7 @@ physics_classes::ClassFacts MobileObjectFacts(MobileObjectInfo type)
 		// The puzzle's base never moves
 		facts.canBecomePhysicsObject = false;
 		break;
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case MobileObjectInfo::HanoiPuzzlePart1:
 	case MobileObjectInfo::HanoiPuzzlePart2:
 	case MobileObjectInfo::HanoiPuzzlePart3:
@@ -281,6 +282,7 @@ float physics_classes::Weight(float infoWeight, float scale)
 
 float physics_classes::BodyMass(float weight)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return std::max(weight, physics::shapes::k_MinMass);
 }
 

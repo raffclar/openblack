@@ -76,7 +76,7 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	};
 	for (auto& person : People({0.0f, 40.0f}, k_Couples))
 	{
-		building.push_back(std::move(person));
+		building.push_back(person);
 	}
 	all.push_back({
 	    .id = "creatures.learns_build",
@@ -156,7 +156,7 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	};
 	for (auto& person : People(k_DanceCentre + glm::vec2(0.0f, -10.0f), k_Couples))
 	{
-		dancing.push_back(std::move(person));
+		dancing.push_back(person);
 	}
 	all.push_back({
 	    .id = "creatures.learns_dance",
@@ -188,7 +188,7 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	};
 	for (auto& person : People(k_DanceCentre + glm::vec2(0.0f, -10.0f), k_Couples))
 	{
-		worshippers.push_back(std::move(person));
+		worshippers.push_back(person);
 	}
 	all.push_back({
 	    .id = "villagers.worshippers_ignore_miracle",

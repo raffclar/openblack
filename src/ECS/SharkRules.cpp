@@ -42,7 +42,7 @@ float shark_rules::Heading(const glm::vec3& turnStart, const glm::vec3& position
 
 glm::mat3 shark_rules::Facing(float heading)
 {
-	return glm::mat3(portable_math::EulerAngleY(-heading));
+	return {portable_math::EulerAngleY(-heading)};
 }
 
 glm::vec3 shark_rules::Drawn(const glm::vec3& turnStart, float startHeight, const glm::vec3& position, float endHeight,

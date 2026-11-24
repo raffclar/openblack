@@ -93,7 +93,7 @@ glm::vec3 RandomBodyPoint(const ecs::Registry& registry, entt::entity creature)
 	}
 	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
 	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
-	return glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]);
+	return {creature::PosedBone(bone, pose.bones, pose.placement)[3]};
 }
 
 /// Every third game turn of the swap, while the other is still a creature and its beam of light still runs, a beam runs

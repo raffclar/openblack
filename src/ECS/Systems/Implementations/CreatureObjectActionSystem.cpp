@@ -133,7 +133,7 @@ glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creatu
 		return transform.position;
 	}
 	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(transform));
-	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
+	return {creature::PosedBone(points->head, pose.bones, pose.placement)[3]};
 }
 
 /// Where a bone is in an animation at a time, in the creature's own space at the world's scale
@@ -320,7 +320,7 @@ glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const 
 	const auto bones = creature_throw::TossPointBones(animation.skeleton.parents, hand);
 	if (bones.empty())
 	{
-		return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
+		return {creature::PosedBone(hand, pose.bones, pose.placement)[3]};
 	}
 	glm::vec3 sum(0.0f);
 	for (const auto bone : bones)
@@ -1440,7 +1440,7 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 		// size. A frozen creature lives fewer milliseconds. A hurried action doubles the step. The time that a point
 		// holds is the time of the mind, and does not change.
 		const auto turnMs = creature_walk_planner::TurnMs(animation.playbackScale, static_cast<int32_t>(gameTime.count()));
-		const float step = static_cast<float>(creature_layers::HurriedStep(
+		const auto step = static_cast<float>(creature_layers::HurriedStep(
 		    creature_layers::TurnStepMs(turnMs, ShownSize(body), animation.realTime), action.hurried));
 		if (action.kind == Kind::Catch)
 		{

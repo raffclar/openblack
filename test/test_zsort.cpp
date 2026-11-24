@@ -34,6 +34,8 @@ TEST(ZSort, DepthOrdersAsTheDistance)
 	const glm::vec3 camera {100.0f, 50.0f, -20.0f};
 	float previous = 0.0f;
 	uint32_t previousDepth = 0;
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float far = 0.01f; far < 20000.0f; far = (far * 1.37f) + 0.01f)
 	{
 		const glm::vec3 point = camera + glm::vec3(far, 0.0f, 0.0f);

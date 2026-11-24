@@ -587,6 +587,30 @@ struct FilteredArguments
 	std::vector<std::string> ignored;
 };
 
+/// An option that takes a value but can also stand alone. The parser of the command line reads a value of such an option
+/// only after a "=", so "--name off" would leave the "off" as a stray argument.
+struct OptionalValueOption
+{
+	/// The long name, after "--"
+	std::string_view name;
+	/// The words that the option takes as its value
+	std::span<const std::string_view> values;
+};
+
+/// The options with an optional value, and the values that each takes
+inline constexpr std::array<std::string_view, 3> k_TurnBesideDrawValues {"on", "off", "auto"};
+inline constexpr std::array<std::string_view, 2> k_BooleanValues {"true", "false"};
+inline constexpr std::array k_OptionalValueOptions {
+    OptionalValueOption {.name = "turn-beside-draw", .values = k_TurnBesideDrawValues},
+    OptionalValueOption {.name = "internet-weather", .values = k_BooleanValues},
+};
+
+/// Joins an option with an optional value to the argument that follows it, when that argument is one of its values.
+/// "--turn-beside-draw off" becomes "--turn-beside-draw=off". Other arguments stay as they are, and the arguments after
+/// a "--" argument stay too.
+[[nodiscard]] std::vector<std::string> JoinOptionalValues(std::span<const std::string_view> arguments,
+                                                          std::span<const OptionalValueOption> options);
+
 /// Divides the arguments of a command line. A developer option goes with its value: the value after a "=", or the next
 /// argument when the option takes a value. A short option can have its value directly after the letter ("-sLand2.txt").
 /// The arguments after a "--" argument stay as they are.

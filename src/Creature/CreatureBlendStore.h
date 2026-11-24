@@ -19,6 +19,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <glm/vec3.hpp>
+
 #include "3D/SkeletalAnimation.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
@@ -88,12 +90,23 @@ struct PreparedBlend
 	uint32_t shaping;
 };
 
+/// The frame turns of an animation that the blends use, and the angles that the turns come from
+struct KeptTurns
+{
+	/// The angles of the turned bones of each frame, frame after frame, when the stores made the turns
+	std::vector<glm::vec3> angles;
+	std::vector<skeletal_animation::Matrix> turns;
+};
+
 /// The animations that the creatures of each species share: the animations adjusted to the variants' stands, and the
 /// blends that the threads or a turn made. The bodies of one shape share the kept blends.
 struct Stores
 {
 	std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash> adjusted;
 	std::unordered_map<BlendKey, PreparedBlend, BlendKeyHash> prepared;
+	/// The frame turns of the species' animations and of the adjusted animations. Each body of another shape blends
+	/// from the same animations, thus the stores make their turns one time.
+	std::unordered_map<const skeletal_animation::Animation*, KeptTurns> turns;
 	/// The count of the shapes of the bodies now
 	uint32_t shaping {0};
 	/// The marks of the animations that the bodies keep, so that the store of keyframe turns trusts their angles
@@ -115,6 +128,12 @@ struct Wanted
 /// stores keep the adjusted animations that the blend makes.
 [[nodiscard]] std::optional<skeletal_animation::Animation> Blend(Stores& stores, const creature::CreatureRig& rig,
                                                                  const creature_morph::Morph& morph, size_t index);
+
+/// The frame turns of the animation, with the same bits as creature_animation::FrameTurns gives. The stores keep the
+/// turns while the angles of the animation stay the same, and make them again when the angles change. The span stays
+/// valid until the next call for the same animation.
+[[nodiscard]] std::span<const skeletal_animation::Matrix> TurnsOf(Stores& stores,
+                                                                  const skeletal_animation::Animation& animation);
 
 /// A copy of the blend that the stores keep for the drawn body, or nothing when they keep none. The stores keep the blend
 /// for two more counts of shapes.

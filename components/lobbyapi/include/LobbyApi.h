@@ -131,6 +131,8 @@ struct Consent
 };
 
 /// A clan of the account in GET /api/v1/me
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct ClanRef
 {
 	/// "id"
@@ -498,6 +500,8 @@ struct ClanList
 };
 
 /// GET /api/v1/clans/{id}. Not in the contract of the lobby yet.
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct ClanDetails
 {
 	/// "id"
@@ -542,6 +546,8 @@ struct RankingQuery
 
 /// GET /api/v1/rankings/players?limit=N&offset=M ("players") and GET /api/v1/rankings/clans?limit=N&offset=M
 /// ("clans")
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct RankingPage
 {
 	/// "count": the number of rows of the whole ranking
@@ -568,6 +574,8 @@ struct PlayerDetailLines
 };
 
 /// GET /api/v1/players/{id}: the profile of a player.
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct PlayerDetails
 {
 	/// "id"
@@ -637,6 +645,8 @@ struct CreatureUploadReply
 
 /// The creature of a clan, at /api/v1/clans/{id}/creature. The game of the team leader sent it at the end of the last
 /// clan game. The two buffers go as base64 in the JSON.
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct ClanCreature
 {
 	/// "alignment": the alignment of the god of the team leader at the end of the game
@@ -650,6 +660,8 @@ struct ClanCreature
 
 /// Before the first clan game the clan has no creature. The lobby then tells the game to make a new creature of a type
 /// with a name.
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct NewClanCreature
 {
 	/// "creature_type": the row of the creature table, 0 to 16

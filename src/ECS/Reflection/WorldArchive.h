@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -29,6 +30,7 @@
 
 #include "BinaryArchive.h"
 #include "ComponentReflection.h"
+#include "RowMarks.h"
 
 namespace openblack
 {
@@ -213,6 +215,15 @@ struct HashMemo
 	const entt::meta_ctx* context {nullptr};
 	/// The writers of the threads. Each writer keeps its memory and the plans of the types from one hash to the next.
 	std::vector<BinaryWriter> writers;
+	/// The rows that can have a change since the last hash, for the components whose writes mark their rows. When the
+	/// marks are usable, the hash takes the bytes of a row with no mark from the last hash and does not save the row.
+	RowMarks marks;
+	/// Tests: the hash also saves each row that it takes from the last hash, and counts each row whose bytes are not
+	/// the same. A count that is not zero shows a write that did not mark its row.
+	bool checkMarks {false};
+	std::atomic<size_t> markMisses {0};
+	/// The count of the rows that the last hashes took from the hash before them, with no save
+	std::atomic<size_t> rowsTaken {0};
 };
 
 /// The count of the rows in each part, when the threads save the rows of a component in parts. A part holds at most

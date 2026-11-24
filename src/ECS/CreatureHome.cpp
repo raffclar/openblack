@@ -46,6 +46,38 @@ std::optional<glm::vec3> PenOfTempleMesh(const Transform& transform, float yAngl
 }
 } // namespace
 
+namespace
+{
+/// The home of a creature, with the pen of its player's temple
+std::optional<glm::vec3> HomeWithPen(const Registry& registry, entt::entity creature, const std::optional<glm::vec3>& temple)
+{
+	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+	const auto home = leash != nullptr ? leash->home : std::nullopt;
+	if (!temple.has_value() && !home.has_value())
+	{
+		return std::nullopt;
+	}
+	// The temple's pen while the temple stands, whatever home it was given; else that home
+	return openblack::creature_mode::PenOf(home, temple, glm::vec3 {});
+}
+
+/// The home of a creature as a map position, with the pen of its player's temple
+std::optional<openblack::map_coords::MapCoords> HomeOnMapWithPen(const Registry& registry, entt::entity creature,
+                                                                 const std::optional<glm::vec3>& temple)
+{
+	if (temple.has_value())
+	{
+		return openblack::temple_pen::MapPosition(*temple);
+	}
+	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+	if (leash == nullptr || !leash->home.has_value())
+	{
+		return std::nullopt;
+	}
+	return leash->homeOnMap.value_or(openblack::map_coords::FromMetres({leash->home->x, leash->home->z}));
+}
+} // namespace
+
 std::optional<glm::vec3> creature_home::HomeOf(const Registry& registry, entt::entity creature)
 {
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -53,15 +85,13 @@ std::optional<glm::vec3> creature_home::HomeOf(const Registry& registry, entt::e
 	{
 		return std::nullopt;
 	}
-	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
-	const auto home = leash != nullptr ? leash->home : std::nullopt;
-	const auto temple = TemplePenOf(registry, body->owner);
-	if (!temple.has_value() && !home.has_value())
-	{
-		return std::nullopt;
-	}
-	// The temple's pen while the temple stands, whatever home it was given; else that home
-	return openblack::creature_mode::PenOf(home, temple, glm::vec3 {});
+	return HomeWithPen(registry, creature, TemplePenOf(registry, body->owner));
+}
+
+std::optional<glm::vec3> creature_home::HomeOf(const Registry& registry, entt::entity creature,
+                                               const std::optional<glm::vec3>& templePen)
+{
+	return registry.AllOf<Creature>(creature) ? HomeWithPen(registry, creature, templePen) : std::nullopt;
 }
 
 std::optional<openblack::map_coords::MapCoords> creature_home::HomeOnMapOf(const Registry& registry, entt::entity creature)
@@ -71,16 +101,13 @@ std::optional<openblack::map_coords::MapCoords> creature_home::HomeOnMapOf(const
 	{
 		return std::nullopt;
 	}
-	if (const auto temple = TemplePenOf(registry, body->owner))
-	{
-		return temple_pen::MapPosition(*temple);
-	}
-	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
-	if (leash == nullptr || !leash->home.has_value())
-	{
-		return std::nullopt;
-	}
-	return leash->homeOnMap.value_or(openblack::map_coords::FromMetres({leash->home->x, leash->home->z}));
+	return HomeOnMapWithPen(registry, creature, TemplePenOf(registry, body->owner));
+}
+
+std::optional<openblack::map_coords::MapCoords> creature_home::HomeOnMapOf(const Registry& registry, entt::entity creature,
+                                                                           const std::optional<glm::vec3>& templePen)
+{
+	return registry.AllOf<Creature>(creature) ? HomeOnMapWithPen(registry, creature, templePen) : std::nullopt;
 }
 
 std::optional<glm::vec3> creature_home::TemplePenOf(const Registry& registry, PlayerNames owner)

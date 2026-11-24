@@ -42,6 +42,7 @@ float creature_kiss::KissingDistance(const KissPoints& self, const KissPoints& o
 
 float creature_kiss::MeanKissingDistance(const KissPoints& self, const KissPoints& other)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return (KissingDistance(self, other) + KissingDistance(other, self)) * 0.5f;
 }
 

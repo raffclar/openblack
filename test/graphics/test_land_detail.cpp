@@ -17,6 +17,7 @@
 #include <Common/NearestWhole.h>
 #include <LNDFile.h>
 #include <Visual/LandDetail.h>
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 using namespace openblack::graphics::land_detail;
@@ -564,4 +565,33 @@ TEST(LandDetail, CornerInputsAreTheSameOnlyWithTheSameBits)
 	other = inputs;
 	other.fades = false;
 	EXPECT_FALSE(SameCornerInputs(inputs, other));
+}
+
+TEST(LandDetail, MaximumDetailShowsEveryBlockInFullDetail)
+{
+	// The option off keeps the lines of the level
+	EXPECT_EQ(Finest(For(4), false), For(4));
+	// A camera at one corner of a 32 by 32 map looks along the land to the far corner
+	std::vector<BlockPlace> places;
+	for (int x = 0; x < 32; ++x)
+	{
+		for (int z = 0; z < 32; ++z)
+		{
+			places.push_back({.corner = {static_cast<float>(x) * 160.0f, static_cast<float>(z) * 160.0f}, .at = {x, z}});
+		}
+	}
+	const FrameInputs off {
+	    .origin = {0.0f, 50.0f, 0.0f}, .forward = glm::normalize(glm::vec3(1.0f, -0.1f, 1.0f)), .lines = For(4)};
+	auto on = off;
+	on.lines = Finest(off.lines, true);
+	const auto vanilla = ClassifyFrame(off, places);
+	const auto finest = ClassifyFrame(on, places);
+	// The game's lines make the far blocks coarse
+	EXPECT_TRUE(std::ranges::any_of(vanilla.blocks, [](const BlockDetail& block) { return block.mesh != Mesh::Full; }));
+	// With the option, each block has the full mesh and the full texture, with no morph and no coarser neighbour
+	EXPECT_TRUE(std::ranges::all_of(finest.blocks, [](const BlockDetail& block) { return block == BlockDetail {}; }));
+	EXPECT_TRUE(std::ranges::all_of(finest.coarserSides, [](uint8_t sides) { return sides == 0; }));
+	// The bands do not change
+	EXPECT_EQ(on.lines.meshBand, off.lines.meshBand);
+	EXPECT_EQ(on.lines.textureBand, off.lines.textureBand);
 }

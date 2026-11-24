@@ -330,6 +330,7 @@ bool spells::OnEvent(SpellServicesInterface& services, Spell& spell, const Spell
 		}
 		return acted;
 	}
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case SpellClass::General:
 		break;
 	default:

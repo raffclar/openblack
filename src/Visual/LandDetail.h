@@ -64,6 +64,23 @@ inline constexpr std::array<Lines, 7> k_Lines = {{
 /// The lines of a detail level; any level above the highest is the highest
 [[nodiscard]] Lines For(uint8_t level);
 
+/// The depth of the lines with the player's "maximum detail" option. It is far past the far side of the map. Thus all
+/// blocks of the land show the full mesh and the full texture.
+inline constexpr float k_MaximumDetailDepth = 1.0e6f;
+
+/// The lines with the player's "maximum detail" option. When the option is on, all lines move to k_MaximumDetailDepth
+/// and the bands do not change. When the option is off, the lines do not change.
+[[nodiscard]] constexpr Lines Finest(Lines lines, bool maximumDetail) noexcept
+{
+	if (maximumDetail)
+	{
+		lines.meshNear = k_MaximumDetailDepth;
+		lines.meshFar = k_MaximumDetailDepth;
+		lines.texture = k_MaximumDetailDepth;
+	}
+	return lines;
+}
+
 /// The texture line meets the ground no higher than this: the camera's height, or this if the camera is higher
 inline constexpr float k_TextureGroundCap = 0.67f * 165.0f;
 

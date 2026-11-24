@@ -33,6 +33,7 @@ constexpr int k_Side = footprint_paint::k_BlockTexels;
 /// A block of black land, opaque
 std::vector<uint16_t> BlackBlock()
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list would not call the count and value constructor
 	return std::vector<uint16_t>(static_cast<size_t>(k_Side) * k_Side, 0xF000);
 }
 

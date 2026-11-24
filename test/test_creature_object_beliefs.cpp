@@ -15,7 +15,9 @@
 #include <array>
 #include <bit>
 #include <optional>
+#include <random>
 #include <set>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -756,4 +758,95 @@ TEST(CreatureObjectBeliefs, OnlyASightThatChangesWhatTheTestsReadChangesThem)
 	auto creature = town;
 	creature.kind = kinds::k_Creature;
 	EXPECT_TRUE(SightChangesTests(TestedOf(creature), creature));
+}
+
+namespace
+{
+/// The beliefs of a store as (thing, kind, order), kind by kind, each kind in the order of its places
+std::vector<std::tuple<entt::entity, uint32_t, uint64_t>> Listed(const Store& store)
+{
+	std::vector<std::tuple<entt::entity, uint32_t, uint64_t>> listed;
+	for (const auto& belief : store.All())
+	{
+		listed.emplace_back(belief.thing, belief.kind, belief.order);
+	}
+	return listed;
+}
+} // namespace
+
+// The store forgets the gone things in the same order as a walk of the index of its contents, also the no-thing value.
+// The places that the next beliefs take are then the same too.
+TEST(CreatureObjectBeliefs, ItForgetsGoneThingsAsAWalkOfItsIndexDoes)
+{
+	std::mt19937 random(777);
+	for (int round = 0; round < 60; ++round)
+	{
+		Store store;
+		std::uniform_int_distribution<uint32_t> thingOf(0, 400);
+		std::uniform_int_distribution<uint32_t> kindOf(0, 5);
+		for (int i = 0; i < 600; ++i)
+		{
+			const auto n = thingOf(random);
+			const auto thing = n == 400 ? entt::null : Thing(n * 37 + 5);
+			if (random() % 5 == 0)
+			{
+				store.Forget(thing);
+			}
+			else
+			{
+				store.Add(thing, kindOf(random), {});
+			}
+		}
+		const uint32_t cut = random() % 3;
+		const auto gone = [cut](entt::entity thing) {
+			return thing == entt::null || (entt::to_integral(thing) / 37) % 3 == cut;
+		};
+		// The walk of the index of the contents, as the store did it before
+		Store walked = store;
+		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
+		for (const auto& [thing, at] : walked.Contents().index)
+		{
+			if (gone(thing))
+			{
+				forgotten.emplace_back(at, thing);
+			}
+		}
+		std::ranges::sort(forgotten, [](const auto& a, const auto& b) {
+			return std::tie(a.first.kind, a.first.slot) < std::tie(b.first.kind, b.first.slot);
+		});
+		for (const auto& [at, thing] : forgotten)
+		{
+			walked.Forget(thing);
+		}
+		ASSERT_FALSE(forgotten.empty());
+		store.ForgetIf(gone);
+		ASSERT_EQ(Listed(store), Listed(walked));
+		for (uint32_t i = 0; i < 50; ++i)
+		{
+			const auto kind = kindOf(random);
+			store.Add(Thing(100'000 + i), kind, {});
+			walked.Add(Thing(100'000 + i), kind, {});
+		}
+		ASSERT_EQ(Listed(store), Listed(walked));
+	}
+}
+
+// The things in the list order are the things of the held beliefs in the list order
+TEST(CreatureObjectBeliefs, ItGivesTheThingsInTheListOrder)
+{
+	Store store;
+	store.Add(Thing(1), k_Forest, {});
+	store.Add(Thing(2), k_Temple, {});
+	store.Add(Thing(3), k_Flock, {});
+	store.Add(Thing(4), k_Temple, {});
+	store.Forget(Thing(2));
+	std::vector<entt::entity> things {Thing(99)};
+	store.ThingsInListOrder(things);
+	std::vector<entt::entity> held;
+	for (const auto* belief : store.HeldInListOrder())
+	{
+		held.push_back(belief->thing);
+	}
+	EXPECT_EQ(things, held);
+	EXPECT_EQ(things.size(), 3u);
 }

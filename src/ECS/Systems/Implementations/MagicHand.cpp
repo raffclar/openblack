@@ -30,12 +30,14 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/CastInput.h"
 #include "Magic/MagicTables.h"
 #include "Magic/SpellSeedRules.h"
 #include "MagicSpellLinks.h"
@@ -138,20 +140,33 @@ void MagicSystem::StopHandEffect(SpellSeed& seed)
 void MagicSystem::StartHoldLoop()
 {
 	StopHoldLoop();
-	// The hum belongs to the hand, not to the seed. It can continue after the seed leaves the hand.
-	if (Locator::sounds::has_value())
+	// The hum belongs to the hand, not to the seed. It can continue after the seed leaves the hand. Its sound starts at
+	// the next game turn.
+	_holdLoopWaits = true;
+}
+
+void MagicSystem::PlayHoldLoop()
+{
+	_holdLoopWaits = false;
+	if (!Locator::sounds::has_value())
 	{
-		_holdLoop = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
-		                                        {.position = _hand.handPosition,
-		                                         .playType = audio::PlayType::Repeat,
-		                                         .owner = Held().value_or(entt::entity {entt::null}),
-		                                         .voiceOwner = audio::VoiceOwner::OwnSound,
-		                                         .follows = audio::Follows::Place});
+		return;
 	}
+	const auto place = Locator::gestureSystem::has_value()
+	                       ? magic::HumPlace(Locator::gestureSystem::value().GetPath(), _hand.handPosition)
+	                       : _hand.handPosition;
+	// The hum stays where it starts, and plays on however far the camera goes
+	_holdLoop = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
+	                                        {.position = place,
+	                                         .playType = audio::PlayType::Repeat,
+	                                         .owner = Held().value_or(entt::entity {entt::null}),
+	                                         .voiceOwner = audio::VoiceOwner::OwnSound,
+	                                         .follows = audio::Follows::Nothing});
 }
 
 void MagicSystem::StopHoldLoop()
 {
+	_holdLoopWaits = false;
 	// Cut at once, as the hand's hum is
 	if (_holdLoop != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(_holdLoop))
 	{

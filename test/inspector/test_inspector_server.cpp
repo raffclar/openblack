@@ -210,7 +210,7 @@ TEST(InspectorServer, AnotherThreadAnswersWhileOneHandlerIsBusy)
 			release = true;
 			frame.join();
 		}
-	} join {release, frame};
+	} const join {release, frame};
 
 	const auto deadline = std::chrono::steady_clock::now() + k_Patience;
 	while (!busy && std::chrono::steady_clock::now() < deadline)

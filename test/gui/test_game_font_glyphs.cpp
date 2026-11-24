@@ -24,6 +24,7 @@ constexpr uint16_t k_FontHeight = 80;
 /// A clear bitmap of a width at the height of the game's fonts
 std::vector<uint8_t> ClearBitmap(uint16_t width)
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list would not call the count and value constructor
 	return std::vector<uint8_t>(static_cast<size_t>(width) * k_FontHeight, 0);
 }
 
@@ -62,9 +63,9 @@ TEST(GameFontGlyphs, AnEvenWidthGlyphHalvesTwoPixelsAcrossAndTwoRowsDown)
 		for (uint16_t x = 0; x < half.width; ++x)
 		{
 			uint8_t expected = 0;
-			for (uint16_t sy = y * 2u; sy < (y * 2u) + 2u; ++sy)
+			for (uint32_t sy = y * 2u; sy < (y * 2u) + 2u; ++sy)
 			{
-				for (uint16_t sx = x * 2u; sx < (x * 2u) + 2u; ++sx)
+				for (uint32_t sx = x * 2u; sx < (x * 2u) + 2u; ++sx)
 				{
 					expected += bitmap[(static_cast<size_t>(sy) * k_Width) + sx];
 				}

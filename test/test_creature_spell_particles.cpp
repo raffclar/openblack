@@ -312,6 +312,7 @@ TEST_F(CreatureSpellParticles, WispsNeedACreatureSpellThatIsNotAnAntiSpell)
 	for (const int kind : {-1, 16})
 	{
 		_spell.kind = kind;
+		// NOLINTNEXTLINE(performance-inefficient-string-concatenation): a test, so the temporary strings do not matter
 		auto effect = Make(First("1 1") + k_Wisps + k_Point);
 		for (int i = 0; i < 40; ++i)
 		{
@@ -427,6 +428,7 @@ TEST_F(CreatureSpellParticles, HeartsAndSteamLetGoOnceTheCreatureHasGone)
 	for (const auto& rule : {hearts, steam})
 	{
 		_world.gone = false;
+		// NOLINTNEXTLINE(performance-inefficient-string-concatenation): a test, so the temporary strings do not matter
 		auto effect = Make(First("1 4") + rule + k_Point);
 		for (int i = 0; i < 10; ++i)
 		{

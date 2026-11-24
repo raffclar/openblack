@@ -75,15 +75,10 @@ bool IsPrintPath(std::string_view path) noexcept
 	{
 		return false;
 	}
-	for (const auto part : std::views::split(path, '/'))
-	{
+	return std::ranges::all_of(std::views::split(path, '/'), [](const auto part) {
 		const std::string_view name(part.begin(), part.end());
-		if (name.empty() || name == "..")
-		{
-			return false;
-		}
-	}
-	return true;
+		return !name.empty() && name != "..";
+	});
 }
 
 std::vector<std::string> PrintPaths(std::span<const std::filesystem::path> readFiles)
@@ -131,8 +126,8 @@ InstallHints HintsOf(std::span<const std::string> topNames)
 		const auto lower = Lower(name);
 		if (lower.starts_with(k_PatchNoteStart) && lower.ends_with(k_PatchNoteEnd))
 		{
-			const auto digits = std::string_view(lower).substr(k_PatchNoteStart.size(),
-			                                                   lower.size() - k_PatchNoteStart.size() - k_PatchNoteEnd.size());
+			const auto digits = std::string_view {lower}.substr(k_PatchNoteStart.size(),
+			                                                    lower.size() - k_PatchNoteStart.size() - k_PatchNoteEnd.size());
 			// The longest number is the last patch, and of two of the same length the larger one
 			if (digits.size() >= 2 && IsDigits(digits) &&
 			    (digits.size() > bestPatch.size() || (digits.size() == bestPatch.size() && digits > bestPatch)))
@@ -142,8 +137,8 @@ InstallHints HintsOf(std::span<const std::string> topNames)
 		}
 		// The sound banks of the language are named by the locale, such as "00000809.16" for English (United Kingdom)
 		const auto dot = lower.find('.');
-		if (hints.language.empty() && dot == 8 && IsHexDigits(std::string_view(lower).substr(0, 8)) &&
-		    IsDigits(std::string_view(lower).substr(dot + 1)))
+		if (hints.language.empty() && dot == 8 && IsHexDigits(std::string_view {lower}.substr(0, 8)) &&
+		    IsDigits(std::string_view {lower}.substr(dot + 1)))
 		{
 			hints.language = lower.substr(4, 4);
 		}
@@ -204,7 +199,7 @@ FileKind KindOfPath(std::string_view path) noexcept
 {
 	const auto lower = Lower(path);
 	const auto slash = lower.rfind('/');
-	const auto name = slash == std::string::npos ? std::string_view(lower) : std::string_view(lower).substr(slash + 1);
+	const auto name = slash == std::string::npos ? std::string_view {lower} : std::string_view {lower}.substr(slash + 1);
 	const auto dot = name.rfind('.');
 	const auto extension = dot == std::string_view::npos ? std::string_view() : name.substr(dot);
 	// The tables, the lands, the maps, the scripts and the data of the creatures, the zones, the dances and the walks

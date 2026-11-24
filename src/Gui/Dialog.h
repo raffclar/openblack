@@ -86,6 +86,12 @@ public:
 	/// control (see MoveFocus). Return in an edit box clicks it and moves the focus on. Other keys go to the control that
 	/// has the focus. True when a control took the key.
 	bool KeyDown(int key, bool shift = false);
+	/// A controller's A button: clicks the control that has the focus when it is a button or a check box. False when
+	/// no such control has the focus.
+	bool ActivateFocused();
+	/// While on, the control that has the focus draws as it does under the pointer, so that a player without a mouse sees
+	/// where the focus is. A move of the pointer turns it off.
+	void SetFocusLit(bool lit) noexcept { _focusLit = lit; }
 	/// Tab moves the focus over the visible controls but for static text, in the order they were made. The tabs of the
 	/// menu's pages come after the other controls, because the game adds them last. Backwards, the focus moves the other
 	/// way.
@@ -137,6 +143,7 @@ private:
 	Control* _hovered {nullptr};
 	Control* _pressed {nullptr};
 	Control* _focused {nullptr};
+	bool _focusLit {false};
 	glm::ivec2 _pointer {-1, -1};
 };
 

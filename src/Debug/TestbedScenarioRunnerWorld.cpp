@@ -564,6 +564,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::config::value().farThunder = *environment.farThunder;
 	}
+	if (environment.maximumDetail.has_value() && Locator::config::has_value())
+	{
+		Locator::config::value().maximumDetail = *environment.maximumDetail;
+	}
 	if (environment.dynamicTreeShadows && Locator::config::has_value())
 	{
 		Locator::config::value().dynamicTreeShadows = true;

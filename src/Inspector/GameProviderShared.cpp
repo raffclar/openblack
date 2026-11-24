@@ -142,7 +142,7 @@ std::optional<PlayerNames> NamedPlayerParam(const Json& params)
 	if (it->is_string())
 	{
 		const auto& text = it->get_ref<const std::string&>();
-		const auto found = std::ranges::find(k_PlayerNamesStrs, std::string_view(text));
+		const auto found = std::ranges::find(k_PlayerNamesStrs, std::string_view {text});
 		if (found == k_PlayerNamesStrs.end())
 		{
 			return std::nullopt;

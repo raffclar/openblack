@@ -132,7 +132,7 @@ TEST(ShieldRules, ADomeThatBreaksInTheMiraclesStepTakesItsStepOfTheTurnFirst)
 TEST(ShieldRules, ADomeThatDiesAwayInItsStepDoesNotBreakUp)
 {
 	const auto shape = shield::MakeDomeShape(PhysicalTables(), 30.0f, 2.0f);
-	shield::DomeState state {.dieTime = shield::k_DomeGoneSeconds, .dying = true};
+	const shield::DomeState state {.dieTime = shield::k_DomeGoneSeconds, .dying = true};
 	const shield::DomePose pose {.scale = shape.finalScale, .drawn = true};
 	EXPECT_FALSE(shield::DomeAtBreakUp(shape, state, pose, 100, shape.finalScale, true, k_Turn).has_value());
 	EXPECT_TRUE(shield::DomeAtBreakUp(shape, state, pose, 100, shape.finalScale, false, k_Turn).has_value());

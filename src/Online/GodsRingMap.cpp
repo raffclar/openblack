@@ -486,7 +486,7 @@ std::array<Slot, k_Slots> gods_ring_map::LayOutSlots(glm::vec2 middle)
 	std::array<Slot, k_Slots> slots {};
 	for (size_t i = 0; i < slots.size(); ++i)
 	{
-		const float outward =
+		const auto outward =
 		    static_cast<float>(Wrapped(static_cast<double>(k_FirstSlotAngle + (static_cast<float>(i) * k_SlotStep))));
 		const double radians = outward;
 		slots.at(i) = Slot {

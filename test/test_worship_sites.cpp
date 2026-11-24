@@ -323,6 +323,7 @@ TEST(WorshipSitePlaces, TheDistanceFromASiteIsFromItsMiddleNotFromWhereItStands)
 	// A thing of another kind measures from where it stands, about 43 metres away
 	const auto other = registry.Create();
 	registry.Assign<Transform>(other, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	EXPECT_NEAR(object_measures::DistanceFromObject(registry, other, villager), glm::length(glm::vec2(18.179f, 39.397f)),
 	            0.05f);
 }

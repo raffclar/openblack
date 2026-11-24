@@ -1581,6 +1581,7 @@ TEST(ParticlePrefetch, TheFieldsThatEachStepReadsAreAtTheStartOfTheAtom)
 	// Each field that the step of the effect or of the symbols of belief reads lies in the bytes that the walk asks for
 	const auto inside = [start, stepped](const auto& field) {
 		const auto* begin = reinterpret_cast<const char*>(&field);
+		// NOLINTNEXTLINE(bugprone-sizeof-expression): the size of the field itself is meant
 		return begin >= start && begin + sizeof(field) <= start + stepped;
 	};
 	EXPECT_TRUE(inside(atom.collection));

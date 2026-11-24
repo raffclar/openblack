@@ -108,6 +108,7 @@ std::filesystem::path Level::ResolveScriptPath(const std::filesystem::path& path
 	{
 		found = Locator::filesystem::value().FindPath(path);
 	}
+	// NOLINTNEXTLINE(bugprone-empty-catch): a path that the code cannot find stays as it was given
 	catch (const std::exception&)
 	{
 		// A script that isn't found is compared as it was given

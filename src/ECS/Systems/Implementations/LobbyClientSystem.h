@@ -35,6 +35,7 @@ namespace openblack::ecs::systems
 {
 
 /// Where the lobby is
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct LobbyClientConfig
 {
 	/// The https:// origin of the lobby on the desktop, for example "https://bw.example.org". In the browser it is

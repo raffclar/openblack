@@ -1356,6 +1356,19 @@
   "writes": true
  },
  {
+  "description": "Tools: the player's \"maximum detail\" option, as the debug menu's Model Detail choice sets it. Without on, it only tells",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "True shows the most detail at all distances, false the game's own detail",
+    "name": "on",
+    "type": "boolean"
+   }
+  ],
+  "query": "engine.maximum_detail",
+  "writes": true
+ },
+ {
   "description": "Tools: the pictures of the sky's dome that the debug menu shows, the game's own pictures or the larger pictures of the sky pack in the profile folder. Without upscaled, it only tells",
   "kind": "object",
   "parameters": [
@@ -3851,6 +3864,20 @@
    }
   ],
   "query": "input.key",
+  "writes": true
+ },
+ {
+  "description": "A button of a game controller goes down and up again, as the player's controller does it. The screens of the lobby sessions take A, B and the pad",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "SDL's name of the button: a, b, x, y, dpup, dpdown, dpleft, dpright, leftshoulder, rightshoulder, start, back",
+    "name": "button",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "input.pad",
   "writes": true
  },
  {

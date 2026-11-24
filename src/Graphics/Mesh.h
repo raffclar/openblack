@@ -20,8 +20,9 @@
 
 namespace bgfx
 {
+// NOLINTNEXTLINE(bugprone-forward-declaration-namespace): bgfx defines this handle in its own namespace
 struct DynamicVertexBufferHandle;
-}
+} // namespace bgfx
 
 namespace openblack::graphics
 {

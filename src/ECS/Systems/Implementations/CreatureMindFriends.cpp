@@ -140,7 +140,7 @@ bool CreatureMindSystem::RequestPartner(entt::entity asker, entt::entity asked, 
 	const auto action =
 	    askedMind->planner.current.has_value() ? askedMind->planner.current->action : askedMind->planner.lastAction;
 	const auto actionName =
-	    action < tables->actions.size() ? std::string_view(tables->actions[action].name) : std::string_view {};
+	    action < tables->actions.size() ? std::string_view {tables->actions[action].name} : std::string_view {};
 	const bool dead = creature_friendship::LiesDead(registry.AllOf<CreatureKnockedOut>(asked), actionName);
 	// A creature in a fight has its opponent as its partner until the fight is over
 	const auto* askedLink = registry.TryGet<const CreaturePartner>(asked);

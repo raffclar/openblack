@@ -419,7 +419,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				}
 				const object_draw_list::Block box {
 				    .corner = block.GetMapPosition(), .highestAltitude = block.GetHighestAltitude(), .reflected = reflected};
-				sights.at(static_cast<size_t>((at.x * GroundShadow::k_BlocksPerSide) + at.y)) = {
+				sights.at((static_cast<size_t>(at.x) * GroundShadow::k_BlocksPerSide) + static_cast<size_t>(at.y)) = {
 				    .present = true,
 				    .inView = Locator::objectDrawListSystem::has_value()
 				                  ? Locator::objectDrawListSystem::value().BlockInView(viewProjection, nearPlane, box)

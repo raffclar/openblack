@@ -335,13 +335,15 @@ private:
 	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older
 	void EndUnderway(components::CreatureMindState& mind);
 	/// Where its home and its player's temple are, and whether another creature is near enough to frighten it
-	void SituateHome(entt::entity creature, creature_plan_actions::Situation& situation);
+	void SituateHome(entt::entity creature, creature_plan_actions::Situation& situation,
+	                 const std::optional<glm::vec3>& templePen);
 	/// The agenda to go into its temple makes the creature believe in the temple's heart
 	void BelieveInTempleToEnter(entt::entity creature, const creature_plan_actions::Executor& executor,
 	                            const creature_plan_actions::Situation& situation);
 	/// The places that the creature uses when it hangs around at home: its home and its player's temple, both on the
 	/// ground, the radius of the area that holds it, and its height
-	[[nodiscard]] static creature_mind::HangAroundPlaces HangAroundPlacesOf(entt::entity creature);
+	[[nodiscard]] static creature_mind::HangAroundPlaces HangAroundPlacesOf(entt::entity creature,
+	                                                                        const std::optional<glm::vec3>& templePen);
 
 	/// Plans an activity in place of what the creature was doing: it stops walking and gets up out of a pose first, while
 	/// an action it is playing plays on and the new agenda waits for it. Some orders of the leash let the walk continue,
@@ -679,6 +681,16 @@ private:
 	/// The cells of the towns that a creature looks far about at, kept from look to look so that a look gets no memory
 	/// from the heap
 	std::vector<creature_object_beliefs::TownCell> _farTowns;
+	/// The lists that the planning of a creature fills, kept from plan to plan so that a plan gets less memory from the
+	/// heap. They hold nothing from one plan to the next. A plan inside another plan finds them empty and fills its own.
+	struct PlanLists
+	{
+		std::vector<creature_planner::ActionCandidate> candidates;
+		std::vector<const creature_plan_actions::Executor*> executors;
+		BelievedFacts believed;
+		std::vector<creature_planner::ObjectCandidate> believedFound;
+	};
+	PlanLists _planLists;
 	/// How many times a creature came across a thing and this changed what the tests of the beliefs read: a new belief,
 	/// a new place or new attributes, a noticed mover, a first sighting in the turn, a villager or a creature seen again.
 	/// Facts kept about beliefs stay true while this does not change.

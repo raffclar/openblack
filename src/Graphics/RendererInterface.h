@@ -97,6 +97,7 @@ public:
 		std::function<void()> landShaded;
 	};
 
+	// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 	struct L3DMeshSubmitDesc
 	{
 		graphics::RenderPass viewId;
@@ -379,9 +380,9 @@ public:
 	virtual void SetDebug(bool value) noexcept = 0;
 	virtual void SetProfile(bool value) noexcept = 0;
 
-	// TODO: Remove this function. All renderables should be drawn through RenderingSystem with Components
+	// TODO(renderer): Remove this function. All renderables should be drawn through RenderingSystem with Components
 	virtual void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept = 0;
-	// TODO: Should shader manager be available through Locator as a service?
+	// TODO(renderer): Should shader manager be available through Locator as a service?
 	/// Null when the renderer has no shaders, as on the dedicated server
 	[[nodiscard]] virtual graphics::ShaderManager* GetShaderManager() const noexcept = 0;
 

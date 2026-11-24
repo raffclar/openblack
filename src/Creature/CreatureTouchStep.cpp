@@ -86,5 +86,5 @@ bool creature_hand::WeighTouchStep(ecs::components::HandOnCreature& contact, con
 
 glm::ivec2 creature_hand::StepCursor(glm::ivec2 before, glm::ivec2 now, const input_steps::Steps& steps, uint32_t step)
 {
-	return glm::ivec2(glm::round(input_steps::Between(glm::vec2(before), glm::vec2(now), steps.Point(step))));
+	return {glm::round(input_steps::Between(glm::vec2(before), glm::vec2(now), steps.Point(step)))};
 }

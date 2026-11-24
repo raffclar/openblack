@@ -114,6 +114,7 @@ Picture creature_tattoo::PictureFromImage(std::span<const std::array<uint8_t, 3>
 {
 	Picture picture {};
 	const auto right = std::min(width, k_DesignSize);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	const auto bottom = std::min(height, k_DesignSize);
 	for (uint32_t y = 0; y < bottom; ++y)
 	{
@@ -346,7 +347,7 @@ glm::u8vec3 creature_tattoo::Brightened(const glm::u8vec3& colour, float brightn
 		const auto factor = static_cast<int32_t>(brightness * 2.0f * 256.0f);
 		result = (channels * factor) / 256;
 	}
-	return glm::u8vec3(glm::clamp(result, 0, 255));
+	return {glm::clamp(result, 0, 255)};
 }
 
 glm::u8vec3 creature_tattoo::PaletteColour(std::span<const std::array<uint8_t, 3>> palette, uint32_t column, uint32_t row,
@@ -365,7 +366,7 @@ std::optional<size_t> creature_tattoo::SlotFor(const Slots& slots, uint8_t site,
 {
 	const auto index = [&slots](auto&& predicate) -> std::optional<size_t> {
 		const auto found = std::ranges::find_if(slots, predicate);
-		return found != slots.end() ? std::optional(static_cast<size_t>(std::distance(slots.begin(), found))) : std::nullopt;
+		return found != slots.end() ? std::optional {static_cast<size_t>(std::distance(slots.begin(), found))} : std::nullopt;
 	};
 	if (const auto same = index([site, design](const Slot& slot) { return slot.site == site && slot.design == design; }))
 	{

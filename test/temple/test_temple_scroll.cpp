@@ -130,7 +130,7 @@ TEST(TempleScrollText, LongTextBreaksAtTheLastSpaceThatFits)
 		{
 			break;
 		}
-		const auto line = std::u16string_view(result).substr(start, end - start);
+		const auto line = std::u16string_view {result}.substr(start, end - start);
 		EXPECT_LT(font.GetWidth(line, 10.0f) * 1.75f, 230.0f) << lines;
 		if (!line.empty())
 		{

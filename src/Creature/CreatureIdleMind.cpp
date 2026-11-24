@@ -151,7 +151,7 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 			commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = senses.camera->point};
 		}
 		const auto turns = std::lround(mind.stepSeconds / senses.seconds) + 1;
-		if (turns > static_cast<long>(*step.turns))
+		if (turns > static_cast<decltype(turns)>(*step.turns))
 		{
 			FinishStep(mind);
 		}
@@ -168,9 +168,10 @@ void WatchCamera(IdleMind& mind, const Step& step, const Senses& senses, Command
 	}
 	const auto turnsPerSecond = std::lround(1.0f / senses.seconds);
 	const auto turns = std::lround(mind.stepSeconds / senses.seconds) + 1;
-	const auto stillLimit = turnsPerSecond * static_cast<long>(step.seconds);
-	if (turns / turnsPerSecond > static_cast<long>(step.seconds) || senses.camera->distance > k_WatchCameraFurthest ||
-	    static_cast<long>(senses.camera->handStillTurns) > stillLimit)
+	const auto stillLimit = turnsPerSecond * static_cast<decltype(turnsPerSecond)>(step.seconds);
+	if (turns / turnsPerSecond > static_cast<decltype(turnsPerSecond)>(step.seconds) ||
+	    senses.camera->distance > k_WatchCameraFurthest ||
+	    static_cast<decltype(stillLimit)>(senses.camera->handStillTurns) > stillLimit)
 	{
 		FinishStep(mind);
 	}

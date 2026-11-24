@@ -15,6 +15,7 @@
 #include <array>
 #include <utility>
 
+#include <Input/InjectedInput.h>
 #include <Input/PointerSettle.h>
 #include <InspectorQuery.h>
 #include <glm/common.hpp>
@@ -24,7 +25,7 @@ using namespace openblack::inspector;
 namespace
 {
 
-constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 10> k_KindNames {{
+constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 11> k_KindNames {{
     {InputEvent::Kind::PointerTo, "pointer"},
     {InputEvent::Kind::ButtonDown, "button_down"},
     {InputEvent::Kind::ButtonUp, "button_up"},
@@ -35,6 +36,7 @@ constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 10> k_KindNa
     {InputEvent::Kind::Gesture, "gesture"},
     {InputEvent::Kind::Release, "release"},
     {InputEvent::Kind::Text, "text"},
+    {InputEvent::Kind::Pad, "pad"},
 }};
 
 constexpr std::array<std::pair<InputEvent::Timing, std::string_view>, 2> k_TimingNames {{
@@ -192,6 +194,7 @@ Json openblack::inspector::ToJson(const InputEvent& event)
 		json["notches"] = event.notches;
 		break;
 	case InputEvent::Kind::Action:
+	case InputEvent::Kind::Pad:
 		json["name"] = event.name;
 		break;
 	case InputEvent::Kind::Gesture:
@@ -291,6 +294,7 @@ std::optional<InputEvent> openblack::inspector::InputEventFromJson(const Json& j
 		event.notches = static_cast<int32_t>(NumberMember(json, "notches").value_or(0.0));
 		break;
 	case InputEvent::Kind::Action:
+	case InputEvent::Kind::Pad:
 	case InputEvent::Kind::Gesture:
 		event.name = StringMember(json, "name").value_or("");
 		if (const auto hold = json.find("hold_action"); hold != json.end() && hold->is_boolean())
@@ -458,6 +462,14 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	           Optional("how", "string",
 	                    "For a key: press, release or tap (the default: down now, up the next frame, or later until "
 	                    "the game has read its input with the key down)")}),
+	    Write("pad",
+	          "A button of a game controller goes down and up again, as the player's controller does it. The screens of the "
+	          "lobby sessions take A, B and the pad",
+	          {{.name = "button",
+	            .type = "string",
+	            .description = "SDL's name of the button: a, b, x, y, dpup, dpdown, dpleft, dpright, leftshoulder, "
+	                           "rightshoulder, start, back",
+	            .required = true}}),
 	    Write("text",
 	          "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It "
 	          "presses no key. The answer does not repeat the letters. While the new player's name box waits before the "
@@ -791,6 +803,20 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::KeyUp, .key = *key}, InputTimeline::Wait::InputStep);
 		}
 		return QueryResult::Value(Answer({{"key", *key}, {"how", how}}, start));
+	}
+	if (query == "pad")
+	{
+		const auto button = StringMember(params, "button");
+		if (!button.has_value() || !input::ControllerButtonNamed(*button).has_value())
+		{
+			return failed("button is SDL's name of a controller button, such as a, b, dpup or dpdown");
+		}
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = InputEvent::Kind::Pad, .name = *button}); !why.empty())
+		{
+			return failed(why);
+		}
+		return QueryResult::Value(Answer({{"button", *button}}, start));
 	}
 	if (query == "text")
 	{

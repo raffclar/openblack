@@ -128,6 +128,32 @@ god_hand::Hands PlayerHandsOf(PlayerNames player)
 	return god_hand::HandsOf(person, reported, god != nullptr ? std::optional(god->last) : std::nullopt);
 }
 
+std::optional<glm::vec3> PlayerHandOf(PlayerNames player)
+{
+	return PlayerHandsOf(player)[static_cast<size_t>(systems::HandSystemInterface::Side::Left)];
+}
+
+std::optional<glm::vec3> PlayerReportedPointOf(PlayerNames player)
+{
+	if (player == PlayerNames::NEUTRAL || !Locator::entitiesRegistry::has_value() || !Locator::playerSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	if (IsPerson(player))
+	{
+		return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedPointUnderCursor(player)
+		                                        : std::nullopt;
+	}
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!entity.has_value() || !registry.Valid(*entity))
+	{
+		return std::nullopt;
+	}
+	const auto* mind = registry.TryGet<const components::ComputerPlayer>(*entity);
+	return mind != nullptr && mind->hand.reported.has_value() ? *mind->hand.reported : god_hand::k_NoReport;
+}
+
 std::optional<glm::vec3> NearestHandOf(PlayerNames player, const glm::vec3& point)
 {
 	const auto hands = PlayerHandsOf(player);

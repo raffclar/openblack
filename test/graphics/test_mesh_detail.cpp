@@ -256,3 +256,25 @@ TEST(MeshDetail, AThingDrawnByItselfIsDrawnInTheMeshOfItsBandOrInItsHighMesh)
 	EXPECT_EQ(mesh_detail::DrawnMesh(false, false, band(Mesh::Standard)), std::nullopt);
 	EXPECT_EQ(asked, 2);
 }
+
+TEST(MeshDetail, MaximumDetailTakesTheHighMeshButKeepsTheFadeAndTheEnd)
+{
+	const float reach = 2.0f;
+	for (const float depth : {10.0f, 100.0f, 200.0f, 300.0f, 1000.0f})
+	{
+		for (const bool disappears : {true, false})
+		{
+			const auto vanilla = mesh_detail::Choose(depth, reach, disappears);
+			// The option off keeps the choice
+			EXPECT_EQ(mesh_detail::Finest(vanilla, false).mesh, vanilla.mesh);
+			const auto finest = mesh_detail::Finest(vanilla, true);
+			// The fade and the end of the draw do not change: far villagers still change into their small shadows
+			EXPECT_EQ(finest.alpha, vanilla.alpha);
+			EXPECT_EQ(finest.mesh.has_value(), vanilla.mesh.has_value());
+			if (finest.mesh.has_value())
+			{
+				EXPECT_EQ(*finest.mesh, Mesh::High);
+			}
+		}
+	}
+}

@@ -699,7 +699,8 @@ entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 	// Each player's town list in turn and the neutral list last: the first met wins a tie
 	ecs::player_towns::ForEachInOrder(registry, [&](entt::entity entity) {
 		const auto* at = registry.TryGet<const Transform>(entity);
-		if (at == nullptr)
+		// A town that is surely not nearer than the nearest so far does not change the result
+		if (at == nullptr || gutils::SurelyNotNearer(glm::xz(point), glm::xz(at->position), best))
 		{
 			return;
 		}
@@ -1466,6 +1467,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		if (commands.effect == creature_mind::Effect::Observed && commands.effectObject.has_value())
 		{
 			const auto thing = static_cast<entt::entity>(*commands.effectObject);
+			// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 			if (const auto belief = BeliefOf(registry, thing, entity))
 			{
 				mind.observedKinds.insert(belief->type);

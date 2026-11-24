@@ -44,6 +44,7 @@
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -608,6 +609,25 @@ void GuidanceSystem::SayOneOff(guidance::OneOff oneOff)
 		{
 			again->oneOffSaid.at(static_cast<size_t>(oneOff)) = true;
 		}
+	}
+}
+
+void GuidanceSystem::WatchPlayer(PlayerNames player)
+{
+	if (!guidance::HandWatchTurn(Turn()) || player == OwnPlayer())
+	{
+		return;
+	}
+	const auto hand = ecs::PlayerHandOf(player);
+	if (!hand.has_value())
+	{
+		return;
+	}
+	// Off the world, the point under the cursor is the origin of the world
+	const auto point = ReportedPointUnderCursor().value_or(glm::vec3(0.0f));
+	if (guidance::HandWatches(gutils::GetDistanceInMetres(*hand, point)))
+	{
+		SayOneOff(guidance::OneOff::HandNearby);
 	}
 }
 

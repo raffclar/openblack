@@ -171,6 +171,7 @@ Control* Dialog::HitTest(glm::ivec2 point) const
 void Dialog::MouseMove(glm::ivec2 point)
 {
 	_pointer = point;
+	_focusLit = false;
 	for (const auto& control : _controls)
 	{
 		control->MouseMove(point);
@@ -305,6 +306,21 @@ bool Dialog::KeyDown(int key, bool shift)
 	return false;
 }
 
+bool Dialog::ActivateFocused()
+{
+	if (_focused == nullptr || !_focused->visible)
+	{
+		return false;
+	}
+	const auto kind = _focused->GetKind();
+	if (kind != "button" && kind != "check box")
+	{
+		return false;
+	}
+	_focused->Activate(_pointer);
+	return true;
+}
+
 void Dialog::MoveFocus(bool backwards)
 {
 	// The controls in the order of Tab
@@ -330,6 +346,7 @@ void Dialog::MoveFocus(bool backwards)
 	{
 		return;
 	}
+	// NOLINTNEXTLINE(modernize-avoid-c-arrays): a vector of bool keeps bits, not values of bool
 	const auto canFocus = std::make_unique<bool[]>(order.size());
 	std::optional<size_t> focus;
 	for (size_t i = 0; i < order.size(); ++i)
@@ -403,7 +420,8 @@ void Dialog::Draw(const DialogPainter& painter, bool active) const
 			{
 				painter.SetClip(control->clip);
 			}
-			control->Draw(painter, active && _hovered == c, active && _focused == c, active && _pressed == c);
+			const bool lit = _hovered == c || (_focusLit && _focused == c);
+			control->Draw(painter, active && lit, active && _focused == c, active && _pressed == c);
 			if (control->clip.has_value())
 			{
 				painter.SetClip(std::nullopt);

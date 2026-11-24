@@ -32,7 +32,7 @@ void IncomingMessageSystem::AddWeather(std::u16string_view place, uint8_t pictur
 {
 	// A text table that is too short gives its first text
 	const std::u16string_view heading =
-	    _texts != nullptr ? std::u16string_view(_texts->GetHelpText(incoming_messages::k_WeatherHeadingText).text)
+	    _texts != nullptr ? std::u16string_view {_texts->GetHelpText(incoming_messages::k_WeatherHeadingText).text}
 	                      : std::u16string_view {};
 	Add(incoming_messages::Kind::Weather, incoming_messages::WeatherText(heading, place), picture);
 }

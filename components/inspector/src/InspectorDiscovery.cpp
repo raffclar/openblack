@@ -205,7 +205,7 @@ std::filesystem::path discovery::ExecutablePath()
 		if (length < buffer.size())
 		{
 			buffer.resize(length);
-			return std::filesystem::path(buffer);
+			return {buffer};
 		}
 		buffer.resize(buffer.size() * 2);
 	}
@@ -320,7 +320,7 @@ discovery::Revision discovery::ReadRevision(const std::filesystem::path& worktre
 		{
 			return revision;
 		}
-		gitDir = FolderFrom(worktree, std::string_view(line).substr(k_GitDir.size()));
+		gitDir = FolderFrom(worktree, std::string_view {line}.substr(k_GitDir.size()));
 	}
 	// Refs live in the folder shared by every worktree of the checkout
 	const auto common = FirstLine(gitDir / "commondir");
@@ -353,7 +353,7 @@ discovery::Revision discovery::ReadRevision(const std::filesystem::path& worktre
 			line.pop_back();
 		}
 		const auto space = line.find(' ');
-		if (space != std::string::npos && std::string_view(line).substr(space + 1) == ref)
+		if (space != std::string::npos && std::string_view {line}.substr(space + 1) == ref)
 		{
 			revision.commit = line.substr(0, space);
 			break;

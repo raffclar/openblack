@@ -10,6 +10,7 @@
 #include "CreatureBlendStore.h"
 
 #include <cmath>
+#include <cstring>
 
 #include <algorithm>
 #include <bit>
@@ -130,7 +131,8 @@ Variant VariantOf(Stores& stores, const CreatureRig& rig, CreatureRig::Mesh mesh
 	{
 		stores.adjusted.insert_or_assign(
 		    missing->key,
-		    AdjustmentOf(*missing, creature_animation::AdjustFromStand(*missing->base, *missing->baseStand, *missing->stand)));
+		    AdjustmentOf(*missing, creature_animation::AdjustFromStand(*missing->base, TurnsOf(stores, *missing->base),
+		                                                               *missing->baseStand, *missing->stand)));
 	}
 	return FindVariant(stores, rig, mesh, index);
 }
@@ -142,32 +144,57 @@ const Animation& BaseStandOf(const CreatureRig& rig, const Animation& base)
 	return stand != nullptr ? *stand : base;
 }
 
-/// The base animation blended toward the two variants as the body is drawn
-Animation BlendVariants(const Animation& base, const Animation& baseStand, const creature_morph::Morph& morph,
-                        const Variant& evilGood, const Variant& thinFat)
+/// True when the stores made the kept turns from the angles that the animation has now. The bits must be the same, thus
+/// the stores do not give the turn of minus zero for plus zero.
+bool SameAngles(const KeptTurns& kept, const Animation& animation)
 {
-	return creature_animation::Blend(base, baseStand,
-	                                 {.animation = evilGood.animation,
-	                                  .stand = evilGood.stand,
-	                                  .weight = evilGood.animation != nullptr ? std::abs(morph.evilGood) : 0.0f},
-	                                 {.animation = thinFat.animation,
-	                                  .stand = thinFat.stand,
-	                                  .weight = thinFat.animation != nullptr ? std::abs(morph.thinFat) : 0.0f});
+	const auto joints = animation.rotatedJoints.size();
+	if (kept.angles.size() != joints * animation.frames.size())
+	{
+		return false;
+	}
+	for (size_t f = 0; f < animation.frames.size() && joints != 0; ++f)
+	{
+		if (std::memcmp(&kept.angles[f * joints], animation.frames[f].eulerAngles.data(), joints * sizeof(glm::vec3)) != 0)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
-/// The frame turns of the animations that a Prepare uses, one time for each animation
-using TurnsOfAnimations = std::unordered_map<const Animation*, std::vector<Matrix>>;
-
-/// The frame turns of the animation, or none when the Prepare did not make them
-std::span<const Matrix> TurnsOf(const TurnsOfAnimations& turns, const Animation* animation)
+/// The frame turns of the animation and the angles that they come from
+KeptTurns MakeTurns(const Animation& animation)
 {
-	const auto found = turns.find(animation);
-	return found != turns.end() ? std::span<const Matrix>(found->second) : std::span<const Matrix> {};
+	KeptTurns made {.angles = {}, .turns = creature_animation::FrameTurns(animation)};
+	const auto joints = animation.rotatedJoints.size();
+	made.angles.reserve(joints * animation.frames.size());
+	for (const auto& frame : animation.frames)
+	{
+		made.angles.insert(made.angles.end(), frame.eulerAngles.begin(),
+		                   frame.eulerAngles.begin() + static_cast<std::ptrdiff_t>(joints));
+	}
+	return made;
 }
 
-/// The same blend as BlendVariants, with the frame turns that the Prepare made
-Animation BlendVariants(const Animation& base, const Animation& baseStand, const creature_morph::Morph& morph,
-                        const Variant& evilGood, const Variant& thinFat, const TurnsOfAnimations& turns)
+/// The kept frame turns of the animation, or none when the stores have no turns from its angles now. It changes
+/// nothing, so many threads can find turns at the same time.
+std::span<const Matrix> FoundTurns(const Stores& stores, const Animation* animation)
+{
+	if (animation == nullptr)
+	{
+		return {};
+	}
+	const auto found = stores.turns.find(animation);
+	return found != stores.turns.end() && SameAngles(found->second, *animation) ? std::span<const Matrix>(found->second.turns)
+	                                                                            : std::span<const Matrix> {};
+}
+
+/// The base animation blended toward the two variants as the body is drawn, with the frame turns of the animations. A
+/// blend with no turns makes them itself, with the same bits.
+Animation BlendVariants(const Animation& base, std::span<const Matrix> baseTurns, const Animation& baseStand,
+                        const creature_morph::Morph& morph, const Variant& evilGood, std::span<const Matrix> evilGoodTurns,
+                        const Variant& thinFat, std::span<const Matrix> thinFatTurns)
 {
 	const auto weightOf = [](const Variant& variant, float value) {
 		return variant.animation != nullptr ? std::abs(value) : 0.0f;
@@ -175,14 +202,20 @@ Animation BlendVariants(const Animation& base, const Animation& baseStand, const
 	const creature_animation::BlendTerm towardsEvilGood {.animation = evilGood.animation,
 	                                                     .stand = evilGood.stand,
 	                                                     .weight = weightOf(evilGood, morph.evilGood),
-	                                                     .turns = TurnsOf(turns, evilGood.animation)};
+	                                                     .turns = evilGoodTurns};
 	const creature_animation::BlendTerm towardsThinFat {.animation = thinFat.animation,
 	                                                    .stand = thinFat.stand,
 	                                                    .weight = weightOf(thinFat, morph.thinFat),
-	                                                    .turns = TurnsOf(turns, thinFat.animation)};
-	const auto baseTurns = TurnsOf(turns, &base);
+	                                                    .turns = thinFatTurns};
 	return baseTurns.empty() ? creature_animation::Blend(base, baseStand, towardsEvilGood, towardsThinFat)
 	                         : creature_animation::Blend(base, baseTurns, baseStand, towardsEvilGood, towardsThinFat);
+}
+
+/// The frame turns of a side of a blend, when the blend uses them
+std::span<const Matrix> SideTurns(Stores& stores, const Variant& variant)
+{
+	return variant.animation != nullptr && !variant.animation->frames.empty() ? TurnsOf(stores, *variant.animation)
+	                                                                          : std::span<const Matrix> {};
 }
 
 } // namespace
@@ -195,6 +228,16 @@ BlendKey creature_blends::KeyOf(const CreatureRig& rig, const creature_morph::Mo
 	        .index = index};
 }
 
+std::span<const Matrix> creature_blends::TurnsOf(Stores& stores, const Animation& animation)
+{
+	auto& kept = stores.turns[&animation];
+	if (!SameAngles(kept, animation))
+	{
+		kept = MakeTurns(animation);
+	}
+	return kept.turns;
+}
+
 std::optional<Animation> creature_blends::Blend(Stores& stores, const CreatureRig& rig, const creature_morph::Morph& morph,
                                                 size_t index)
 {
@@ -205,7 +248,16 @@ std::optional<Animation> creature_blends::Blend(Stores& stores, const CreatureRi
 	}
 	const auto evilGood = VariantOf(stores, rig, EvilGoodMesh(morph.evilGood), index);
 	const auto thinFat = VariantOf(stores, rig, ThinFatMesh(morph.thinFat), index);
-	return BlendVariants(*base, BaseStandOf(rig, *base), morph, evilGood, thinFat);
+	const auto& baseStand = BaseStandOf(rig, *base);
+	// A body with no shape moves as the base, and the blend uses no turns
+	if ((evilGood.animation == nullptr || morph.evilGood == 0.0f) && (thinFat.animation == nullptr || morph.thinFat == 0.0f))
+	{
+		return BlendVariants(*base, {}, baseStand, morph, evilGood, {}, thinFat, {});
+	}
+	// The spans stay valid, because each call is for another animation or for the same animation with the same angles
+	const auto evilGoodTurns = SideTurns(stores, evilGood);
+	const auto thinFatTurns = SideTurns(stores, thinFat);
+	return BlendVariants(*base, TurnsOf(stores, *base), baseStand, morph, evilGood, evilGoodTurns, thinFat, thinFatTurns);
 }
 
 std::optional<Animation> creature_blends::KeptBlend(Stores& stores, const CreatureRig& rig, const creature_morph::Morph& morph,
@@ -261,11 +313,12 @@ void creature_blends::Prepare(Stores& stores, std::span<const Wanted> wanted, Wo
 	}
 	// The frame turns of each animation that the blends and the adjustments use, one time for each animation. The
 	// creatures of a species share the base animations and the variants, so this does less work than each blend alone.
-	// A variant that the adjustments make again gets its turns after its adjustment.
-	TurnsOfAnimations turns;
+	// The stores keep the turns for the next Prepare and the next turn. A variant that the adjustments make again gets
+	// its turns after its adjustment.
 	std::vector<const Animation*> turned;
-	const auto turn = [&turns, &turned](const Animation* animation) {
-		if (animation != nullptr && turns.try_emplace(animation).second)
+	const auto turn = [&stores, &turned](const Animation* animation) {
+		if (animation != nullptr && FoundTurns(stores, animation).empty() &&
+		    std::ranges::find(turned, animation) == turned.end())
 		{
 			turned.push_back(animation);
 		}
@@ -286,42 +339,42 @@ void creature_blends::Prepare(Stores& stores, std::span<const Wanted> wanted, Wo
 	{
 		turn(sources.base);
 	}
-	std::vector<std::vector<Matrix>> madeTurns(turned.size());
-	workers.ForEach(turned.size(), [&turned, &madeTurns](size_t index, size_t /*lane*/) {
-		madeTurns[index] = creature_animation::FrameTurns(*turned[index]);
-	});
+	std::vector<KeptTurns> madeTurns(turned.size());
+	workers.ForEach(turned.size(),
+	                [&turned, &madeTurns](size_t index, size_t /*lane*/) { madeTurns[index] = MakeTurns(*turned[index]); });
 	for (size_t i = 0; i < turned.size(); ++i)
 	{
-		turns.insert_or_assign(turned[i], std::move(madeTurns[i]));
+		stores.turns.insert_or_assign(turned[i], std::move(madeTurns[i]));
 	}
 
 	std::vector<Animation> adjusted(adjustments.size());
-	std::vector<std::vector<Matrix>> adjustedTurns(adjustments.size());
-	workers.ForEach(adjustments.size(), [&adjustments, &adjusted, &adjustedTurns, &turns](size_t index, size_t /*lane*/) {
+	std::vector<KeptTurns> adjustedTurns(adjustments.size());
+	workers.ForEach(adjustments.size(), [&adjustments, &adjusted, &adjustedTurns, &stores](size_t index, size_t /*lane*/) {
 		const auto& sources = adjustments[index];
-		const auto baseTurns = TurnsOf(turns, sources.base);
+		const auto baseTurns = FoundTurns(stores, sources.base);
 		adjusted[index] =
 		    baseTurns.empty()
 		        ? creature_animation::AdjustFromStand(*sources.base, *sources.baseStand, *sources.stand)
 		        : creature_animation::AdjustFromStand(*sources.base, baseTurns, *sources.baseStand, *sources.stand);
-		adjustedTurns[index] = creature_animation::FrameTurns(adjusted[index]);
+		adjustedTurns[index] = MakeTurns(adjusted[index]);
 	});
 	for (size_t i = 0; i < adjustments.size(); ++i)
 	{
 		const auto& kept =
 		    stores.adjusted.insert_or_assign(adjustments[i].key, AdjustmentOf(adjustments[i], std::move(adjusted[i])))
 		        .first->second;
-		turns.insert_or_assign(&kept->animation, std::move(adjustedTurns[i]));
+		stores.turns.insert_or_assign(&kept->animation, std::move(adjustedTurns[i]));
 	}
 
-	// Then the blends. The threads only read the stores and the turns.
+	// Then the blends. The threads only read the stores.
 	std::vector<Animation> made(blends.size());
-	workers.ForEach(blends.size(), [&stores, &blends, &made, &turns](size_t index, size_t /*lane*/) {
+	workers.ForEach(blends.size(), [&stores, &blends, &made](size_t index, size_t /*lane*/) {
 		const auto& [rig, morph, animation] = blends[index];
 		const auto& base = *rig->GetAnimation(CreatureRig::Mesh::Base, animation);
-		made[index] = BlendVariants(base, BaseStandOf(*rig, base), morph,
-		                            FindVariant(stores, *rig, EvilGoodMesh(morph.evilGood), animation),
-		                            FindVariant(stores, *rig, ThinFatMesh(morph.thinFat), animation), turns);
+		const auto evilGood = FindVariant(stores, *rig, EvilGoodMesh(morph.evilGood), animation);
+		const auto thinFat = FindVariant(stores, *rig, ThinFatMesh(morph.thinFat), animation);
+		made[index] = BlendVariants(base, FoundTurns(stores, &base), BaseStandOf(*rig, base), morph, evilGood,
+		                            FoundTurns(stores, evilGood.animation), thinFat, FoundTurns(stores, thinFat.animation));
 	});
 	for (size_t i = 0; i < blends.size(); ++i)
 	{

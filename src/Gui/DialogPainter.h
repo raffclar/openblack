@@ -118,7 +118,7 @@ public:
 	/// Where a point between the pixels of the screen, such as an edge of the screen, is in the dialog space
 	[[nodiscard]] glm::ivec2 EdgeToDialog(glm::ivec2 screen) const;
 	/// Where a point of the dialog space is on the screen
-	[[nodiscard]] glm::ivec2 ToScreenPoint(glm::ivec2 dialog) const { return glm::ivec2(ToScreen(glm::vec2(dialog))); }
+	[[nodiscard]] glm::ivec2 ToScreenPoint(glm::ivec2 dialog) const { return {ToScreen(glm::vec2(dialog))}; }
 
 	/// From 0 to 1: how opaque everything drawn is
 	void SetAlpha(float alpha) const noexcept { _alpha = alpha; }

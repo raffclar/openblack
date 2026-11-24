@@ -248,6 +248,19 @@ TEST(GuidanceRules, OneOffs)
 	EXPECT_FALSE(OneOffSaid(0.11f, 0.1f));
 }
 
+TEST(GuidanceRules, TheAdvisorsWatchTheOtherHandsOnceInTenThousandTurns)
+{
+	EXPECT_TRUE(HandWatchTurn(0));
+	EXPECT_FALSE(HandWatchTurn(1));
+	EXPECT_FALSE(HandWatchTurn(9999));
+	EXPECT_TRUE(HandWatchTurn(10000));
+	EXPECT_TRUE(HandWatchTurn(30000));
+	// A hand nearer than 100 metres is near
+	EXPECT_TRUE(HandWatches(0.0f));
+	EXPECT_TRUE(HandWatches(99.99f));
+	EXPECT_FALSE(HandWatches(100.0f));
+}
+
 TEST(GuidanceRules, ClockNight)
 {
 	EXPECT_TRUE(ClockSaysNight(0, 0));

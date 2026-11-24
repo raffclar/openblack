@@ -291,7 +291,7 @@ std::u16string openblack::gui::ConvertScriptText(std::u16string_view text)
 std::u16string_view TextDatabase::Get(std::string_view name) const
 {
 	const auto found = _texts.find(std::string(name));
-	return found != _texts.end() ? std::u16string_view(found->second) : std::u16string_view();
+	return found != _texts.end() ? std::u16string_view {found->second} : std::u16string_view();
 }
 
 std::string openblack::gui::ToUtf8(std::u16string_view text)

@@ -68,7 +68,7 @@ std::string MiracleName(MagicType type)
 		return fmt::format("{}", static_cast<int>(type));
 	}
 	const auto& name = magic::GetMagicEffectInfo(Locator::infoConstants::value(), type).debugString;
-	return std::string(name.data(), strnlen(name.data(), name.size()));
+	return {name.data(), strnlen(name.data(), name.size())};
 }
 
 /// The nearest creature to a point, if any

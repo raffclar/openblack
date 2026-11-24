@@ -245,6 +245,11 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 			    break;
 		    case player_turn::Part::Influence:
 			    NotePlayerInfluence(player);
+			    // Then the advisors of this computer can see the hand of the player near the point under the cursor
+			    if (Locator::guidanceSystem::has_value())
+			    {
+				    Locator::guidanceSystem::value().WatchPlayer(player);
+			    }
 			    break;
 		    }
 	    },
@@ -1403,7 +1408,7 @@ std::optional<SplitTurn> StartTurn(TurnViewInterface& view, MindFrameBudget* bud
 
 std::optional<SplitTurn> ContinueTurn(TurnViewInterface& view, SplitTurn turn, MindFrameBudget* budget)
 {
-	return PlayTurnPart(view, std::move(turn), budget);
+	return PlayTurnPart(view, turn, budget);
 }
 
 void PlayTurn(TurnViewInterface& view)

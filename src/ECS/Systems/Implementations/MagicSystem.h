@@ -448,6 +448,7 @@ private:
 	void AnnounceHeldMiracle(const components::SpellSeed& seed);
 	/// The hum of an armed seed, following the hand
 	void StartHoldLoop();
+	void PlayHoldLoop();
 	void StopHoldLoop();
 	/// The player's prayer power, if they have a store
 	[[nodiscard]] components::PrayerPower* PrayerOf(PlayerNames player) const;
@@ -556,8 +557,9 @@ private:
 	[[nodiscard]] bool HasActingHand() const;
 	/// The player whose hand holds the seed, if a hand holds it
 	[[nodiscard]] std::optional<PlayerNames> HolderOf(entt::entity seed) const;
-	/// Where the last report of the player put the left hand, none before the first report or off the land
-	[[nodiscard]] std::optional<glm::vec3> ReportedHandOf(PlayerNames player) const;
+	/// Where the turn has the left hand of the player (see ecs::PlayerHandOf), none at the origin of the
+	/// world. After the step of a computer mind, this is the hand of the god before the step.
+	[[nodiscard]] std::optional<glm::vec3> WorldHandOf(PlayerNames player) const;
 
 	GameMagicWorld _world;
 	magic::FlockMiracle _flocks;
@@ -618,6 +620,8 @@ private:
 	/// The hum that the press of an armed seed starts. After a use of the armed seed on a fireball, it continues until
 	/// the next let go of an armed seed.
 	entt::entity _holdLoop {entt::null};
+	/// The press started the hum, and its sound starts at the next game turn
+	bool _holdLoopWaits {false};
 	/// The pour of food or wood lifting and tipping the hand
 	magic::PourState _pour;
 	/// The creature that the pour of a phial follows: the hand stays at its head. Null when the pour follows no creature.

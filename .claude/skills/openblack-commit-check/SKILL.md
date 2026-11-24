@@ -85,6 +85,11 @@ Stage files by name; never `git add -A` or `git add .`.
 
 ## 5. Code checks
 
+- clang-tidy 17 on the lines you changed: the `pre-commit` hook runs `tools/githooks/tidy_gate.py staged`. A finding on a
+  changed line stops the commit. Fix the code. If the code must stay, add `NOLINT(check-name)` and a reason comment on
+  the same line or the line before. A `NOLINT` without a check name or a reason is a finding. The merge-train car runs
+  the same check. If the hook says clang-tidy 17 or the compile database is not found, set the values in
+  `tools/githooks/README.md`, then run the check by hand before you push.
 - Whole-file `clang-format -i` on every touched C++ file (`tools.clangFormat` in `.claude/openblack.local.json`).
 - New files carry the header `Copyright (c) 2018-2026 openblack developers`.
 - Comments follow strict ASD-STE100 Simplified Technical English and describe behaviour: no addresses, Mac symbols, assembly or vanilla internal names (skill `openblack-code-comments`).

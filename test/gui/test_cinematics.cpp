@@ -131,6 +131,8 @@ TEST(CinemaBars, TheTurnsAloneFinishTheSlide)
 		while (!bars.IsTransitionFinished())
 		{
 			// The frames between two turns slide the drawn bars only
+			// The test adds the step on purpose, and the values must stay the same.
+			// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 			for (float spent = 0.0f; spent < 100.0f; spent += frameMs)
 			{
 				bars.Update(frameMs, 1.0f);

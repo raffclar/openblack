@@ -12,7 +12,9 @@
 
 #include "Renderer.h"
 
+#include <cstdarg>
 #include <cstdint>
+#include <cstdio>
 
 #include <algorithm>
 #include <array>
@@ -170,13 +172,19 @@ struct BgfxCallback: public bgfx::CallbackI
 	                va_list argList) override
 	{
 		std::array<char, 0x2000> temp;
+		std::vector<char> large;
 		char* out = temp.data();
+		// The first write uses the argument list, so a long text writes again from a copy of the list
+		va_list again;
+		va_copy(again, argList);
 		int32_t len = vsnprintf(out, temp.size(), format, argList);
-		if (static_cast<int32_t>(temp.size()) < len)
+		if (len >= static_cast<int32_t>(temp.size()))
 		{
-			out = reinterpret_cast<char*>(alloca(len + 1));
-			len = vsnprintf(out, len, format, argList);
+			large.resize(static_cast<size_t>(len) + 1);
+			out = large.data();
+			len = vsnprintf(out, large.size(), format, again);
 		}
+		va_end(again);
 		if (len > 0)
 		{
 			out[len] = '\0';

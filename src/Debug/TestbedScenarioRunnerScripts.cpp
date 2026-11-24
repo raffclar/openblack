@@ -143,6 +143,7 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case ScriptArgument::Kind::Result:
 		return _lastNativeResult;
 	case ScriptArgument::Kind::LastResult:

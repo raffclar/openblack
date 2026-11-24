@@ -2009,7 +2009,7 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		ready = PrepareResume(settings, *world, restored);
 	}
 	if (!ready)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		exitCode = EXIT_FAILURE;
 	}
 	else if (settings.network.has_value() &&

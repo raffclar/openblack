@@ -50,5 +50,5 @@ std::optional<water_rings::Ring> swimmer_rules::Ring(int32_t& timer, int32_t fra
 
 glm::vec3 swimmer_rules::RingPlace(const glm::mat4& model, const glm::mat4& bone)
 {
-	return glm::vec3(model * bone[3]);
+	return {model * bone[3]};
 }

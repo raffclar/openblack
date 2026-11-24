@@ -22,6 +22,7 @@
 #include <entt/signal/sigh.hpp>
 
 #include "ECS/DrawLayoutComponents.h"
+#include "ECS/Reflection/RowMarks.h"
 #include "ECS/RegistryContext.h"
 
 namespace openblack
@@ -51,9 +52,32 @@ template <typename Id>
 struct Kept;
 }
 
+namespace openblack::ecs::components
+{
+struct FixedOutline;
+struct MapCellResident;
+struct MapPlace;
+} // namespace openblack::ecs::components
+
 namespace openblack::ecs
 {
 struct KeptStores;
+
+/// The components whose every write marks the row of the entity for the hash of the world (see reflection::RowMarks).
+/// The registry gives these components only for a read. A write goes through Assign, AssignOrReplace or Write. These
+/// components have large rows that seldom change.
+template <typename Component>
+inline constexpr bool k_MarksHashRows = false;
+template <>
+inline constexpr bool k_MarksHashRows<components::FixedOutline> = true;
+template <>
+inline constexpr bool k_MarksHashRows<components::MapCellResident> = true;
+template <>
+inline constexpr bool k_MarksHashRows<components::MapPlace> = true;
+
+/// A request for a component that can change it with no mark of its row
+template <typename Component>
+inline constexpr bool k_WritesWithNoMark = !std::is_const_v<Component> && k_MarksHashRows<std::remove_cv_t<Component>>;
 
 class Registry
 {
@@ -135,6 +159,7 @@ public:
 	template <typename... Components>
 	decltype(auto) Get(entt::entity entity)
 	{
+		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
 		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
@@ -145,6 +170,7 @@ public:
 	template <typename... Components>
 	decltype(auto) TryGet(entt::entity entity)
 	{
+		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
 		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
@@ -160,8 +186,20 @@ public:
 	template <typename... Components, typename... Exclude, typename Func>
 	decltype(auto) Each(Func func, Exclude... exclude)
 	{
+		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
 		return _registry.view<Components...>(exclude...).each(func);
 	}
+	/// Changes the component of an entity in place, and marks the row for the hash of the world. The function gets the
+	/// component and gives the result.
+	template <typename Component, typename Func>
+	decltype(auto) Write(entt::entity entity, Func func)
+	{
+		auto& value = _registry.get<Component>(entity);
+		_rowMarks.Mark(entt::type_hash<Component>::value(), entity);
+		return func(value);
+	}
+	/// Gives the marks of the rows since the last call to the marks of a hash memo (see reflection::RowMarks::GiveTo)
+	void GiveRowMarks(reflection::RowMarks& taker) { _rowMarks.GiveTo(taker, &_registry); }
 	template <typename... Components, typename... Exclude, typename Func>
 	[[nodiscard]] decltype(auto) Each(Func func, Exclude... exclude) const
 	{
@@ -206,7 +244,7 @@ public:
 	/// The registry beneath, read without knowing its component types, as the debug inspector lists entities
 	[[nodiscard]] const entt::registry& Underlying() const { return _registry; }
 	/// The same written to, as the debug inspector adds, removes and sets components by their names; whoever writes
-	/// through it marks what is drawn as changed
+	/// through it marks what is drawn as changed. A direct write to a value also calls StoresWritten.
 	[[nodiscard]] entt::registry& Underlying() { return _registry; }
 	/// Told whenever an entity gains a component, or loses one (also as it is destroyed)
 	template <typename Component>
@@ -297,6 +335,19 @@ private:
 		_registry.on_destroy<Component>().template connect<&Registry::LivingChanged>(*this);
 	}
 	template <typename Component>
+	void HashRowChanged(entt::registry& /*registry*/, entt::entity entity)
+	{
+		_rowMarks.Mark(entt::type_hash<Component>::value(), entity);
+	}
+	/// Each new row of the component and each replace of a row marks the row for the hash of the world
+	template <typename Component>
+	void MarkHashRows()
+	{
+		_rowMarks.Follow(entt::type_hash<Component>::value());
+		_registry.on_construct<Component>().template connect<&Registry::HashRowChanged<Component>>(*this);
+		_registry.on_update<Component>().template connect<&Registry::HashRowChanged<Component>>(*this);
+	}
+	template <typename Component>
 	void ConnectTownMember()
 	{
 		_registry.on_construct<Component>().template connect<&Registry::TownMemberChanged>(*this);
@@ -315,6 +366,8 @@ private:
 	std::unique_ptr<reaction_groups::Counts> _reactionGroups;
 	std::unique_ptr<KeptStores> _kept;
 	entt::sigh<void(entt::entity)> _destroying;
+	/// The rows of the components of k_MarksHashRows that can have a change since the last hash of the world
+	reflection::RowMarks _rowMarks;
 	bool _freshIdsAtNextReset {false};
 };
 

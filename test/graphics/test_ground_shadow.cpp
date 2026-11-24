@@ -426,6 +426,7 @@ GroundShadow::BlockSights AllShown()
 
 GroundShadow::BlockSight& SightOf(GroundShadow::BlockSights& sights, int x, int z)
 {
+	// NOLINTNEXTLINE(bugprone-misplaced-widening-cast): x and z are small and not negative
 	return sights.at(static_cast<size_t>((x * GroundShadow::k_BlocksPerSide) + z));
 }
 } // namespace

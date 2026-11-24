@@ -473,7 +473,7 @@ void EditorWindow::PickAt(EditorContext& context, glm::vec2 screen) noexcept
 			selection.Toggle(*picked);
 		}
 		else if (_pickAdd)
-		{
+		{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 			selection.Add(*picked);
 		}
 		else if (tool != Tool::Select && selection.IsSelected(*picked))
@@ -1181,7 +1181,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 
 	auto& history = system.GetHistory();
 	// In a network game undo and redo wait for the turn of the last change of the editor
-	const auto waitNote = history.Waiting() ? " (waits for the turn of the last change)" : "";
+	const auto* const waitNote = history.Waiting() ? " (waits for the turn of the last change)" : "";
 	ImGui::BeginDisabled(!history.CanUndo());
 	if (ImGui::Button("Undo"))
 	{

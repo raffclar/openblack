@@ -208,7 +208,7 @@ std::optional<creature_learning::Context> creature_learning::Remember(std::vecto
 		forgotten = contexts.front();
 		contexts.erase(contexts.begin(), contexts.begin() + static_cast<std::ptrdiff_t>(contexts.size() - k_MaxContexts + 1));
 	}
-	contexts.push_back(std::move(context));
+	contexts.push_back(context);
 	return forgotten;
 }
 

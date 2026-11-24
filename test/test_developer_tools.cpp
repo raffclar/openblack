@@ -419,7 +419,7 @@ TEST(DeveloperTools, ADeployedServerKeepsTheConditionsAndTheTimeLimitOfTheOperat
 	                                        "WC_KILL_NUM_VILLAGERS:\t\t1\t1\t500\t1 \t25\n"
 	                                        "WC_GROW_TREES:\t1\t1\t1000\t1\t100\n";
 	const auto request =
-	    openblack::sim_run::ParseConditions(std::string_view(kept.at(3)).substr(std::string_view("--conditions=").size()));
+	    openblack::sim_run::ParseConditions(std::string_view {kept.at(3)}.substr(std::string_view("--conditions=").size()));
 	ASSERT_TRUE(request.has_value());
 	EXPECT_EQ(request->limitsLand, "mpm_2p_1");
 	const auto limits = openblack::gui::multiplayer::FindConditions(k_Template, request->limitsLand);
@@ -569,4 +569,42 @@ TEST(DeveloperTools, ABuildWithNoInspectorNamesEachOptionThatNeedsIt)
 	const std::vector<std::string> two {"sim-input", "inspect-port"};
 	EXPECT_EQ(*InspectorOptionsError(two), "This build has no inspector. It cannot do the options --sim-input, --inspect-port. "
 	                                       "Use a desktop build that has the inspector.");
+}
+
+namespace
+{
+std::vector<std::string> Joined(const std::vector<std::string_view>& arguments)
+{
+	return JoinOptionalValues(arguments, k_OptionalValueOptions);
+}
+} // namespace
+
+TEST(DeveloperTools, AnOptionWithAnOptionalValueTakesTheNextWordAsItsValue)
+{
+	EXPECT_EQ(Joined({"openblack", "--turn-beside-draw", "off", "-n", "5"}),
+	          (std::vector<std::string> {"openblack", "--turn-beside-draw=off", "-n", "5"}));
+	EXPECT_EQ(Joined({"openblack", "--internet-weather", "false"}),
+	          (std::vector<std::string> {"openblack", "--internet-weather=false"}));
+}
+
+TEST(DeveloperTools, AnOptionWithAnOptionalValueStaysAloneWhenNoValueFollows)
+{
+	EXPECT_EQ(Joined({"openblack", "--turn-beside-draw", "-n", "5"}),
+	          (std::vector<std::string> {"openblack", "--turn-beside-draw", "-n", "5"}));
+	EXPECT_EQ(Joined({"openblack", "--turn-beside-draw"}), (std::vector<std::string> {"openblack", "--turn-beside-draw"}));
+	// A word that is not a value of the option stays a separate argument
+	EXPECT_EQ(Joined({"openblack", "--turn-beside-draw", "false"}),
+	          (std::vector<std::string> {"openblack", "--turn-beside-draw", "false"}));
+}
+
+TEST(DeveloperTools, AnOptionWithAValueAfterAnEqualsSignStaysAsItIs)
+{
+	EXPECT_EQ(Joined({"openblack", "--turn-beside-draw=off", "on"}),
+	          (std::vector<std::string> {"openblack", "--turn-beside-draw=off", "on"}));
+}
+
+TEST(DeveloperTools, TheArgumentsAfterTwoDashesStayAsTheyAre)
+{
+	EXPECT_EQ(Joined({"openblack", "--", "--turn-beside-draw", "off"}),
+	          (std::vector<std::string> {"openblack", "--", "--turn-beside-draw", "off"}));
 }

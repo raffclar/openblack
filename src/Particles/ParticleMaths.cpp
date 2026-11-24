@@ -59,7 +59,7 @@ constexpr std::array<uint8_t, 256> k_Permutation {
 
 glm::mat3 Rotation(float glmAngle, const glm::vec3& axis)
 {
-	return glm::mat3(portable_math::Rotate(glm::mat4(1.0f), glmAngle, axis));
+	return {portable_math::Rotate(glm::mat4(1.0f), glmAngle, axis)};
 }
 } // namespace
 

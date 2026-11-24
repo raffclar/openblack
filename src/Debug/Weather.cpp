@@ -177,6 +177,7 @@ void Weather::DrawAtCamera() noexcept
 	const auto flash = weather.GetLightningFlash(camera);
 	AmountBar("Flash", (flash * 100) / 255, ImVec4(1.0f, 0.95f, 0.55f, 1.0f));
 	ImGui::EndGroup();
+	// NOLINTNEXTLINE(bugprone-signed-char-misuse): the value is a signed byte, so the sign must stay
 	const auto temperature = static_cast<int>(here.temperature);
 	const auto cold = temperature < 0;
 	ImGui::TextColored(cold ? ImVec4(0.6f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%d C", temperature);
@@ -239,6 +240,7 @@ void Weather::DrawCustom() noexcept
 	// The sliders keep each value in their limits, also a typed value: each computer refuses a storm out of the limits
 	constexpr auto k_Clamp = ImGuiSliderFlags_AlwaysClamp;
 	const auto byteSlider = [](const char* label, int8_t& value, int min, int max, const char* format) {
+		// NOLINTNEXTLINE(bugprone-signed-char-misuse): the value is a signed byte, so the sign must stay
 		int wide = value;
 		if (ImGui::SliderInt(label, &wide, min, max, format, ImGuiSliderFlags_AlwaysClamp))
 		{

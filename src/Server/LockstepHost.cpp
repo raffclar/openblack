@@ -334,7 +334,7 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std:
 		serverBuild = online::build_id::Own();
 		const auto found = _peers.find(connection);
 		const auto builds =
-		    BuildsText(found != _peers.end() ? std::string_view(found->second.build) : std::string_view(), serverBuild);
+		    BuildsText(found != _peers.end() ? std::string_view {found->second.build} : std::string_view(), serverBuild);
 		text = text.empty() ? builds : text + "; " + builds;
 	}
 	Log(spdlog::level::info, fmt::format("The server refuses connection {} ({}): {}{}{}", connection, WhoIs(connection), reason,
@@ -761,7 +761,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	if (const auto refusal = lobby_game::BuildRefusal(_settings.buildId, join.build, _settings.lobby.has_value());
 	    refusal.has_value())
 	{
-		Log(spdlog::level::info, fmt::format("Connection {} has the build \"{}\", not the build \"{}\" of the server",
+		Log(spdlog::level::info, fmt::format(R"(Connection {} has the build "{}", not the build "{}" of the server)",
 		                                     connection, join.build, _settings.buildId));
 		Refuse(connection, *refusal);
 		return;
@@ -1353,6 +1353,7 @@ void LockstepHost::ObserverGone(uint8_t number)
 std::vector<uint8_t> LockstepHost::ObserverNumbers() const
 {
 	std::vector<uint8_t> numbers;
+	numbers.reserve(_observerBlocks.size());
 	for (const auto& [number, blocks] : _observerBlocks)
 	{
 		numbers.push_back(number);

@@ -779,6 +779,7 @@ void computer_world::CastAtPlace(RuleContext& context, const map_coords::MapCoor
 	const auto type = TypeOfIcon(icon);
 	// The miracle goes on the side of the place that faces the hand
 	const float angle = gutils::Get3DAngleFromXZ(place, context.state.hand.coords);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	const auto side = place + gutils::GetPosFromAngle(angle, radius);
 	switch (WayOf(type))
 	{

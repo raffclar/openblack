@@ -119,7 +119,7 @@ public:
 		{
 			return std::nullopt;
 		}
-		return std::string_view(*_contents);
+		return std::string_view {*_contents};
 	}
 
 private:

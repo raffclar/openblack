@@ -10,7 +10,9 @@
 #include "FileStream.h"
 
 #include <cassert>
+#include <cstring>
 
+#include <array>
 #include <stdexcept>
 
 #include <spdlog/fmt/fmt.h>
@@ -110,22 +112,22 @@ Stream& FileStream::Write(const uint8_t* buffer, std::size_t length)
 std::string FileStream::GetLine()
 {
 	constexpr int k_MaxLineLength = 1024;
-	char buffer[k_MaxLineLength];
-	if (fgets(buffer, k_MaxLineLength, _file) != nullptr)
+	std::array<char, k_MaxLineLength> buffer;
+	if (fgets(buffer.data(), k_MaxLineLength, _file) != nullptr)
 	{
 		// fgets() includes the newline character in the output,
 		// so we remove it if it's there
-		auto len = strlen(buffer);
+		auto len = strlen(buffer.data());
 		if (len > 0 && buffer[len - 1] == '\n')
 		{
 			buffer[len - 1] = '\0';
 		}
 
-		return std::string(buffer);
+		return {buffer.data()};
 	}
 
 	// EOF or error
-	return std::string();
+	return {};
 }
 
 bool FileStream::IsEndOfFile() const

@@ -813,3 +813,59 @@ bool MultiplayerBoxes::LobbyKeyDown(int key)
 	}
 	return false;
 }
+
+bool MultiplayerBoxes::ControllerButtonDown(int button)
+{
+	if (_frontEnd == nullptr || !IsLobbyBox())
+	{
+		return false;
+	}
+	// A question box over the screen takes the controller in place of the screen
+	auto* dialog = _message.has_value() ? &_message->answers : _dialog.get();
+	if (dialog == nullptr)
+	{
+		return false;
+	}
+	auto* focusedList = dynamic_cast<List*>(dialog->GetFocus());
+	const auto action = screens::ControllerActionOf(button, focusedList != nullptr && focusedList->TakesSelectionKeys());
+	if (action != screens::ControllerAction::None)
+	{
+		dialog->SetFocusLit(true);
+	}
+	switch (action)
+	{
+	case screens::ControllerAction::FocusNext:
+		dialog->KeyDown(SDLK_TAB, false);
+		return false;
+	case screens::ControllerAction::FocusPrevious:
+		dialog->KeyDown(SDLK_TAB, true);
+		return false;
+	case screens::ControllerAction::ListUp:
+	case screens::ControllerAction::ListDown:
+		dialog->KeyDown(action == screens::ControllerAction::ListUp ? SDLK_UP : SDLK_DOWN, false);
+		// The picked line takes effect as after a click, but for the maps of the room: A picks a map
+		if (focusedList != _mapList && focusedList->onClick)
+		{
+			focusedList->onClick();
+		}
+		return false;
+	case screens::ControllerAction::Back:
+		KeyDown(SDLK_ESCAPE, false);
+		return false;
+	case screens::ControllerAction::Accept:
+		if (focusedList != nullptr && focusedList == _mapList && focusedList->onClick)
+		{
+			focusedList->onClick();
+			return true;
+		}
+		if (dialog->ActivateFocused())
+		{
+			return true;
+		}
+		KeyDown(SDLK_RETURN, false);
+		return false;
+	case screens::ControllerAction::None:
+		break;
+	}
+	return false;
+}

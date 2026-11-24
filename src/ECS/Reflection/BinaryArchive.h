@@ -418,6 +418,7 @@ private:
 		LastPlan() = default;
 		LastPlan(const LastPlan&) noexcept {}
 		LastPlan(LastPlan&&) noexcept {}
+		// NOLINTNEXTLINE(bugprone-unhandled-self-assignment): a copy always clears the cache, also a copy to itself
 		LastPlan& operator=(const LastPlan&) noexcept
 		{
 			plan = nullptr;
@@ -872,11 +873,11 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 		out.WriteRaw(static_cast<std::conditional_t<std::is_signed_v<Type>, int64_t, uint64_t>>(value));
 	}
 	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		out.WriteRaw(value);
 	}
 	else if constexpr (std::is_same_v<Type, std::string> || std::is_same_v<Type, std::u16string>)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		out.WriteSize(value.size());
 		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
 	}
@@ -1063,7 +1064,7 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 		}
 	}
 	else if constexpr (detail::k_IsIndirect<Type>)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		out.Unsupported(entt::type_id<Type>().name());
 	}
 	else if constexpr (detail::k_IsDuration<Type>)
@@ -1138,7 +1139,7 @@ void Load(BinaryReader& in, Type& value)
 		}
 	}
 	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		in.ReadRaw(value);
 	}
 	else if constexpr (std::is_same_v<Type, std::string> || std::is_same_v<Type, std::u16string>)

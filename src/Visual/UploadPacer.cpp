@@ -16,6 +16,7 @@ using namespace openblack::graphics;
 namespace
 {
 /// The pacer the calling thread's uploads go through, if any: only loading threads have one
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): each thread that loads keeps its own pacer
 thread_local UploadPacer* t_Pacer = nullptr;
 } // namespace
 

@@ -290,6 +290,8 @@ TEST(PortableMath, FloatResultsAreTheExactValueRoundedOnce)
 
 TEST(PortableMath, FloatResultsAreTheDoubleResultRounded)
 {
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float x = -20.0f; x < 20.0f; x += 0.0137f)
 	{
 		EXPECT_EQ(portable_math::Sin(x), static_cast<float>(portable_math::Sin(static_cast<double>(x))));

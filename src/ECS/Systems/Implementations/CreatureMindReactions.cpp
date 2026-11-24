@@ -44,12 +44,12 @@
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
-#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -81,23 +81,6 @@ constexpr int32_t k_LeashCastCells = 64;
 constexpr std::string_view k_ExaminePlaceAction = "ExaminePos";
 constexpr std::string_view k_RunAwayFromPlaceAction = "RunAwayFromPos";
 
-/// The point that the interface of a player picks under the cursor, as the last report of the player's hand tells it.
-/// The turn reads the reports and never the pick of the cursor of this computer.
-std::optional<glm::vec3> ReportedPickOf(const ecs::Registry& registry, PlayerNames player)
-{
-	if (!Locator::handSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto hands = Locator::handSystem::value().GetHandsOf(player);
-	if (!hands.has_value())
-	{
-		return std::nullopt;
-	}
-	const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
-	return reported != nullptr ? std::optional(reported->collidePoint) : std::nullopt;
-}
 } // namespace
 
 void CreatureMindSystem::WatchMiracle(entt::entity creature, size_t miracle)
@@ -171,7 +154,7 @@ void CreatureMindSystem::CastOnLeashAfterReaction(entt::entity creature, size_t 
 	});
 	const auto& known = mind->learnt->knowledge.miraclesKnown;
 	state.knowsMiracle = miracle < known.size() && known.at(miracle);
-	if (const auto picked = ReportedPickOf(registry, body->owner); picked.has_value())
+	if (const auto picked = ecs::PlayerReportedPointOf(body->owner); picked.has_value())
 	{
 		state.pickedPoint = glm::vec2(picked->x, picked->z);
 	}
@@ -526,7 +509,9 @@ bool CreatureMindSystem::WeighWatchedCreature(entt::entity creature, CreatureMin
 		// Find the desire of the creature about the other creature. The other creature sees this creature, and finds
 		// its desire about this creature.
 		const auto mine = DesireAboutCreature(creature, mind, other, leftOut);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		ComeAcross(other, *otherMind, creature);
+		// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 		const auto theirs = DesireAboutCreature(other, *otherMind, creature, {});
 		if (!mine.has_value())
 		{

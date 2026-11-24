@@ -176,7 +176,7 @@ CreatureCaveEffects::CreatureCaveEffects(ecs::Registry& rooms, glm::vec3 fire)
 		spray.drift = {Random(0.0f, 1.0f) - 0.5f, Random(0.0f, 1.0f), Random(0.0f, 1.0f) - 0.5f};
 		spray.rising = true;
 		spray.size = k_SpraySize;
-		_spray.push_back(std::move(spray));
+		_spray.push_back(spray);
 	}
 
 	for (size_t i = 0; i < k_FireSmokes; ++i)
@@ -185,7 +185,7 @@ CreatureCaveEffects::CreatureCaveEffects(ecs::Registry& rooms, glm::vec3 fire)
 		smoke.place = fire + glm::vec3 {Random(-1.0f, 1.0f), Random(-1.0f, 1.0f) + 2.0f, Random(-1.0f, 1.0f)};
 		smoke.colour = k_FireSmokeColour;
 		smoke.size = k_FireSmokeSize;
-		_fireSmoke.push_back(std::move(smoke));
+		_fireSmoke.push_back(smoke);
 	}
 
 	_mistDome = LoadMistDome();

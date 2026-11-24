@@ -2122,3 +2122,154 @@ TEST(WorldArchive, TheHashLeavesOutTheRowsOfMarkedEntities)
 	EXPECT_EQ(HashWorld(marked, context, leaveOut, false, {}, &pool, nullptr, &memo).components,
 	          HashWorld(plain, context, {}).components);
 }
+
+namespace
+{
+
+/// The hash of a world with the marks of its rows: the source of the marks gives them to the memo before each hash
+struct MarkedHash
+{
+	entt::meta_ctx context;
+	entt::registry registry;
+	RowMarks source;
+	HashMemo memo;
+
+	MarkedHash()
+	{
+		Register(context);
+		source.Follow(entt::type_hash<FakeWalker>::value());
+		memo.checkMarks = true;
+	}
+	void Mark(entt::entity entity) { source.Mark(entt::type_hash<FakeWalker>::value(), entity); }
+	[[nodiscard]] WorldHashes Hash(WorkerPool* pool = nullptr)
+	{
+		source.GiveTo(memo.marks, &registry);
+		return HashWorld(registry, context, {}, false, {}, pool, nullptr, &memo);
+	}
+};
+
+} // namespace
+
+// A row with no mark gets its bytes from the last hash, with no save. With a mark on each changed row, the hash is the
+// same as the hash with no memo, with and without the threads.
+TEST(WorldArchive, TheHashTakesTheRowsWithNoMarkFromTheLastHash)
+{
+	for (const auto threads : {0u, 3u})
+	{
+		MarkedHash world;
+		std::optional<WorkerPool> pool;
+		if (threads != 0)
+		{
+			pool.emplace(threads);
+		}
+		auto* lanes = pool.has_value() ? &*pool : nullptr;
+		std::vector<entt::entity> made(300);
+		world.registry.create(made.begin(), made.end());
+		for (const auto entity : made)
+		{
+			world.registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+		}
+		const auto expectSame = [&]() {
+			EXPECT_EQ(HashWorld(world.registry, world.context).components, world.Hash(lanes).components);
+		};
+		// The first marks are not complete, so the first hash saves each row
+		expectSame();
+		EXPECT_EQ(world.memo.rowsTaken, 0u);
+		expectSame();
+		EXPECT_EQ(world.memo.rowsTaken, made.size());
+		// A changed row with a mark, a longer row, an added row and a removed row
+		world.registry.get<FakeWalker>(made[100]).name = "Tom";
+		world.Mark(made[100]);
+		world.registry.get<FakeWalker>(made[3]).name = "A much longer name than before";
+		world.Mark(made[3]);
+		const auto added = world.registry.create();
+		world.registry.emplace<FakeWalker>(added, SampleWalker(added, added));
+		world.Mark(added);
+		expectSame();
+		world.registry.destroy(made[200]);
+		expectSame();
+		EXPECT_EQ(world.memo.markMisses, 0u);
+	}
+}
+
+// The check of the marks finds a write that did not mark its row
+TEST(WorldArchive, TheCheckOfTheMarksFindsAWriteWithNoMark)
+{
+	MarkedHash world;
+	std::vector<entt::entity> made(4);
+	world.registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		world.registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	static_cast<void>(world.Hash());
+	static_cast<void>(world.Hash());
+	world.registry.get<FakeWalker>(made[2]).name = "Tom";
+	static_cast<void>(world.Hash());
+	EXPECT_EQ(world.memo.markMisses, 1u);
+}
+
+// The marks are usable only when the same source gave the last marks to the same memo, and a hash used them
+TEST(WorldArchive, TheMarksAreUsableOnlyWhenTheyFollowTheLastHash)
+{
+	MarkedHash world;
+	const auto entity = world.registry.create();
+	world.registry.emplace<FakeWalker>(entity, SampleWalker(entity, entity));
+	static_cast<void>(world.Hash());
+	static_cast<void>(world.Hash());
+	EXPECT_TRUE([&] {
+		world.source.GiveTo(world.memo.marks, &world.registry);
+		return world.memo.marks.Usable(&world.registry);
+	}());
+	// The marks are for one hash only, and for the registry of their source
+	EXPECT_FALSE(world.memo.marks.Usable(&world.context));
+	world.memo.marks.Used();
+	EXPECT_FALSE(world.memo.marks.Usable(&world.registry));
+	// A second give with no hash between: the memo does not have the bytes of the world of the first marks
+	world.source.GiveTo(world.memo.marks, &world.registry);
+	world.source.GiveTo(world.memo.marks, &world.registry);
+	EXPECT_FALSE(world.memo.marks.Usable(&world.registry));
+	// A write that the marks do not see
+	static_cast<void>(world.Hash());
+	world.source.Forget();
+	world.source.GiveTo(world.memo.marks, &world.registry);
+	EXPECT_FALSE(world.memo.marks.Usable(&world.registry));
+	// Another memo took the marks between
+	static_cast<void>(world.Hash());
+	HashMemo other;
+	world.source.GiveTo(other.marks, &world.registry);
+	world.source.GiveTo(world.memo.marks, &world.registry);
+	EXPECT_FALSE(world.memo.marks.Usable(&world.registry));
+}
+
+// A row that a marker leaves out of the hash moves the places of the rows after it. The hash takes a row of the last
+// hash only at the same place among the rows that it keeps, and the hash stays the same.
+TEST(WorldArchive, ARowThatAMarkerLeavesOutMovesThePlacesOfTheRowsAfterIt)
+{
+	MarkedHash world;
+	std::vector<entt::entity> made(8);
+	world.registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		world.registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	const std::array leaveOut {HashLeaveOut {.component = "*", .field = "", .marker = &world.registry.storage<FakeTag>()}};
+	const auto takenBy = [&]() {
+		const size_t before = world.memo.rowsTaken;
+		world.source.GiveTo(world.memo.marks, &world.registry);
+		EXPECT_EQ(HashWorld(world.registry, world.context, leaveOut).components,
+		          HashWorld(world.registry, world.context, leaveOut, false, {}, nullptr, nullptr, &world.memo).components);
+		return world.memo.rowsTaken - before;
+	};
+	EXPECT_EQ(takenBy(), 0u);
+	EXPECT_EQ(takenBy(), made.size());
+	// The marker comes and goes with no mark on the rows of the component. Only the rows before the row of the marked
+	// entity keep their places.
+	const auto before = world.registry.storage<FakeWalker>().index(made[2]);
+	world.registry.emplace<FakeTag>(made[2]);
+	EXPECT_EQ(takenBy(), before);
+	world.registry.remove<FakeTag>(made[2]);
+	EXPECT_EQ(takenBy(), before);
+	EXPECT_EQ(takenBy(), made.size());
+	EXPECT_EQ(world.memo.markMisses, 0u);
+}

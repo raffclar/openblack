@@ -77,6 +77,7 @@ View Step(const View& now, State& state, const Input& input)
 	const glm::vec3 gap {origin.x - focus.x, origin.y - focus.y, origin.z - focus.z};
 	const float distance = std::sqrt(((gap.z * gap.z) + (gap.y * gap.y)) + (gap.x * gap.x));
 	// The heading and the pitch of the focus as the eye sees it
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	const auto turned = script_camera::HeadingAndPitchFromPoints(focus, origin);
 	float heading = turned.heading;
 	float pitch = turned.pitch;

@@ -119,6 +119,7 @@ TEST(CreatureShownFace, AFaceThatTheWorldChangesInADifferentWayReplacesTheShownF
 	const creature_layers::FaceLayer shown {.current = 5, .timeMs = 120.0f, .wanted = 5, .remainingMs = 1800.0f};
 	EXPECT_EQ(creature_shown_face::AfterWorldWrites(shown, world, world), shown);
 	const auto written = creature_layers::PullFace(world, 3, 1000.0f, creature_face::Cue::Anger);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	EXPECT_EQ(creature_shown_face::AfterWorldWrites(shown, world, written), written);
 }
 

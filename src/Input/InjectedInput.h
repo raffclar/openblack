@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <bitset>
+#include <optional>
+#include <string_view>
 
 #include <SDL_keycode.h>
 #include <SDL_scancode.h>
@@ -35,6 +37,10 @@ void MarkPumped(SDL_Event& event);
 [[nodiscard]] bool IsPumped(const SDL_Event& event);
 /// Whether an event is the player's mouse or keyboard at work: moving, buttons, the wheel, keys and typing
 [[nodiscard]] bool IsPlayerDeviceEvent(const SDL_Event& event);
+
+/// The button of a game controller that a name gives, as SDL names the buttons ("a", "b", "dpup", "leftshoulder"); none
+/// for a name that is not a button
+[[nodiscard]] std::optional<uint8_t> ControllerButtonNamed(std::string_view name);
 
 /// The modifiers that the held keys make, as SDL's modifier bits: each Shift, Ctrl, Alt and system key held sets its bit
 [[nodiscard]] uint16_t ModifiersOfHeldKeys(const std::bitset<SDL_NUM_SCANCODES>& held);

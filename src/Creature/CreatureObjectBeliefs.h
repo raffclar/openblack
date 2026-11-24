@@ -179,6 +179,19 @@ public:
 	void Erase(entt::entity thing);
 	void Clear();
 	[[nodiscard]] size_t Size() const { return _count; }
+	/// Calls the function with each thing and its place, in the order of the entries. This order is not the order of
+	/// the numbers of the things.
+	template <typename Visit>
+	void ForEach(Visit&& visit) const
+	{
+		for (const auto& entry : _entries)
+		{
+			if (entry.thing != entt::null)
+			{
+				visit(entry.thing, BeliefPlace {.kind = entry.kind, .slot = entry.slot});
+			}
+		}
+	}
 
 private:
 	/// An entry is small, thus more entries are in the memory cache
@@ -224,14 +237,21 @@ public:
 	{
 		// The store forgets them in the order of their kinds and places, not in the order of the things in the index,
 		// because the marker of the oldest belief moves on as each belief goes.
+		// The fast index holds the same things as the index of the contents, but not the no-thing value. Its entries
+		// lie side by side in memory, thus a walk of them costs less. After the sort below, the order of the walk has no
+		// effect. The no-thing value has the largest number, thus it can only be the last thing of the index of the
+		// contents.
 		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
-		for (const auto& [thing, at] : _contents.index)
+		if (!_contents.index.empty() && _contents.index.rbegin()->first == entt::null && gone(entt::null))
 		{
+			forgotten.emplace_back(_contents.index.rbegin()->second, entt::null);
+		}
+		_places.ForEach([&gone, &forgotten](entt::entity thing, BeliefPlace at) {
 			if (gone(thing))
 			{
 				forgotten.emplace_back(at, thing);
 			}
-		}
+		});
 		std::ranges::sort(forgotten, [](const auto& a, const auto& b) {
 			return std::tie(a.first.kind, a.first.slot) < std::tie(b.first.kind, b.first.slot);
 		});
@@ -266,6 +286,9 @@ public:
 	/// The same two orders, as the beliefs in the store, not copies. They stay valid only while the store does not change.
 	[[nodiscard]] std::vector<const Belief*> HeldNewestFirst() const;
 	[[nodiscard]] std::vector<const Belief*> HeldInListOrder() const;
+	/// The things of the beliefs, in the order of HeldInListOrder. The things go into the list, which loses what it held
+	/// before.
+	void ThingsInListOrder(std::vector<entt::entity>& things) const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
 	[[nodiscard]] size_t Size() const { return _contents.index.size(); }

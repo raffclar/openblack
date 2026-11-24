@@ -1268,7 +1268,7 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 			++fighting->faceOffTurns;
 			// The order to turn, its own turn, the order to start the duel and its own duel show anger
 			if (fighting->faceOffTurns == fight::k_SquareOrderTurn)
-			{
+			{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 				angerOnOrder();
 			}
 			else if (fighting->faceOffTurns == fight::k_SquareOwnTurn || (fighting->played && !fighting->angerShown))
@@ -1483,6 +1483,7 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 			WinByOpponentsLife(entity, opponent);
 		}
 		break;
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case CreatureFighting::Stage::Celebrate:
 		// Its move finished, it leaves the fight. Its mind then does what the win made it do to the loser.
 		if (fighting->fighter.state == fight::State::Idle)
@@ -1854,6 +1855,7 @@ void CreatureFightSystem::OrderLoserToRespond(entt::entity creature, entt::entit
 		asker->partnerInMind = false;
 	}
 	// The plan of the first creature fails, so it plays no response and leaves its fight
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	PartnerPlanFails(creature, loser, true);
 	Leave(creature);
 	// Then the order gives the other creature the plan to obey again, to respond
