@@ -70,7 +70,7 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	out.WriteRaw(_input);
 	reflection::Save(out, _actionDown);
 	out.WriteRaw(_fireBallPress);
-	reflection::Save(out, _holdLoop != entt::null);
+	reflection::Save(out, _holdLoop != entt::null || _holdLoopWaits);
 	out.WriteRaw(_pour);
 	out.EndPresentation();
 	reflection::Save(out, _rainWatchers);

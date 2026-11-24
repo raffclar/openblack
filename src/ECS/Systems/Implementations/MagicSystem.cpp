@@ -757,10 +757,10 @@ void MagicSystem::HeldSeedTurn()
 
 void MagicSystem::ProcessTurn()
 {
-	// The hum of an armed seed follows the hand one time each turn, before the audio turn
-	if (_holdLoop != entt::null && Locator::sounds::has_value())
+	// The hum of an armed seed starts at the turn after the press, before the audio turn
+	if (_holdLoopWaits)
 	{
-		Locator::sounds::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
+		PlayHoldLoop();
 	}
 	if (!Locator::infoConstants::has_value() || !Locator::effectRequestSystem::has_value() ||
 	    !Locator::effectRequestSystem::value().ShowsEffects())

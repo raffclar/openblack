@@ -9,6 +9,8 @@
 
 #include "CastInput.h"
 
+#include "Gestures/GestureRecorder.h"
+
 using namespace openblack;
 using namespace openblack::magic;
 
@@ -142,4 +144,9 @@ CastActions magic::Cancel(CastInput& input)
 uint32_t magic::TurnsHeld(const CastInput& input, uint32_t turn)
 {
 	return input.state == CastInput::State::Locked && turn >= input.lockTurn ? turn - input.lockTurn : 0;
+}
+
+glm::vec3 magic::HumPlace(const gesture::GestureRecorder& path, glm::vec3 hand)
+{
+	return path.Empty() ? hand : path.At(path.Count() - 1).world;
 }
