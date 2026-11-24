@@ -619,7 +619,9 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	const auto madeIndices = Locator::graphicsDevice::value().Bytes(indicesMem);
 	_madeVertices.assign(madeVertices.begin(), madeVertices.end());
 	_madeIndices.assign(madeIndices.begin(), madeIndices.end());
+	// NOLINTNEXTLINE(bugprone-unhandled-exception-at-new): the mesh owns the buffer, and a failed allocation stops the game
 	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl);
+	// NOLINTNEXTLINE(bugprone-unhandled-exception-at-new): the mesh owns the buffer, and a failed allocation stops the game
 	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
 	return true;

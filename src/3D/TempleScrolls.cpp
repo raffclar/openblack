@@ -942,7 +942,7 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		for (const auto& saved : facts.savedGames)
 		{
 			text.Add(saved.date);
-			text.Add(saved.name.empty() ? get("HELP_TEXT_NONAME_SAVED_GAME_01") : std::u16string_view(saved.name));
+			text.Add(saved.name.empty() ? get("HELP_TEXT_NONAME_SAVED_GAME_01") : std::u16string_view {saved.name});
 			text.AddNewLine();
 		}
 		text.End();

@@ -94,6 +94,7 @@ void DrawGlyph(std::span<uint16_t> texels, const gui::GameFont::SmallGlyph& smal
 		column = Truncate(-static_cast<float>(left) * stepX);
 		left = 0;
 	}
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	right = std::min(right, k_Size);
 	if (top < 0)
 	{
@@ -208,7 +209,7 @@ void TempleScrollText::Add(std::u16string_view source)
 					++end;
 				}
 				const auto number =
-				    ParseNumber(std::u16string_view(text).substr(std::min(start, length), end - std::min(start, length)));
+				    ParseNumber(std::u16string_view {text}.substr(std::min(start, length), end - std::min(start, length)));
 				if (kind == u'g' || kind == u'G')
 				{
 					gesture = number;
@@ -401,7 +402,6 @@ uint32_t TempleScrollTexture::LayOut(std::u16string_view text, uint32_t position
 				if (tag == u'E' || tag == u'N')
 				{
 					ended = tag == u'E';
-					found = true;
 					break;
 				}
 			}
