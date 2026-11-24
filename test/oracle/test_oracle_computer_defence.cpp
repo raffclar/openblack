@@ -56,8 +56,8 @@ TEST(OracleComputerDefence, DefendTownAsInTheGame)
 				const auto name = std::to_string(index) + "_" + std::to_string(slot);
 				attacks.push_back({.town = index,
 				                   .attacker = static_cast<PlayerNames>(slot),
-				                   .lastTurn = table->Bits(row, *table->Column("last" + name)),
-				                   .aggression = table->Float(row, *table->Column("aggression" + name))});
+				                   .lastTurn = table->Bits(row, table->Column("last" + name).value()),
+				                   .aggression = table->Float(row, table->Column("aggression" + name).value())});
 			}
 		}
 		const auto ours = ChooseDefence(attacks, table->Bits(row, *turn));
@@ -95,8 +95,8 @@ TEST(OracleComputerDefence, BeliefAttackAsInTheGame)
 		TownBeliefFacts town;
 		for (size_t slot = 0; slot < k_Players; ++slot)
 		{
-			town.belief.at(slot) = table->Float(row, *table->Column("belief" + std::to_string(slot)));
-			town.recent.at(slot) = table->Float(row, *table->Column("recent" + std::to_string(slot)));
+			town.belief.at(slot) = table->Float(row, table->Column("belief" + std::to_string(slot)).value());
+			town.recent.at(slot) = table->Float(row, table->Column("recent" + std::to_string(slot)).value());
 		}
 		const float ours = BeliefAttack(town, static_cast<PlayerNames>(table->Bits(row, *god)), allies);
 		if (std::bit_cast<uint32_t>(ours) != table->Bits(row, *value))

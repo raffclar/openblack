@@ -181,6 +181,8 @@ struct MindLearningCount
 	std::optional<uint32_t> c;
 };
 
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct MindFileData
 {
 	uint32_t version {k_CurrentVersion};

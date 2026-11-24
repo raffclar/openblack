@@ -173,6 +173,7 @@ TEST(HandReportRules, AfterASendTheReportTestsAgainAfterTheWait)
 		{
 			const bool waits = WaitsThisTurn(wait, false);
 			tests.push_back(!waits);
+			// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 			wait = TurnsToWaitAfter(wait, waits, !waits, origin);
 		}
 		const auto gap = TurnsToWaitAfterSend(origin);

@@ -114,6 +114,8 @@ struct LobbyMap
 };
 
 /// The settings of a game that the host sets
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct LobbySettings
 {
 	/// "time_limit_minutes"
@@ -125,6 +127,8 @@ struct LobbySettings
 };
 
 /// "server_map" of the pool: the one land that each game plays on the fixed game server
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct ServerMap
 {
 	/// "file", for example "Online Maps/mpm_2p_1.map"

@@ -369,7 +369,7 @@ TEST(SkyPicturePack, APackWithAPictureOf16BitsKeepsHalfFloats)
 	EXPECT_EQ(HalfAt(loaded.pack->texels, (3 * k_LayerChannels) + 2), 1.0f);
 	EXPECT_EQ(HalfAt(loaded.pack->texels, (3 * k_LayerChannels) + 3), 1.0f);
 	// The pictures of 8 bits in the same pack become half floats of the same values
-	for (size_t layer : {0u, 8u})
+	for (const size_t layer : {0u, 8u})
 	{
 		const auto first = layer * k_LayerChannels;
 		EXPECT_NEAR(HalfAt(loaded.pack->texels, first), static_cast<float>(layer * 10) / 255.0f, 1.0f / 2048.0f);

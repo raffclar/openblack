@@ -286,6 +286,7 @@ TEST(LobbyApi, ClanCreatureKeepsTheFilesAndTheBitsOfTheAlignment)
 	};
 	const auto back = ParseClanCreature(ToJson(creature));
 	ASSERT_TRUE(back.has_value());
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	EXPECT_EQ(std::memcmp(&back->alignment, &creature.alignment, sizeof(float)), 0);
 	EXPECT_EQ(back->mind, creature.mind);
 	EXPECT_EQ(back->physique, creature.physique);

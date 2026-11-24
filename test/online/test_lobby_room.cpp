@@ -909,6 +909,7 @@ protected:
 TEST_F(LobbyRoomSystemTest, JoinWithAPasswordOpensTheRoom)
 {
 	std::optional<LobbyResult<LobbyDone>> done;
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_system.Join("l1", "secret", lobby_api::MemberRole::God, 3, [&](auto&& result) { done = std::move(result); });
 	ASSERT_EQ(_client.calls.size(), 1u);
 	EXPECT_EQ(_client.calls[0].method, HttpMethod::Post);

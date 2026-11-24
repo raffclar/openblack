@@ -30,9 +30,9 @@ constexpr glm::u8vec3 k_Blue {0, 0, 255};
 Slots Full()
 {
 	Slots slots {};
-	for (uint8_t i = 0; i < slots.size(); ++i)
+	for (size_t i = 0; i < slots.size(); ++i)
 	{
-		slots.at(i) = {.design = i, .site = i, .colour = k_Red};
+		slots.at(i) = {.design = static_cast<uint8_t>(i), .site = static_cast<uint8_t>(i), .colour = k_Red};
 	}
 	return slots;
 }

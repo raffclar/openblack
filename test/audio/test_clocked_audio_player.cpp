@@ -29,6 +29,7 @@ struct FakeClock
 /// One second of mono sound at a rate of 1000 frames a second
 std::vector<int16_t> OneSecond()
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list would not call the count and value constructor
 	return std::vector<int16_t>(1000, 0);
 }
 

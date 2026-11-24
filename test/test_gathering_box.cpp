@@ -434,6 +434,7 @@ TEST(GatheringBoxSystem, TheBoxGetsTheKeptFriendsAndTheProfileKeepsTheChanges)
 	const std::vector<FriendRecord> kept {{.user = k_Ann, .name = u"Ann"}};
 	std::vector<std::vector<FriendRecord>> written;
 	ecs::systems::GatheringBoxSystem::Services services;
+	// NOLINTNEXTLINE(performance-no-automatic-move): the lambda must copy the value on each call
 	services.readFriends = [&kept]() { return kept; };
 	services.writeFriends = [&written](std::span<const FriendRecord> friends) {
 		written.emplace_back(friends.begin(), friends.end());

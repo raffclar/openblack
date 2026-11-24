@@ -44,6 +44,7 @@ constexpr uint32_t k_CountBits = 10;
 /// A chunk of `count` copies of `value` (block types and runs)
 void Repeat(BinkBitWriter& w, uint32_t count, uint32_t value)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	w.Put(count, k_CountBits).Bit(true).Put(value, 4);
 }
 

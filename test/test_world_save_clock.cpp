@@ -27,7 +27,7 @@ namespace
 std::mt19937 DrawnGenerator(uint32_t seed, int draws)
 {
 	std::mt19937 generator(seed);
-	generator.discard(static_cast<unsigned long long>(draws));
+	generator.discard(static_cast<uint64_t>(draws));
 	return generator;
 }
 

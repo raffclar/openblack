@@ -174,6 +174,7 @@ INT_PTR CALLBACK OpeningProc(HWND dialog, UINT message, WPARAM /*wParam*/, LPARA
 	{
 		return FALSE;
 	}
+	// NOLINTNEXTLINE(performance-no-int-to-ptr): the window system passes a pointer in this integer
 	const auto& opening = *reinterpret_cast<const Opening*>(lParam);
 	win32::Prepare(dialog, opening.setup, opening.texts, opening.icon);
 	return TRUE;

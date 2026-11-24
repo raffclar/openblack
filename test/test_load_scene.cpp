@@ -59,14 +59,14 @@ protected:
 	std::unique_ptr<openblack::Game> _game;
 };
 
-TEST_F(LoadScene, minimal)
+TEST_F(LoadScene, Minimal)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)
 )"""");
 }
 
-TEST_F(LoadScene, landscape_only)
+TEST_F(LoadScene, LandscapeOnly)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)
@@ -74,7 +74,7 @@ LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
 )"""");
 }
 
-TEST_F(LoadScene, load_abode_no_landscape)
+TEST_F(LoadScene, LoadAbodeNoLandscape)
 {
 	// A place on a line is read with no land under it, as the game reads it. The abode has no town to join.
 	const char* sceneScript = R""""(
@@ -84,7 +84,7 @@ CREATE_ABODE(0, "2224.63,2372.52", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
 	ASSERT_NO_THROW(LoadTestScene(sceneScript));
 }
 
-TEST_F(LoadScene, a_camera_line_before_the_landscape_line_loads_the_land)
+TEST_F(LoadScene, ACameraLineBeforeTheLandscapeLineLoadsTheLand)
 {
 	// The camera line only keeps its place, so the land loads as the game loads it
 	LoadTestScene(R""""(
@@ -97,7 +97,7 @@ CREATE_TOWN(0, "2829.13,2822.80", "PLAYER_ONE", 3, "CELTIC")
 	EXPECT_TRUE(openblack::Locator::terrainSystem::value().IsLoaded());
 }
 
-TEST_F(LoadScene, load_celtic_abode_f)
+TEST_F(LoadScene, LoadCelticAbodeF)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)
@@ -106,7 +106,7 @@ CREATE_ABODE(0, "2224.63,2372.52", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
 )"""");
 }
 
-TEST_F(LoadScene, a_thing_made_at_a_place_keeps_the_map_position_that_the_game_reads)
+TEST_F(LoadScene, AThingMadeAtAPlaceKeepsTheMapPositionThatTheGameReads)
 {
 	// Far from the corner of the map, the game reads 1280.04 one unit less than the metres give
 	LoadTestScene(R""""(
@@ -125,7 +125,7 @@ CREATE_ABODE(0, "1280.04,1280.04", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
 	EXPECT_EQ(abodes, 1u);
 }
 
-TEST_F(LoadScene, a_town_centre_goes_up_only_where_it_fits_in_its_town)
+TEST_F(LoadScene, ATownCentreGoesUpOnlyWhereItFitsInItsTown)
 {
 	// The first centre stands on the house of its town, so the script makes nothing for it. The second has free land.
 	LoadTestScene(R""""(
@@ -149,7 +149,7 @@ CREATE_TOWN_CENTRE(0, "1320.00,1320.00", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 30
 	EXPECT_EQ(abodes, 2u);
 }
 
-TEST_F(LoadScene, a_temple_goes_up_only_where_no_building_stands_in_its_way)
+TEST_F(LoadScene, ATempleGoesUpOnlyWhereNoBuildingStandsInItsWay)
 {
 	// The first temple stands on a house, so the script makes nothing for it. The second has free land.
 	LoadTestScene(R""""(
@@ -176,7 +176,7 @@ CREATE_CITADEL("1360.00,1360.00", 0, "PLAYER_ONE", 0, 500)
 	EXPECT_EQ(temples, 1u);
 }
 
-TEST_F(LoadScene, a_temple_is_planned_only_for_a_town_that_is_there)
+TEST_F(LoadScene, ATempleIsPlannedOnlyForATownThatIsThere)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)
@@ -197,7 +197,7 @@ CREATE_PLANNED_CITADEL(0, "1360.00,1360.00", 0, "PLAYER_ONE", 0, 1000)
 	EXPECT_EQ(plans, 1u);
 }
 
-TEST_F(LoadScene, a_temple_and_its_heart_keep_the_map_position_that_the_game_reads)
+TEST_F(LoadScene, ATempleAndItsHeartKeepTheMapPositionThatTheGameReads)
 {
 	// The game makes the temple and its heart at the same map position, the script's
 	LoadTestScene(R""""(
@@ -217,7 +217,7 @@ CREATE_CITADEL("1280.04,1280.04", 0, "PLAYER_ONE", 0, 1000)
 	EXPECT_EQ(hearts, 1u);
 }
 
-TEST_F(LoadScene, unknown_command_is_skipped)
+TEST_F(LoadScene, UnknownCommandIsSkipped)
 {
 	// A land's script may misspell a command, as one multiplayer land does; the game passes over that line and carries
 	// out the commands after it
@@ -230,7 +230,7 @@ SET_LAND_NUMBER(7)
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 7);
 }
 
-TEST_F(LoadScene, unknown_command_keeps_later_commands_on_its_line)
+TEST_F(LoadScene, UnknownCommandKeepsLaterCommandsOnItsLine)
 {
 	// Everything after an unknown word is passed over up to the next command the game knows, even on the same line
 	LoadTestScene(R""""(
@@ -240,7 +240,7 @@ NOT_A_COMMAND(1, "2,2", 4) SET_LAND_NUMBER(9)
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 9);
 }
 
-TEST_F(LoadScene, unknown_player_name_is_neutral)
+TEST_F(LoadScene, UnknownPlayerNameIsNeutral)
 {
 	// A name that is no player's, such as a tribe's or an eighth player's, is the neutral player; names match in any case
 	LoadTestScene(R""""(
@@ -257,7 +257,7 @@ SET_TOWN_BELIEF(1, "GREEK", 0.500000)
 	EXPECT_FLOAT_EQ(registry.Get<openblack::ecs::components::TownImpression>(towns.at(1)).belief.neutral, 0.5f);
 }
 
-TEST_F(LoadScene, town_command_for_missing_town_is_skipped)
+TEST_F(LoadScene, TownCommandForMissingTownIsSkipped)
 {
 	// A command for a town the land never made does nothing, and the commands after it are carried out
 	LoadTestScene(R""""(
@@ -269,7 +269,7 @@ SET_LAND_NUMBER(4)
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 4);
 }
 
-TEST_F(LoadScene, command_missing_its_parenthesis_ends_at_its_line)
+TEST_F(LoadScene, CommandMissingItsParenthesisEndsAtItsLine)
 {
 	// The game reads a land's script a line at a time, so a command whose ')' was left out still runs, and so do the
 	// commands after it
@@ -282,7 +282,7 @@ SET_LAND_NUMBER(6)
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 8);
 }
 
-TEST_F(LoadScene, command_with_too_few_values_stops_the_load_and_keeps_the_commands_before_it)
+TEST_F(LoadScene, CommandWithTooFewValuesStopsTheLoadAndKeepsTheCommandsBeforeIt)
 {
 	// The game stops the land's script at a command that has too few values. It keeps what the commands before it did
 	// and does not do the commands after it.
@@ -295,7 +295,7 @@ SET_LAND_NUMBER(9)
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 3);
 }
 
-TEST_F(LoadScene, a_bonfire_takes_its_turn_from_the_third_number_and_not_the_second)
+TEST_F(LoadScene, ABonfireTakesItsTurnFromTheThirdNumberAndNotTheSecond)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)
@@ -314,7 +314,7 @@ CREATE_BONFIRE("1425.03,2331.89", 24.700001, 0.000000, 1.000000)
 	EXPECT_EQ(bonfires, 1u);
 }
 
-TEST_F(LoadScene, a_street_light_has_no_model_and_is_no_lantern)
+TEST_F(LoadScene, AStreetLightHasNoModelAndIsNoLantern)
 {
 	// The street light keeps its place only. The lantern line makes a lantern with a model.
 	LoadTestScene(R""""(
@@ -337,7 +337,7 @@ CREATE_STREET_LIGHT("2202.51,2412.95")
 	EXPECT_EQ(lanterns, 0u);
 }
 
-TEST_F(LoadScene, a_footpath_node_with_a_third_number_is_above_the_land_by_that_height)
+TEST_F(LoadScene, AFootpathNodeWithAThirdNumberIsAboveTheLandByThatHeight)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)
@@ -359,7 +359,7 @@ CREATE_FOOTPATH_NODE(0, "1290.00,1280.04")
 	EXPECT_EQ(nodes[0].altitude, 0.0f);
 }
 
-TEST_F(LoadScene, each_footpath_node_line_puts_its_node_first_on_the_path)
+TEST_F(LoadScene, EachFootpathNodeLinePutsItsNodeFirstOnThePath)
 {
 	LoadTestScene(R""""(
 VERSION(2.300000)

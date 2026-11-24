@@ -114,6 +114,7 @@ struct RuleRun
 template <typename T>
 [[nodiscard]] bool SameBits(const T& a, const T& b)
 {
+	// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 	return std::memcmp(&a, &b, sizeof(T)) == 0;
 }
 

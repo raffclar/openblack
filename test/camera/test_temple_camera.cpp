@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <optional>
 #include <vector>
@@ -37,12 +38,13 @@ namespace
 std::vector<uint8_t> MakeCam(uint32_t durationMs, uint32_t pointCount)
 {
 	std::vector<uint8_t> data(3 * sizeof(uint32_t) + pointCount * 6 * sizeof(float));
-	const uint32_t header[3] {static_cast<uint32_t>(data.size()), durationMs, pointCount};
-	std::memcpy(data.data(), header, sizeof(header));
+	const std::array<uint32_t, 3> header {static_cast<uint32_t>(data.size()), durationMs, pointCount};
+	std::memcpy(data.data(), header.data(), sizeof(header));
 	for (uint32_t i = 0; i < pointCount; ++i)
 	{
-		const float point[6] {static_cast<float>(i) * 10.0f, 5.0f, 0.0f, static_cast<float>(i) * 10.0f + 1.0f, 5.0f, 0.0f};
-		std::memcpy(&data[sizeof(header) + i * sizeof(point)], point, sizeof(point));
+		const std::array<float, 6> point {static_cast<float>(i) * 10.0f,        5.0f, 0.0f,
+		                                  static_cast<float>(i) * 10.0f + 1.0f, 5.0f, 0.0f};
+		std::memcpy(&data[sizeof(header) + i * sizeof(point)], point.data(), sizeof(point));
 	}
 	return data;
 }
@@ -698,9 +700,9 @@ TEST(TempleCamera, TheMainRoomCameraTriesTheTimesInWholeMilliseconds)
 	EXPECT_EQ(tried.front(), 0);
 	EXPECT_EQ(tried.at(1), 100);
 	float time = 0.0f;
-	for (size_t i = 0; i < tried.size(); ++i)
+	for (const auto attempt : tried)
 	{
-		EXPECT_EQ(tried.at(i), static_cast<int64_t>(time * 1000.0f));
+		EXPECT_EQ(attempt, static_cast<int64_t>(time * 1000.0f));
 		time += 0.1f;
 	}
 }

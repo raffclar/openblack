@@ -211,7 +211,7 @@ TEST(VortexCrossing, AChestLineIsReadBackAsTheSameChest)
 	const auto text = Text(line);
 	EXPECT_EQ(text, "CREATE_REWARD_CHEST(\"-6.00,4.00\", 4, 1, 0.500000)\n");
 	// The reader takes the line without its new line, as the vortex reads the file
-	const auto read = ReadRewardLine(std::string_view(text).substr(0, text.size() - 1));
+	const auto read = ReadRewardLine(std::string_view {text}.substr(0, text.size() - 1));
 	ASSERT_TRUE(read.has_value());
 	EXPECT_EQ(read->offset, glm::vec2(-6.0f, 4.0f));
 	EXPECT_EQ(read->onMap, map_coords::ScriptPlace(-6.0, 4.0));

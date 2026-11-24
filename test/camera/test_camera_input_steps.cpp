@@ -76,7 +76,7 @@ public:
 	}
 	[[nodiscard]] glm::uvec2 GetMousePosition() const override
 	{
-		return glm::uvec2(_step.has_value() ? _stepMice.at(*_step).position : position);
+		return {_step.has_value() ? _stepMice.at(*_step).position : position};
 	}
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return _step.has_value() ? _stepMice.at(*_step).delta : delta; }
 	[[nodiscard]] glm::ivec2 GetMousePushDelta() const override

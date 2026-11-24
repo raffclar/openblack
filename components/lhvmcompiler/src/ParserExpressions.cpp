@@ -266,6 +266,7 @@ ExprPtr Parser::MakeValue(double value, ArgType type, SourceLocation location)
 
 bool Parser::MatchWords(std::string_view text)
 {
+	// NOLINTNEXTLINE(readability-use-anyofallof): the loop moves on by one word on each match
 	for (const auto word : SplitWords(text))
 	{
 		if (!IsWord(Current(), word))

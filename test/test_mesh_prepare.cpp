@@ -427,6 +427,7 @@ TEST_F(MeshPrepare, MeshesThatFinishFromOneKeptPreparationHaveTheBitsOfALoadedMe
 		if (mesh < 2)
 		{
 			// The kept preparation stays as it was
+			// NOLINTNEXTLINE(bugprone-use-after-move): only the meshes before the last read the kept value
 			EXPECT_EQ(prepared.skins.front().bytes, skinBytes);
 			EXPECT_EQ(prepared.subMeshes.front().vertices, vertices);
 		}

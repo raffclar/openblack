@@ -40,10 +40,10 @@ TEST(OracleComputerTownThreat, ThreatAsInTheGame)
 		for (size_t index = 0; index < k_TownAttackPlayers; ++index)
 		{
 			const auto n = std::to_string(index);
-			attacks.at(index) = {.turn = table->Bits(row, *table->Column("last" + n)),
-			                     .miracleHarm = table->Float(row, *table->Column("miracle" + n)),
-			                     .thingHarm = table->Float(row, *table->Column("thing" + n)),
-			                     .otherThingHarm = table->Float(row, *table->Column("other" + n))};
+			attacks.at(index) = {.turn = table->Bits(row, table->Column("last" + n).value()),
+			                     .miracleHarm = table->Float(row, table->Column("miracle" + n).value()),
+			                     .thingHarm = table->Float(row, table->Column("thing" + n).value()),
+			                     .otherThingHarm = table->Float(row, table->Column("other" + n).value())};
 		}
 		const auto ours = ThreatOf(attacks, table->Bits(row, *turn));
 		bool same = ours.has_value() == (table->Bits(row, *threat) != 0);

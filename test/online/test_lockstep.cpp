@@ -1617,7 +1617,7 @@ TEST_F(LockstepTest, AnAwayGodIsDefeatedAfterTheTimeToComeBack)
 	Computer bob(_network, _now, "god:bob");
 	Frames({&alice, &bob}, 10);
 	_network.Cut(bob.sockets->Ids().back());
-	std::vector<Command> leaves;
+	const std::vector<Command> leaves;
 	// Bob's computer stops: no frame of his any more
 	for (int i = 0; i < 50; ++i)
 	{
@@ -2027,7 +2027,7 @@ struct GameLogLines
 // and the logs of the server and of the client name the two builds. The other god stays.
 TEST_F(LockstepTest, TheServerClosesAClientThatSendsAFrameOfAnotherVersionOfTheTurns)
 {
-	GameLogLines log;
+	const GameLogLines log;
 	MakeHost(2);
 	Computer alice(_network, _now, "god:alice", k_LandFile, {'C'}, 0.0f, {}, "0.0.1+old/codec1");
 	Computer bob(_network, _now, "god:bob");
@@ -2068,7 +2068,7 @@ TEST_F(LockstepTest, ABinaryFrameThatDoesNotReadForAnotherCauseIsOnlyLeftOut)
 // the client, when the text gives one, and the build of the server.
 TEST_F(LockstepTest, ARefusalForTheProtocolNamesTheBuildsOfTheClientAndOfTheServer)
 {
-	GameLogLines log;
+	const GameLogLines log;
 	MakeHost(1);
 	const auto server = online::build_id::Own();
 	auto client = _network.MakeClient();
@@ -2095,7 +2095,7 @@ TEST_F(LockstepTest, ARefusalForTheProtocolNamesTheBuildsOfTheClientAndOfTheServ
 // A refusal for another cause does not name the builds
 TEST_F(LockstepTest, ARefusalForAnotherCauseDoesNotNameTheBuilds)
 {
-	GameLogLines log;
+	const GameLogLines log;
 	MakeHost(1);
 	Computer alice(_network, _now, "not-a-ticket", k_LandFile, {'C'}, 0.0f, {}, "0.1.0+abc/codec34");
 	Frames({&alice}, 3);
@@ -4147,7 +4147,7 @@ void Exchange(LoopbackSockets& network, Computer& computer, int frames = 3)
 // path out of the folder. The client opens no file and leaves the game.
 TEST(HostileGameServer, ALandThatIsNotAPlainNameOfALandEndsTheJoin)
 {
-	for (const std::string land : {"//host/share/x.txt", "\\\\host\\share\\x.txt", "C:/Windows/win.ini", "../../x.txt",
+	for (const std::string land : {"//host/share/x.txt", R"x(\\host\share\x.txt)x", "C:/Windows/win.ini", "../../x.txt",
 	                               "Scripts/../../x.txt", "NUL", "con.txt", "Land1.txt:stream", "a/./b.txt", "x.txt."})
 	{
 		SCOPED_TRACE(land);
@@ -4177,7 +4177,7 @@ TEST(HostileGameServer, ALandQueryWithAPathOutOfTheGameEndsTheJoin)
 	Exchange(network, alice);
 	server.Text(game_socket::Joined {.role = game_socket::Role::God, .slot = 0, .session = "s", .name = "alice"});
 	Exchange(network, alice);
-	server.Text(game_socket::StartQuery {.land = "\\\\host\\share\\land.txt", .testbed = false, .checksum = 1});
+	server.Text(game_socket::StartQuery {.land = R"x(\\host\share\land.txt)x", .testbed = false, .checksum = 1});
 	Exchange(network, alice);
 	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
 	EXPECT_TRUE(alice.askedLand.empty());
@@ -5466,7 +5466,7 @@ TEST_F(LockstepTest, TheServerTakesTheActsOfTheDebugWindowsOnlyFromAGodWithTheDe
 	ASSERT_FALSE(bob.session.GetJoined()->debugger);
 	const DebugAdvisor out {.act = DebugAdvisor::Act::Out, .advisor = 1};
 	const DebugWorld noon {.act = DebugWorld::Act::TimeOfDay, .value = 12.0f};
-	const DebugConsoleLine line {.text = "CREATE_TOWN(1, \"1,1\", \"Celtic\")"};
+	const DebugConsoleLine line {.text = R"x(CREATE_TOWN(1, "1,1", "Celtic"))x"};
 	alice.session.Send(out);
 	alice.session.Send(noon);
 	alice.session.Send(line);
@@ -5597,7 +5597,7 @@ TEST_F(LockstepTest, TheSpeedOfTheGameOfAPlayerWithNoClaimSetsTheTimeBetweenTwoT
 	Frames({&alice, &bob}, 20);
 	ASSERT_TRUE(_host->Started());
 	// The faster key of a god with no claim: the speed 2 asks for 50 ms between two turns
-	alice.session.RequestPace(*online::room_clock::PeriodOf(2.0f));
+	alice.session.RequestPace(online::room_clock::PeriodOf(2.0f).value());
 	Frames({&alice, &bob}, 4);
 	EXPECT_EQ(_host->RoomClock().period, 50u);
 	EXPECT_FLOAT_EQ(_host->RoomClock().speed, 0.5f);
@@ -5631,7 +5631,7 @@ TEST_F(LockstepTest, TheSpeedOfTheGameSendsNoRequestWhenTheTimeBetweenTwoTurnsDo
 	ASSERT_TRUE(_host->Started());
 	const auto changes = alice.session.RoomClockChanges();
 	// The normal speed asks for the normal time, which the room has
-	alice.session.RequestPace(*online::room_clock::PeriodOf(1.0f));
+	alice.session.RequestPace(online::room_clock::PeriodOf(1.0f).value());
 	Frames({&alice, &bob}, 4);
 	EXPECT_EQ(alice.session.RoomClockChanges(), changes);
 	EXPECT_FALSE(_host->RoomClock().period.has_value());

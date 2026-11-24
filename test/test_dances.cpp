@@ -308,6 +308,7 @@ TEST(Dances, ADanceStopsForATurnWhenItsTimeIsUp)
 	const auto entity = dances::Create(
 	    registry, {.type = DanceInfo::NewDanceAroundPerson, .autostart = true, .duration = 30, .madeByScript = true}, file);
 	const auto dancer = registry.Create();
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	ASSERT_TRUE(dances::AddDancer(registry, entity, dancer, DanceGroup::k_Men));
 	EXPECT_EQ(dances::DanceOf(registry, dancer), entity);
 	std::vector<entt::entity> finished;
@@ -483,6 +484,7 @@ TEST(Dances, AKeyFramesMoveSetsItsGroupGoingAndItsDancersClipsAgain)
 	file->keyFrames.at(1).actions.push_back(grow);
 	const auto entity = dances::Create(registry, {.type = DanceInfo::NewDanceAroundPerson, .autostart = true}, file);
 	const auto dancer = registry.Create();
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	ASSERT_TRUE(dances::AddDancer(registry, entity, dancer, DanceGroup::k_Men));
 	auto& dance = registry.Get<Dance>(entity);
 	dance.clock = 20.0f;

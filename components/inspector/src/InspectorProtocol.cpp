@@ -58,7 +58,7 @@ std::string UnknownMembers(const Json& object, const std::array<std::string_view
 	std::string unknown;
 	for (const auto& [key, value] : object.items())
 	{
-		if (std::ranges::find(known, std::string_view(key)) == known.end())
+		if (std::ranges::find(known, std::string_view {key}) == known.end())
 		{
 			unknown += (unknown.empty() ? "" : ", ") + key;
 		}

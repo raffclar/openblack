@@ -54,6 +54,7 @@ namespace
 {
 
 /// The signal handler sets it, and the loop of the server stops at the end of its frame
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the signal handler must reach it
 std::atomic<bool> g_StopAsked {false};
 
 extern "C" void StopOnSignal(int /*signal*/)
@@ -72,7 +73,7 @@ int SearchLocalNetwork(uint32_t seconds)
 	auto search = openblack::online::MakeUdpLanDiscovery(now);
 	if (!search->IsAvailable())
 	{
-		std::cerr << "The search of the local network cannot open a socket." << std::endl;
+		std::cerr << "The search of the local network cannot open a socket." << '\n' << std::flush;
 		return EXIT_FAILURE;
 	}
 	search->Start();
@@ -85,16 +86,18 @@ int SearchLocalNetwork(uint32_t seconds)
 		for (; shown < servers.size(); ++shown)
 		{
 			std::cout << "found " << servers[shown].id << " \"" << servers[shown].hostname << "\" " << servers[shown].url
-			          << std::endl;
+			          << '\n'
+			          << std::flush;
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	const auto servers = search->GetServers();
-	std::cout << "rooms " << servers.size() << std::endl;
+	std::cout << "rooms " << servers.size() << '\n' << std::flush;
 	for (const auto& server : servers)
 	{
 		std::cout << "room " << server.id << " \"" << server.hostname << "\" " << server.numplayers << "/" << server.maxplayers
-		          << " " << server.gamever << " " << server.url << std::endl;
+		          << " " << server.gamever << " " << server.url << '\n'
+		          << std::flush;
 	}
 	search->Stop();
 	return EXIT_SUCCESS;
@@ -235,7 +238,7 @@ int main(int argc, char* argv[])
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
 		("all-gone-seconds", "How long the gods wait when the players of all the gods lost the connection. Then each away god is defeated and the game ends.", cxxopts::value<uint32_t>()->default_value("10"))
 		("lobby-id", "The game of one lobby on a server of the pool: the id of the lobby, which each join ticket must name. It needs --expect-members and --game-id. The time limit is then 360 minutes (6 hours) at most, and the server ends after its game.", cxxopts::value<std::string>())
-		("expect-members", "With --lobby-id, the JSON file of the members of the lobby: {\"members\": [{\"account\": \"101\", \"role\": \"god\", \"slot\": 0}, ...]}. The server takes only these accounts, each in its role and god slot.", cxxopts::value<std::string>())
+		("expect-members", R"(With --lobby-id, the JSON file of the members of the lobby: {"members": [{"account": "101", "role": "god", "slot": 0}, ...]}. The server takes only these accounts, each in its role and god slot.)", cxxopts::value<std::string>())
 		("game-id", "With --lobby-id, the id of the game at the lobby, which the log and the results of the game name.", cxxopts::value<std::string>())
 		("join-window", "With --lobby-id, the seconds in which the members join after the server listens. The room waits for each god of the lobby until then. With fewer gods than --min-gods at its end, or no start at two times its length, the server ends with exit code 12.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::game_lifetime::k_DefaultJoinWindowSeconds)))
 		("deadline", "With --lobby-id, the time (UTC, ISO 8601 such as 2026-11-12T18:00:00+00:00) at which the server ends with exit code 11. The server also ends 6 hours after it starts to listen at the latest.", cxxopts::value<std::string>())
@@ -301,26 +304,28 @@ int main(int argc, char* argv[])
 			arguments = std::move(kept);
 			for (const auto& ignored : filtered.ignored)
 			{
-				std::cerr << "This build has no developer tools: it ignores the option " << ignored << std::endl;
+				std::cerr << "This build has no developer tools: it ignores the option " << ignored << '\n' << std::flush;
 			}
 		}
 		const auto result = options.parse(static_cast<int>(arguments.size()), arguments.data());
 		if (result.count("help") != 0)
 		{
-			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << '\n' << std::flush;
 			return EXIT_SUCCESS;
 		}
 		if (result.count("version") != 0)
 		{
 			std::cout << "openblack-server " << openblack::build_version::Text() << " (build id "
-			          << openblack::online::build_id::Own() << ")" << std::endl;
+			          << openblack::online::build_id::Own() << ")" << '\n'
+			          << std::flush;
 			return EXIT_SUCCESS;
 		}
 		if (result.count("build-id") != 0 && result["build-id"].as<std::string>() != openblack::online::build_id::Own())
 		{
 			// The server cannot start the game of another version. The exit code tells the slot agent the reason.
 			std::cerr << "openblack-server: the lobby gave the build " << result["build-id"].as<std::string>()
-			          << ", but this server is the build " << openblack::online::build_id::Own() << std::endl;
+			          << ", but this server is the build " << openblack::online::build_id::Own() << '\n'
+			          << std::flush;
 			return openblack::server::game_lifetime::k_ExitWrongVersion;
 		}
 		if (result.count("write-map-package") != 0 && result.count("custom-map") != 0)
@@ -380,7 +385,7 @@ int main(int argc, char* argv[])
 #endif
 		if (result.count("game-path") == 0)
 		{
-			std::cerr << "The server needs the folder of the game's data: use -g." << std::endl;
+			std::cerr << "The server needs the folder of the game's data: use -g." << '\n' << std::flush;
 			return EXIT_FAILURE;
 		}
 		settings.gamePath = result["game-path"].as<std::string>();
@@ -449,7 +454,8 @@ int main(int argc, char* argv[])
 			if (!slots.has_value())
 			{
 				std::cerr << "openblack-server: --random-alignment-slots needs god slots from 0 with a comma between them"
-				          << std::endl;
+				          << '\n'
+				          << std::flush;
 				return EXIT_FAILURE;
 			}
 			settings.randomAlignmentSlots = std::move(*slots);
@@ -461,7 +467,7 @@ int main(int argc, char* argv[])
 		if (const auto refusal = openblack::developer_tools::SoakRefusalOf(openblack::developer_tools::k_Built, settings.soak);
 		    refusal.has_value())
 		{
-			std::cerr << "This server " << *refusal << "." << std::endl;
+			std::cerr << "This server " << *refusal << "." << '\n' << std::flush;
 			return EXIT_FAILURE;
 		}
 		if (result.count("seed") != 0)
@@ -487,8 +493,8 @@ int main(int argc, char* argv[])
 			            : openblack::game_end::TimeLimitRefusal(minutes, openblack::developer_tools::k_Built);
 			    refusal.has_value())
 			{
-				std::cerr << "The time limit of --time-limit is " << minutes << " minutes, but " << *refusal << "."
-				          << std::endl;
+				std::cerr << "The time limit of --time-limit is " << minutes << " minutes, but " << *refusal << "." << '\n'
+				          << std::flush;
 				return EXIT_FAILURE;
 			}
 			settings.timeLimit = minutes;
@@ -498,8 +504,8 @@ int main(int argc, char* argv[])
 			settings.conditions = openblack::sim_run::ParseConditions(result["conditions"].as<std::string>());
 			if (!settings.conditions.has_value())
 			{
-				std::cerr << "The winning conditions of --conditions are not NAME[=VALUE],... with each condition once."
-				          << std::endl;
+				std::cerr << "The winning conditions of --conditions are not NAME[=VALUE],... with each condition once." << '\n'
+				          << std::flush;
 				return EXIT_FAILURE;
 			}
 		}
@@ -541,7 +547,7 @@ int main(int argc, char* argv[])
 			                       : std::nullopt;
 			if (!turns.has_value())
 			{
-				std::cerr << "--world-states needs --world-state-turns with a list such as 100,250" << std::endl;
+				std::cerr << "--world-states needs --world-state-turns with a list such as 100,250" << '\n' << std::flush;
 				return EXIT_FAILURE;
 			}
 			settings.worldStates = openblack::world_state_at_turn::Settings {
@@ -558,7 +564,7 @@ int main(int argc, char* argv[])
 		}
 		if (result.count("slot-kinds") != 0 && result.count("listen") == 0)
 		{
-			std::cerr << "openblack-server: --slot-kinds needs --listen" << std::endl;
+			std::cerr << "openblack-server: --slot-kinds needs --listen" << '\n' << std::flush;
 			return EXIT_FAILURE;
 		}
 		if (result.count("listen") != 0)
@@ -567,7 +573,7 @@ int main(int argc, char* argv[])
 			const auto colon = listen.rfind(':');
 			if (colon == std::string::npos)
 			{
-				std::cerr << "--listen needs an address and a port, such as 127.0.0.1:0." << std::endl;
+				std::cerr << "--listen needs an address and a port, such as 127.0.0.1:0." << '\n' << std::flush;
 				return EXIT_FAILURE;
 			}
 			openblack::server::NetworkSettings network;
@@ -642,12 +648,12 @@ int main(int argc, char* argv[])
 			}
 			if (const auto error = ReadSlotKinds(result, network); error.has_value())
 			{
-				std::cerr << "openblack-server: " << *error << std::endl;
+				std::cerr << "openblack-server: " << *error << '\n' << std::flush;
 				return EXIT_FAILURE;
 			}
 			if (const auto error = ReadLobbyGame(result, settings, network); error.has_value())
 			{
-				std::cerr << "openblack-server: " << *error << std::endl;
+				std::cerr << "openblack-server: " << *error << '\n' << std::flush;
 				return EXIT_FAILURE;
 			}
 			if (network.lobby.has_value())
@@ -656,7 +662,8 @@ int main(int argc, char* argv[])
 				    member != nullptr)
 				{
 					std::cerr << "openblack-server: the member " << member->account << " has the slot "
-					          << static_cast<int>(*member->slot) << ", which is not an open slot of --slot-kinds" << std::endl;
+					          << static_cast<int>(*member->slot) << ", which is not an open slot of --slot-kinds" << '\n'
+					          << std::flush;
 					return EXIT_FAILURE;
 				}
 			}
@@ -666,8 +673,9 @@ int main(int argc, char* argv[])
 	}
 	catch (const cxxopts::exceptions::exception& error)
 	{
-		std::cerr << error.what() << std::endl
-		          << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+		std::cerr << error.what() << '\n'
+		          << std::flush << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << '\n'
+		          << std::flush;
 		return EXIT_FAILURE;
 	}
 

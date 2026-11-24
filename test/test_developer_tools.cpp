@@ -419,7 +419,7 @@ TEST(DeveloperTools, ADeployedServerKeepsTheConditionsAndTheTimeLimitOfTheOperat
 	                                        "WC_KILL_NUM_VILLAGERS:\t\t1\t1\t500\t1 \t25\n"
 	                                        "WC_GROW_TREES:\t1\t1\t1000\t1\t100\n";
 	const auto request =
-	    openblack::sim_run::ParseConditions(std::string_view(kept.at(3)).substr(std::string_view("--conditions=").size()));
+	    openblack::sim_run::ParseConditions(std::string_view {kept.at(3)}.substr(std::string_view("--conditions=").size()));
 	ASSERT_TRUE(request.has_value());
 	EXPECT_EQ(request->limitsLand, "mpm_2p_1");
 	const auto limits = openblack::gui::multiplayer::FindConditions(k_Template, request->limitsLand);

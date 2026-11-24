@@ -56,6 +56,8 @@ TEST(CreatureAudio, EventsFireOnceAcrossFrames)
 {
 	// Played in 16 ms frames over a whole cycle, each step sounds once
 	std::vector<int32_t> heard;
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float time = 0.0f; time < 2000.0f; time += 16.0f)
 	{
 		const auto fired = EventsPassed(k_Walk, time, time + 16.0f, 2000, true);

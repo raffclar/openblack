@@ -68,7 +68,7 @@ std::optional<std::vector<uint8_t>> ReadFile(const std::filesystem::path& path)
 
 std::filesystem::path PathOf(const std::string& utf8)
 {
-	return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+	return {std::u8string(utf8.begin(), utf8.end())};
 }
 
 /// The folder of the game from the registry, as the game finds it

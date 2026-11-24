@@ -75,6 +75,7 @@ protected:
 		SyncChecksumSystem checksums;
 		checksums.SetEnabled(true);
 		checksums.ProcessTurn();
+		// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.UndefReturn): the last checksum is set after the turn
 		return checksums.GetLast().value().checksum;
 	}
 };

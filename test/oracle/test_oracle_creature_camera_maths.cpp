@@ -42,8 +42,8 @@ public:
 	{
 	}
 
-	[[nodiscard]] float Float(std::string_view name) const { return _table.Float(_row, *_table.Column(name)); }
-	[[nodiscard]] uint32_t Bits(std::string_view name) const { return _table.Bits(_row, *_table.Column(name)); }
+	[[nodiscard]] float Float(std::string_view name) const { return _table.Float(_row, _table.Column(name).value()); }
+	[[nodiscard]] uint32_t Bits(std::string_view name) const { return _table.Bits(_row, _table.Column(name).value()); }
 	[[nodiscard]] glm::vec3 Vec3(std::string_view x, std::string_view y, std::string_view z) const
 	{
 		return {Float(x), Float(y), Float(z)};

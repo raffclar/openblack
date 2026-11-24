@@ -700,6 +700,8 @@ TEST(ScreenPick, AnInvisibleBallIsHitWithinItsWholePixelRadiusAtItsMiddlesDepth)
 TEST(ScreenPick, AnInvisibleBallFarOffTheSideOfTheScreenIsNeverHit)
 {
 	const glm::vec3 middle(2000.0f, 0.0f, -1.5f);
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float x = 0.0f; x < 800.0f; x += 50.0f)
 	{
 		EXPECT_FALSE(screen_pick::BallHit(View({x, 300.0f}), middle, 2.0f).has_value()) << x;

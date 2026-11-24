@@ -50,8 +50,8 @@ TEST(OracleComputerWar, TownTargetAsInTheGame)
 	size_t different = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
-		const auto at = [&](const char* name) { return table->Bits(row, *table->Column(name)); };
-		const auto floatAt = [&](const char* name) { return table->Float(row, *table->Column(name)); };
+		const auto at = [&](const char* name) { return table->Bits(row, table->Column(name).value()); };
+		const auto floatAt = [&](const char* name) { return table->Float(row, table->Column(name).value()); };
 		const auto hand = Coords(at("hand_x"), at("hand_z"), 0.0f);
 		std::vector<float> values;
 		std::vector<uint32_t> kinds;
@@ -88,9 +88,9 @@ TEST(OracleComputerWar, AttackCreatureWishAsInTheGame)
 	size_t different = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
-		const auto at = [&](const char* name) { return table->Bits(row, *table->Column(name)); };
+		const auto at = [&](const char* name) { return table->Bits(row, table->Column(name).value()); };
 		const auto hand = Coords(at("hand_x"), at("hand_z"), 0.0f);
-		const auto creature = Coords(at("creature_x"), at("creature_z"), table->Float(row, *table->Column("altitude")));
+		const auto creature = Coords(at("creature_x"), at("creature_z"), table->Float(row, table->Column("altitude").value()));
 		const float distance = gutils::GetDistanceInMetres(hand, creature);
 		const float ours = AttackCreatureWish(distance, gutils::GetDistanceModifier(distance, k_AttackCreatureReach));
 		const auto game = at("wish");

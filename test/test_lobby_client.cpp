@@ -397,6 +397,7 @@ TEST_F(LobbyClientTest, ARefusedAccessTokenGetsOneRefreshAndOneRetry)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<lobby_api::Me>> got;
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->GetMe([&](auto&& result) { got = std::move(result); });
 	_http.Answer(401, "{}");
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions/refresh");
@@ -667,6 +668,7 @@ TEST_F(LobbyClientTest, AJoinTicketMustBeForAnEncryptedSocket)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<lobby_api::JoinTicket>> got;
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->RequestJoinTicket("eden", game_socket::Role::God, [&](auto&& result) { got = std::move(result); });
 	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/servers/eden/tickets");
@@ -675,6 +677,7 @@ TEST_F(LobbyClientTest, AJoinTicketMustBeForAnEncryptedSocket)
 	ASSERT_TRUE(got.has_value());
 	EXPECT_EQ(got->error.kind, LobbyErrorKind::AddressRefused);
 
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->RequestJoinTicket("eden", game_socket::Role::Observer, [&](auto&& result) { got = std::move(result); });
 	EXPECT_EQ(_http.NextBody(), R"({"role":"observer"})");
 	_http.Answer(201,
@@ -689,6 +692,7 @@ TEST_F(LobbyClientTest, AFullRoomGivesTheCodeOfTheProblem)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<lobby_api::JoinTicket>> got;
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->RequestJoinTicket("eden", game_socket::Role::God, [&](auto&& result) { got = std::move(result); });
 	_http.Answer(409,
 	             R"({"type":"about:blank","title":"Conflict","status":409,)"
@@ -782,6 +786,7 @@ TEST_F(LobbyClientTest, PlayerDetailLinesSendTheVersionOfTheGame)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<lobby_api::PlayerDetailLines>> got;
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->GetPlayerDetailLines(4, "0.1.0+ab c", [&](auto&& result) { got = std::move(result); });
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/players/4/details?version=0.1.0%2Bab%20c");
 	_http.Answer(200, R"({"lines":[{"label":"Points","value":"12"}]})");
@@ -794,11 +799,13 @@ TEST_F(LobbyClientTest, TheLogoMustBeABmpFile)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<std::vector<uint8_t>>> got;
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->GetClanLogo(3, [&](auto&& result) { got = std::move(result); });
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/clans/3/logo");
 	_http.Answer(200, "BM\x01\x02");
 	ASSERT_TRUE(got->Ok());
 	EXPECT_EQ(got->value->size(), 4u);
+	// NOLINTNEXTLINE(bugprone-move-forwarding-reference): the callback gets a value that it may take
 	_client->GetClanLogo(3, [&](auto&& result) { got = std::move(result); });
 	_http.Answer(200, "<html>");
 	EXPECT_EQ(got->error.kind, LobbyErrorKind::BadAnswer);

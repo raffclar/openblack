@@ -40,6 +40,7 @@ struct Sample
 };
 
 // clang-format off
+// NOLINTNEXTLINE(modernize-avoid-c-arrays): the size comes from the list
 constexpr Sample k_Samples[] = {
     // Assignments and arithmetic
     {"assign", "\tX = 1\n"},

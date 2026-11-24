@@ -269,6 +269,7 @@ TEST_F(CreatureUploadDialogTest, ASuccessfulUploadShowsThePageAndSignsOut)
 	_http.Answer(201, k_Uploaded);
 	EXPECT_EQ(Effects(), (std::vector<std::string> {
 	                         fmt::format("position {}", most),
+	                         // NOLINTNEXTLINE(bugprone-suspicious-missing-comma): the strings join on purpose
 	                         "message [Creature Upload Utility] Your creaturefile has been sent to the server, look at: "
 	                         "https://bw.example/creature/abc/",
 	                         "status Creaturedata was sent to the server",

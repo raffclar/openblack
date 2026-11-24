@@ -26,7 +26,7 @@ constexpr DialogRect k_Rect {.min = {150, 525}, .max = {650, 555}};
 
 TEST(EditBox, ABoxThatThePlayerCanTypeIntoTakesCharactersAndKeys)
 {
-	GameFont font = openblack::gui::test::LoadFont();
+	const GameFont font = openblack::gui::test::LoadFont();
 	EditBox box(font, k_Rect, u"ab", 20, 10);
 	box.SetFocus(true);
 	EXPECT_TRUE(box.KeyDown(SDLK_END));
@@ -39,7 +39,7 @@ TEST(EditBox, ABoxThatThePlayerCanTypeIntoTakesCharactersAndKeys)
 
 TEST(EditBox, ABoxThatThePlayerCannotTypeIntoTakesNoCharacterOrKey)
 {
-	GameFont font = openblack::gui::test::LoadFont();
+	const GameFont font = openblack::gui::test::LoadFont();
 	EditBox box(font, k_Rect, u"Status", 20, 10);
 	box.editable = false;
 	box.SetFocus(true);

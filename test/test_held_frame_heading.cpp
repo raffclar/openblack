@@ -51,9 +51,9 @@ TEST(HeldFrameHeading, ALineThatLeansTooLittleGivesNoHeading)
 
 TEST(HeldFrameHeading, TheHeadingIsZeroAlongMinusZAndGrowsTowardsPlusX)
 {
-	EXPECT_NEAR(*HeadingOfSight({0.0f, -0.5f, -1.0f}), 0.0f, k_Near);
-	EXPECT_NEAR(*HeadingOfSight({1.0f, -0.5f, 0.0f}), 1.5707964f, k_Near);
-	EXPECT_NEAR(*HeadingOfSight({-1.0f, -0.5f, 0.0f}), -1.5707964f, k_Near);
+	EXPECT_NEAR(HeadingOfSight({0.0f, -0.5f, -1.0f}).value(), 0.0f, k_Near);
+	EXPECT_NEAR(HeadingOfSight({1.0f, -0.5f, 0.0f}).value(), 1.5707964f, k_Near);
+	EXPECT_NEAR(HeadingOfSight({-1.0f, -0.5f, 0.0f}).value(), -1.5707964f, k_Near);
 }
 
 TEST(HeldFrameHeading, AHeldThingFacesBackAlongTheLineOfSight)
@@ -62,7 +62,7 @@ TEST(HeldFrameHeading, AHeldThingFacesBackAlongTheLineOfSight)
 	// camera's own line
 	for (const glm::vec3 line : {glm::vec3(0.0f, -0.6f, -1.0f), glm::vec3(0.7f, -0.6f, -1.0f), glm::vec3(-0.7f, -0.6f, -1.0f)})
 	{
-		const auto facing = HeldFacing(*HeadingOfSight(line));
+		const auto facing = HeldFacing(HeadingOfSight(line).value());
 		EXPECT_EQ(facing.y, 0.0f);
 		EXPECT_NEAR(glm::dot(facing, -Level(line)), 1.0f, k_Near);
 	}
@@ -73,8 +73,8 @@ TEST(HeldFrameHeading, TheFrameOfAHeldThingFollowsTheHeading)
 	const glm::vec3 up {0.0f, 1.0f, 0.0f};
 	const glm::vec3 left {-0.7f, -0.6f, -1.0f};
 	const glm::vec3 right {0.7f, -0.6f, -1.0f};
-	const auto atLeft = HeldBasis(HeldFacing(*HeadingOfSight(left)), up);
-	const auto atRight = HeldBasis(HeldFacing(*HeadingOfSight(right)), up);
+	const auto atLeft = HeldBasis(HeldFacing(HeadingOfSight(left).value()), up);
+	const auto atRight = HeldBasis(HeldFacing(HeadingOfSight(right).value()), up);
 	// The third axis of the frame points along the level line of sight, away from the camera. The frames at the two sides
 	// are turned by opposite angles.
 	EXPECT_NEAR(glm::dot(atLeft[2], Level(left)), 1.0f, k_Near);

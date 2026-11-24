@@ -12,6 +12,7 @@
 #include <cctype>
 #include <charconv>
 
+#include <algorithm>
 #include <optional>
 
 using namespace openblack::psys;
@@ -37,14 +38,7 @@ bool IsName(std::string_view text)
 	{
 		return false;
 	}
-	for (const char c : text)
-	{
-		if (std::isalnum(static_cast<unsigned char>(c)) == 0 && c != '_')
-		{
-			return false;
-		}
-	}
-	return true;
+	return std::ranges::all_of(text, [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; });
 }
 } // namespace
 

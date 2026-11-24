@@ -249,8 +249,10 @@ TEST(CurlWebSocketThread, AnAddressThatIsNotWssMakesNoThreadAndEndsInPoll)
 	                               Recorder(seen, inPoll));
 	EXPECT_EQ(client.State(id), online::WebSocketState::None);
 	EXPECT_FALSE(seen.closed.has_value());
+	// NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores): the recorder reads the flag by reference
 	inPoll = true;
 	client.Poll();
+	// NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores): the recorder reads the flag by reference
 	inPoll = false;
 	ASSERT_TRUE(seen.closed.has_value());
 	EXPECT_EQ(seen.closed->end, online::WebSocketEnd::AddressRefused);

@@ -67,7 +67,7 @@ public:
 	{
 		return _held && (static_cast<uint64_t>(actions) & static_cast<uint64_t>(input::BindableActionMap::MOVE)) != 0;
 	}
-	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return glm::uvec2(_atFrameStart); }
+	[[nodiscard]] glm::uvec2 GetMousePosition() const override { return {_atFrameStart}; }
 	[[nodiscard]] glm::ivec2 GetPointerPosition() const override { return _pointer; }
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const override { return _movement; }
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const override

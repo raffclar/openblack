@@ -134,11 +134,13 @@ TEST(FootpathRules, FarFromTheBuildingsPathsTheWalkGoesThroughTheStoragePit)
 	const auto farm = At(5, 0);
 	const auto pit = At(0, 0);
 	EXPECT_FALSE(footpath_rules::NearestPathTo(farmPaths, villager, farm, footpath_rules::k_JoinReach).has_value());
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	const auto route = footpath_rules::RouteThroughStore(farmPaths, storePaths, villager, farm, pit);
 	ASSERT_TRUE(route.has_value());
 	EXPECT_EQ(route->toStore, (Join {.path = 1, .towardsStart = true, .node = 3}));
 	EXPECT_EQ(route->onward, 0u);
 	// A pit with no paths of its own gives no route
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 	EXPECT_FALSE(footpath_rules::RouteThroughStore(farmPaths, {}, villager, farm, pit).has_value());
 }
 

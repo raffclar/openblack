@@ -162,6 +162,7 @@ TEST(PlayersSymbols, EachComputerGodAfterTheSeventhTakesNemesis)
 		}
 		for (int32_t land = 1; land <= 5; ++land)
 		{
+			// NOLINTNEXTLINE(readability-suspicious-call-argument): the arguments are in the right order
 			EXPECT_EQ(k_GodPictures.at(GodPictureOf(number, land)), "nemesis") << number << " " << land;
 		}
 	}

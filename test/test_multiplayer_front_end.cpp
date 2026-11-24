@@ -198,6 +198,7 @@ public:
 	template <typename Value>
 	static void Give(LobbyCallback<Value>& callback, Value value)
 	{
+		// NOLINTNEXTLINE(clang-analyzer-cplusplus.Move): the callback is set again right after the move
 		auto done = std::move(callback);
 		callback = {};
 		done(LobbyResult<Value> {.value = std::move(value), .error = {}});
@@ -1218,6 +1219,7 @@ TEST_F(FrontEndTest, AStartedGameIsJoinedAsAnObserverWhenTheAccountHasNoGodInIt)
 	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God, game_socket::Role::Observer}));
 	// The lobby also refuses the observer: the join fails, with no loop
+	// NOLINTNEXTLINE(clang-analyzer-cplusplus.Move): the callback is taken once in this test
 	auto again = std::move(lobby.ticket);
 	again({.value = std::nullopt,
 	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
@@ -2497,6 +2499,7 @@ TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
 			const auto [buttonMin, buttonMax] = onScreen(refresh->rect);
 			const auto count = std::ranges::count_if(rects, [&](const DialogRect& rect) {
 				const auto [min, max] = onScreen(rect);
+				// NOLINTNEXTLINE(clang-analyzer-core.NullDereference): the bounds come from the rectangle of the lambda
 				return min.x < buttonMax.x && buttonMin.x < max.x && min.y < buttonMax.y && buttonMin.y < max.y;
 			});
 			EXPECT_EQ(count, 1) << when << " " << width << "x" << height;

@@ -426,7 +426,7 @@ TEST(VortexCrossingLines, AChestReadyToOpenIsWrittenAsTheSameChest)
 	EXPECT_EQ(text, "CREATE_REWARD_CHEST(\"0.00,-10.00\", 4, 0, 0.000000)\n");
 	// The land scripts do not know the line: only the vortex makes the chest
 	EXPECT_FALSE(ReaderTakes(Read(text)));
-	const auto read = vortex::crossing::ReadRewardLine(std::string_view(text).substr(0, text.size() - 1));
+	const auto read = vortex::crossing::ReadRewardLine(std::string_view {text}.substr(0, text.size() - 1));
 	ASSERT_TRUE(read.has_value());
 	EXPECT_EQ(read->type, RewardObjectInfo::MediumFood);
 	EXPECT_EQ(read->player, PlayerNames::PLAYER_ONE);
