@@ -388,6 +388,7 @@ std::optional<std::filesystem::path> Write(const Settings& settings, const Captu
 	{
 		return std::nullopt;
 	}
+	// NOLINTNEXTLINE(performance-no-automatic-move): the folder stays const, and the copy costs little
 	return folder;
 }
 
