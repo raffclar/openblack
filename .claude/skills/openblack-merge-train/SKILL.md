@@ -44,6 +44,7 @@ Scripts, in this skill's `scripts/` folder (call them by their full path from an
 | `car_finish.sh <n> <batch> <short:branch>...` | Finishes a hand-merged car in `<worktrees>/prm-wtb<batch>`. |
 | `car_checks.sh` | The checks, PR and merge that both of the scripts above use. Not called directly. After the merge, it moves the car's worktree to the merge commit, builds the game and the server again (only the build id compiles, then two links) and stores them, so that the stored build of a commit has the build id of that commit (`ob-build store` refuses another id; `ob-build store-check` tells). |
 | `format_check.sh <worktree>` | The format step of each car, run first in `car_checks.sh` before any build: every C++ file the car changes against the main branch (src, apps, components, test, minus `.clang-format-ignore`) must pass clang-format 17 `--dry-run --Werror` (found like the pre-commit hook; no other version is used). FAIL stops the car (exit 21, or 22 if clang-format 17 is missing). `tools/githooks/pre-merge-commit` runs the same check for merge commits that git makes. |
+| `tidy_check.sh <worktree> <build dir>` | The tidy step of each car, run after the configure and before the first build: clang-tidy 17 on the lines that the car changes against the main branch (`tools/githooks/tidy_gate.py range --strict`, with the compile database of the car's own build folder). A finding on a changed line, or a `NOLINT` without a check name or a reason comment, stops the car (exit 23). A missing clang-tidy 17, a missing `compile_commands.json` or a file that takes more than 300 s stops the car too (exit 24). A finding on a line that the car did not change never stops it. |
 | `check_lost.sh` | Lists unmerged cars missing from both order files. Run before you choose the next work. The output must be empty. |
 | `prep_hand.sh`, `post_hand.sh` | Start and end a hand car, with vanilla-bugs row renumbering (`old:new`). |
 | `nc3_check.sh <worktree> <build dir>` | The 3-client net check of each car. |
@@ -51,7 +52,18 @@ Scripts, in this skill's `scripts/` folder (call them by their full path from an
 | `uz_shots.py <ref exe> <new exe> <out dir>` | The pixel check of old against new master (needs `paths.gameData`). |
 | `resolve_*.py`, `union_conflicts.py`, `includes_only.py`, `fix_kind_names.py`, `hunk.py`, `sort_rows.py` | Conflict helpers. `hunk.py` resolves one conflict block by hand. |
 
-Working files in `paths.mergeTrain` (each developer's own; not in the repository):
+A car that stops with exit 23 (tidy) has a finding on a line that one of its lanes changed. The output lists each
+file, line, text and check name. Fix it on the lane branch, or in the car worktree if the lane is closed, then run the
+queue line again:
+
+1. Change the code so that the check passes.
+2. If the code must stay, add `NOLINT(check-name)` and a reason comment on the same line or the line before.
+3. Do not turn the check off in `.clang-tidy` and do not leave out the lane.
+
+A car that stops with exit 24 cannot run the check. Set `tools.clangTidy17Dir` (the folder with clang-tidy 17) in
+`.claude/openblack.local.json`, or fix the build folder, then run the queue line again. Details: `tools/githooks/README.md`.
+
+Working files in `paths.mergeTrain`Working files in `paths.mergeTrain` (each developer's own; not in the repository):
 
 | File | Use |
 |---|---|

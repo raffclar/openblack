@@ -26,6 +26,9 @@
     "python": "python",
     "clangFormat": "clang-format",
     "clangFormat17Dir": "",
+    "clangTidy17Dir": "",
+    "tidyBuildDir": "",
+    "tidyMsvcDir": "",
     "obBuild": "",
     "ghidraBridge": "http://127.0.0.1:8080",
     "ghidraBinary": "BW1W120"
