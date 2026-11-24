@@ -747,6 +747,8 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	}
 	UploadHandSkins();
 	UploadPosedBones(drawDesc);
+	// What the creatures' pass reads of the creatures, with the copies of their bones that the texture holds
+	CollectDrawnCreatures(frame, drawDesc);
 	// The workers make the moving shadows on the land while the passes below draw
 	StartGroundShadows(drawDesc);
 	{
@@ -771,6 +773,7 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	CollectCreatureFootprints(effects, drawDesc);
 	CollectLeashes(effects, drawDesc);
 	CollectTempleLooks(effects, drawDesc);
+	CollectSprites(frame, drawDesc);
 	_effectsFilled = true;
 }
 

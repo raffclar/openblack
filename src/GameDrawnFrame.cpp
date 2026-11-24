@@ -14,6 +14,7 @@
 #include <span>
 #include <vector>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Animal.h"
@@ -174,6 +175,8 @@ void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uin
 	frame.templeActive = Locator::temple::has_value() && Locator::temple::value().Active();
 	frame.sky = SkyOf();
 
+	frame.land.extent =
+	    Locator::terrainSystem::has_value() ? std::optional(Locator::terrainSystem::value().GetExtent()) : std::nullopt;
 	frame.land.reflected = config.detail.landReflection;
 	frame.land.coarse = config.detail.coarseLand;
 	frame.land.groundMarks.clear();

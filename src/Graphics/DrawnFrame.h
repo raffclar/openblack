@@ -20,10 +20,13 @@
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
+#include "3D/Extent.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "Graphics/DrawnCreatures.h"
 #include "Graphics/DrawnEffects.h"
+#include "Graphics/DrawnSprites.h"
 
 namespace openblack
 {
@@ -119,6 +122,8 @@ struct DrawnFrame
 	struct Land
 	{
 		std::vector<ecs::systems::VortexSystemInterface::GroundMark> groundMarks;
+		/// The lowest and the highest corners of the land on the map, when the game has a land
+		std::optional<Extent2> extent;
 		bool reflected {true};
 		bool coarse {false};
 	};
@@ -143,6 +148,10 @@ struct DrawnFrame
 	std::vector<glm::mat4> bones;
 	/// What the effects draw. The renderer fills it after the rest, only in a frame that draws the world.
 	DrawnEffects effects;
+	/// What the creatures' pass draws. The renderer fills it with the effects.
+	DrawnCreatures creatures;
+	/// The sprites that the frame shows, in the order of the draw. The renderer fills them with the effects.
+	std::vector<DrawnSprite> sprites;
 
 	[[nodiscard]] std::span<const glm::mat4> BonesOf(BoneRun run) const
 	{
