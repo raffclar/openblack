@@ -94,6 +94,7 @@
 #include "ECS/NeedFlagRules.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
@@ -173,28 +174,16 @@ constexpr float k_CreatureTapShare = 0.4f;
 /// How far a tap reaches
 constexpr float k_TapReach = 1e6f;
 
-/// The hand of a player in the world, as the reports of the player put it, none off the land. The turns measure from
-/// here.
+/// The hand of a player in the world, as the turn reads it, none off the land. After the step of a computer mind, this
+/// is the hand of the god before the step. The turns measure from here.
 std::optional<glm::vec3> HandPoint(PlayerNames player)
 {
-	if (!Locator::handSystem::has_value())
+	const auto hand = ecs::PlayerHandOf(player);
+	if (!hand.has_value() || *hand == glm::vec3(0.0f))
 	{
 		return std::nullopt;
 	}
-	const auto& hands = Locator::handSystem::value();
-	if (player == PlayerNames::PLAYER_ONE)
-	{
-		return hands.GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	}
-	const auto own = hands.GetHandsOf(player);
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = own.has_value() ? (*own)[static_cast<size_t>(HandSystemInterface::Side::Left)] : entt::null;
-	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
-	if (reported == nullptr || reported->handPoint == glm::vec3(0.0f))
-	{
-		return std::nullopt;
-	}
-	return reported->handPoint;
+	return hand;
 }
 
 /// The player whose hand this computer moves

@@ -161,7 +161,7 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	auto position = transform->position;
 	if (const auto holder = HolderOf(spell.seed); holder.has_value())
 	{
-		position = ReportedHandOf(*holder).value_or(position);
+		position = WorldHandOf(*holder).value_or(position);
 	}
 	else
 	{
@@ -313,7 +313,7 @@ bool MagicSystem::TakeSeedBack(PlayerNames player, entt::entity entity)
 	auto& transform = registry.Get<Transform>(entity);
 	transform.rotation = glm::mat3(1.0f);
 	transform.scale = glm::vec3(info.scale);
-	transform.position = own ? _hand.handPosition : ReportedHandOf(player).value_or(transform.position);
+	transform.position = own ? _hand.handPosition : WorldHandOf(player).value_or(transform.position);
 	SetHeld(entity);
 	// The player's last miracle is now this one: the R gesture and the R key ask for it again
 	registry.Each<Player>([player, &seed](entt::entity, Player& record) {

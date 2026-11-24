@@ -22,7 +22,6 @@
 
 #include "Common/GameRandom.h"
 #include "ECS/Components/HandHeldSeed.h"
-#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -30,6 +29,7 @@
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/SpellCreator.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
@@ -75,21 +75,6 @@ ecs::Registry& EntityRegistry()
 	return Locator::entitiesRegistry::value();
 }
 
-/// The left hand of a player, none for a player with no hands
-[[nodiscard]] entt::entity LeftHandOf(PlayerNames player)
-{
-	if (!Locator::handSystem::has_value() || !Locator::entitiesRegistry::has_value())
-	{
-		return entt::null;
-	}
-	const auto hands = Locator::handSystem::value().GetHandsOf(player);
-	if (!hands.has_value())
-	{
-		return entt::null;
-	}
-	const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	return Locator::entitiesRegistry::value().Valid(hand) ? hand : entt::null;
-}
 } // namespace
 
 // The system
@@ -508,15 +493,15 @@ bool MagicSystem::OnSpellEvent(entt::entity entity, const particles::SpellEventI
 
 particles::ProcessInfo MagicSystem::TurnHandInfo(const particles::ProcessInfo& last, PlayerNames player) const
 {
-	// The turn reads the hand of the player as the reports give it, never the hand that this computer draws. Before the
-	// first report the miracle keeps what it had.
+	// The turn reads the hand of the player as the turn has it, never the hand that this computer draws. Before the first
+	// report the miracle keeps what it had.
 	auto info = last;
 	if (!Locator::handSystem::has_value())
 	{
 		return info;
 	}
 	const auto& hands = Locator::handSystem::value();
-	if (const auto hand = ReportedHandOf(player); hand.has_value())
+	if (const auto hand = WorldHandOf(player); hand.has_value())
 	{
 		info.handPosition = *hand;
 	}
@@ -529,9 +514,7 @@ particles::ProcessInfo MagicSystem::TurnHandInfo(const particles::ProcessInfo& l
 			info.cameraForward = line * (1.0f / glm::length(line));
 		}
 	}
-	const auto hand = LeftHandOf(player);
-	const auto* stillness = hand != entt::null ? EntityRegistry().TryGet<const HandStillness>(hand) : nullptr;
-	info.direction = stillness != nullptr ? stillness->velocity : glm::vec3(0.0f);
+	info.direction = ecs::PlayerHandVelocityOf(player);
 	info.enabled = true;
 	return info;
 }

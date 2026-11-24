@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <bit>
+#include <map>
 #include <optional>
 
 #include <gtest/gtest.h>
@@ -25,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Hand/HandStart.h"
 #include "Locator.h"
 
@@ -218,4 +220,70 @@ TEST_F(HandsAtTheCitadel, AComputerMindThatTheGameMakesAfterTheCitadelLooksAtThe
 	minds.SetCreatureLike(PlayerNames::PLAYER_FOUR, PlayerNames::PLAYER_ONE);
 	ASSERT_TRUE(registry.AllOf<ComputerPlayer>(player));
 	EXPECT_EQ(registry.Get<const ComputerPlayer>(player).hand.camera, k_Camera);
+}
+
+namespace
+{
+/// The players of the test: a person plays only the players that the test names
+class FakeGods final: public ecs::systems::PlayerSystemInterface
+{
+public:
+	void RegisterPlayers() override {}
+	void AddPlayer(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames name) const override
+	{
+		const auto found = entities.find(name);
+		return found != entities.end() ? std::optional(found->second) : std::nullopt;
+	}
+	entt::entity EnsurePlayer(PlayerNames /*name*/) override { return entt::null; }
+	void AddCreature(entt::entity /*creature*/) override {}
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames /*name*/) const override { return std::nullopt; }
+	void KeepForNextLand() override {}
+	void ForgetKept() override {}
+	[[nodiscard]] bool KeepAlignmentAt(uint32_t /*turn*/) override { return false; }
+	void TakeUpKept(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override { return !IsHumanPlayer(name); }
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override { return name == PlayerNames::PLAYER_ONE; }
+
+	std::map<PlayerNames, entt::entity> entities;
+};
+
+class GodHandsInTheTurn: public ::testing::Test
+{
+protected:
+	void SetUp() override
+	{
+		Locator::entitiesRegistry::emplace<ecs::Registry>();
+		Locator::playerSystem::emplace<FakeGods>();
+		auto& registry = Locator::entitiesRegistry::value();
+		_god = registry.Create();
+		registry.Assign<Player>(_god, Player {.name = PlayerNames::PLAYER_TWO});
+		dynamic_cast<FakeGods&>(Locator::playerSystem::value()).entities[PlayerNames::PLAYER_TWO] = _god;
+	}
+	void TearDown() override
+	{
+		Locator::playerSystem::reset();
+		Locator::entitiesRegistry::reset();
+	}
+
+	entt::entity _god {entt::null};
+};
+} // namespace
+
+TEST_F(GodHandsInTheTurn, TheWorldReadsTheHandBeforeTheStepAndTheReportGivesTheHandAfterIt)
+{
+	using ecs::PlayerHandOf;
+	using ecs::PlayerReportedPointOf;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& mind = registry.Assign<ComputerPlayer>(_god);
+	// Before the first step the god reports the origin of the world
+	EXPECT_EQ(PlayerReportedPointOf(PlayerNames::PLAYER_TWO), std::optional(glm::vec3(0.0f)));
+	// The step moved the hand from where the world has it to where the god reports it
+	registry.Assign<HandStillness>(_god).last = {10.0f, 5.0f, 20.0f};
+	mind.hand.reported = glm::vec3 {110.0f, 5.0f, 20.0f};
+	EXPECT_EQ(PlayerHandOf(PlayerNames::PLAYER_TWO), std::optional(glm::vec3(10.0f, 5.0f, 20.0f)));
+	EXPECT_EQ(PlayerReportedPointOf(PlayerNames::PLAYER_TWO), std::optional(glm::vec3(110.0f, 5.0f, 20.0f)));
+	// The neutral player has no hand
+	EXPECT_FALSE(PlayerHandOf(PlayerNames::NEUTRAL).has_value());
+	EXPECT_FALSE(PlayerReportedPointOf(PlayerNames::NEUTRAL).has_value());
 }

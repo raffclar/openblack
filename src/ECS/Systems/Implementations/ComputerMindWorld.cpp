@@ -170,14 +170,18 @@ bool GameMindWorld::ActionBusy() const
 
 bool GameMindWorld::StepAction()
 {
-	// The god reports the place of its hand before the step, and its camera after it
+	// The world has the hand of the god where it was before the step. After the step, the god reports its hand and its
+	// camera where the step put them. The turn that only puts a move in front of a step makes no report.
 	const auto start = _timeHand ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
-	const auto hand = _state.hand.hand;
-	ReportGodHand(hand);
+	ReportGodHand(_state.hand.hand);
+	const bool reports = !computer_hand::PutsMoveInFront(_state.hand);
 	const bool ended = computer_hand::Process(_state.hand, _hand);
 	// The step can change the world, so the searches look again
 	_context.ForgetSearches();
-	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	if (reports && _state.hand.reported.has_value())
+	{
+		computer_world::ReportHand(_player, *_state.hand.reported, _state.hand.camera);
+	}
 	if (_timeHand)
 	{
 		_handMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
