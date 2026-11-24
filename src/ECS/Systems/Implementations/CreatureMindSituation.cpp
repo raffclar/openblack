@@ -483,17 +483,15 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 		};
 	}
 	situation.hasTemple = situation.templeHeart.has_value();
-	// Every other creature counts, of any player, dead or alive. A creature that is surely too far to frighten it cannot
-	// change the result, thus the code does not measure its distance.
+	// Every other creature counts, of any player, dead or alive. The search stops at the first creature that frightens it.
+	// The code does not measure the distance of a creature that is surely too far to frighten it.
 	const auto reach = situation.height * creature_mind::k_FrighteningHeights;
-	std::vector<float> others;
-	registry.Each<const Creature, const Transform>([&](entt::entity other, const Creature&, const Transform& place) {
-		if (other != creature && !gutils::SurelyNotNearer(glm::xz(place.position), glm::xz(at->position), reach))
-		{
-			others.push_back(gutils::GetDistanceInMetres(place.position, at->position));
-		}
-	});
-	situation.nothingFrighteningNear = creature_mind::NothingFrighteningNear(situation.height, others);
+	const auto frightening =
+	    registry.FindFirst<const Creature, const Transform>([&](entt::entity other, const Creature&, const Transform& place) {
+		    return other != creature && !gutils::SurelyNotNearer(glm::xz(place.position), glm::xz(at->position), reach) &&
+		           creature_mind::Frightens(situation.height, gutils::GetDistanceInMetres(place.position, at->position));
+	    });
+	situation.nothingFrighteningNear = !frightening.has_value();
 }
 
 creature_mind::HangAroundPlaces CreatureMindSystem::HangAroundPlacesOf(entt::entity creature,

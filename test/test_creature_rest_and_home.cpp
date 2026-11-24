@@ -87,6 +87,13 @@ TEST(CreatureRestAndHome, AnotherCreatureNearerThanEightHeightsIsFrightening)
 	EXPECT_TRUE(NothingFrighteningNear(10.0f, {}));
 }
 
+TEST(CreatureRestAndHome, OneCreatureFrightensOnlyNearerThanEightHeights)
+{
+	EXPECT_TRUE(Frightens(10.0f, 79.9f));
+	EXPECT_FALSE(Frightens(10.0f, 80.0f));
+	EXPECT_FALSE(Frightens(0.0f, 0.0f));
+}
+
 TEST(CreatureRestAndHome, HomeDistancesDecideGoingHomeAndPraying)
 {
 	EXPECT_FALSE(FarFromHome(20.0f));
