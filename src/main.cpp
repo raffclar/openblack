@@ -193,6 +193,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		    cxxopts::value<std::vector<std::string>>()->default_value("all=debug"))
 		("background", "Tools: keep the window out of the way of the desk: it never takes the focus, never comes to the front, never holds or moves the mouse, and it stays in a window (the display mode is ignored). Input from the inspector still works.")
 		("dynamic-tree-shadows", "Trees cast their shadows as they are drawn each frame, swaying with them, rather than baked into the land as the game does.")
+		("maximum-detail", "Start with the \"maximum detail\" option on: models, the land and effects show their most detailed form at all distances. Far villagers still change into their small shadows.")
 		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
 		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
@@ -784,6 +785,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.mapPieceDelayMs = result["map-piece-delay-ms"].as<uint32_t>();
 		}
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
+		args.maximumDetail = result.count("maximum-detail") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;
 		if (result.count("unlock-bonus-creatures") != 0)

@@ -381,6 +381,7 @@ Game::Game(Arguments&& args) noexcept
 	config.showPing = args.showPing;
 	config.mapPieceDelayMs = args.mapPieceDelayMs;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
+	config.maximumDetail = args.maximumDetail;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.footballAddOn = args.footballAddOn;
 	// The settings of this computer give what the command line did not

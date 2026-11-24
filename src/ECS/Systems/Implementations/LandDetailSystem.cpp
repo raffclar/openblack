@@ -35,7 +35,8 @@ const land_detail::FrameDetail& LandDetailSystem::For(const Camera& camera)
 	if (Locator::config::has_value())
 	{
 		const auto& config = Locator::config::value();
-		inputs.lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel));
+		inputs.lines =
+		    land_detail::Finest(config.landDetailLines.value_or(land_detail::For(config.detailLevel)), config.maximumDetail);
 		inputs.coarseLand = config.detail.coarseLand;
 	}
 	return _memo.For(inputs, _places);

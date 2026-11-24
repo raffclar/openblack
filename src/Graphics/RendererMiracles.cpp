@@ -168,6 +168,7 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		const float halfDiagonal = mesh_detail::HalfDiagonal(box.Size());
 		const auto forward = looks != nullptr && looks->forward.has_value() ? *looks->forward : desc.camera->GetForward();
 		const float modelDetail = Locator::config::value().detail.modelDetail;
+		const bool maximumDetail = Locator::config::value().maximumDetail;
 		for (size_t index = 0; index < draws.size(); ++index)
 		{
 			const auto& draw = draws[index];
@@ -194,9 +195,10 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 				// alpha keep their own alpha in the fade.
 				const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 				const float reach = mesh_detail::Reach(0.0f, mesh_detail::ScaledRadius(box.Size(), objectScale), modelDetail);
-				const auto banded =
-				    object_draw::DrawBanded(mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, forward), reach, true),
-				                            draw.alpha, phial || draw.alpha != std::numeric_limits<uint8_t>::max());
+				const auto banded = object_draw::DrawBanded(
+				    mesh_detail::Finest(mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, forward), reach, true),
+				                        maximumDetail),
+				    draw.alpha, phial || draw.alpha != std::numeric_limits<uint8_t>::max());
 				if (!banded.has_value())
 				{
 					continue;
@@ -606,8 +608,10 @@ void Renderer::DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDra
 		const float reach = mesh_detail::Reach(0.0f, mesh_detail::ScaledRadius(box.Size(), ringScale),
 		                                       Locator::config::value().detail.modelDetail);
 		const auto banded = object_draw::DrawBanded(
-		    mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, desc.camera->GetForward()), reach, true), shown.alpha,
-		    false);
+		    mesh_detail::Finest(
+		        mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, desc.camera->GetForward()), reach, true),
+		        Locator::config::value().maximumDetail),
+		    shown.alpha, false);
 		if (!banded.has_value())
 		{
 			continue;

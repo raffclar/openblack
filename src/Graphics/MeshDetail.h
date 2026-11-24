@@ -70,6 +70,18 @@ struct Choice
 /// then left out; any other is drawn as its low mesh however far it is.
 [[nodiscard]] Choice Choose(float depth, float reach, bool disappears) noexcept;
 
+/// The choice with the player's "maximum detail" option. When the option is on, a model that is drawn takes its high
+/// mesh at all depths. The fade and the depth where the model is left out do not change. Thus far villagers still
+/// change into their small shadows. When the option is off, the choice does not change.
+[[nodiscard]] constexpr Choice Finest(Choice choice, bool maximumDetail) noexcept
+{
+	if (maximumDetail && choice.mesh.has_value())
+	{
+		choice.mesh = Mesh::High;
+	}
+	return choice;
+}
+
 /// The bit a mesh choice stands for among a model's parts: each part names the choices it is drawn at, so a model with
 /// one mesh can still draw fewer or other parts further off (a tree's far card)
 [[nodiscard]] constexpr uint8_t LevelBit(Mesh mesh) noexcept

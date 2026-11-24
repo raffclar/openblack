@@ -195,10 +195,11 @@ openblack::graphics::mesh_detail::Choice ChooseDetail(const openblack::AxisAlign
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 	const float depth = mesh_detail::ViewDepth(centre, camera.eye, camera.forward);
 	const float reach = mesh_detail::Reach(importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
-	const auto choice = mesh_detail::Choose(depth, reach, true);
+	const bool maximumDetail = openblack::Locator::config::has_value() && openblack::Locator::config::value().maximumDetail;
+	const auto choice = mesh_detail::Finest(mesh_detail::Choose(depth, reach, true), maximumDetail);
 	if ((choice.alpha.has_value() || !choice.mesh.has_value()) && !disappears())
 	{
-		return mesh_detail::Choose(depth, reach, false);
+		return mesh_detail::Finest(mesh_detail::Choose(depth, reach, false), maximumDetail);
 	}
 	return choice;
 }
@@ -556,8 +557,10 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		}
 		instanceCount += room;
 	};
-	auto prep = [&registry, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
-	                                                                  bool morphWithTerrain) {
+	// With the player's "maximum detail" option, a thing of several meshes fades out as its high mesh, not its low mesh
+	const bool fadesAsHighMesh = openblack::Locator::config::has_value() && openblack::Locator::config::value().maximumDetail;
+	auto prep = [&registry, &prepMesh, &fadingCounts, &instanceCount, fadesAsHighMesh](entt::entity entity, const Mesh& mesh,
+	                                                                                   bool morphWithTerrain) {
 		const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		if (detail == nullptr || morphWithTerrain)
 		{
@@ -581,7 +584,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 				prepMesh(registry, entity, *it, mesh, morphWithTerrain);
 			}
 		}
-		++fadingCounts[detail->meshes.back()];
+		++fadingCounts[fadesAsHighMesh ? detail->meshes.front() : detail->meshes.back()];
 		++instanceCount;
 	};
 
@@ -2323,6 +2326,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
+	const bool maximumDetail = Locator::config::value().maximumDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	using Group = PlacedTree::Group;
 	// Every far tree turns the same way, by the camera's heading
@@ -2433,7 +2437,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		// unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
 		// or as the physics places it.
 		glm::mat4 drawnMatrix;
-		if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !stores.AllOf<InPhysics>(entity))
+		// With the player's "maximum detail" option, a tree that fades out keeps its full shape
+		const bool paper = group == Group::Low || (group == Group::Fading && !maximumDetail);
+		if (camera != nullptr && paper && !stores.AllOf<InPhysics>(entity))
 		{
 			drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x, paperTurn);
 		}
@@ -2510,7 +2516,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	_renderContext.atOnceTrees.clear();
 	_renderContext.heldTreeDraws.clear();
 	bool fits = true;
-	const auto low = graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::Low);
+	// A tree fades out as its low mesh, or as its high mesh with the player's "maximum detail" option
+	const auto fadingLevel = graphics::mesh_detail::LevelBit(
+	    Locator::config::value().maximumDetail ? graphics::mesh_detail::Mesh::High : graphics::mesh_detail::Mesh::Low);
 	for (auto& [meshId, slots] : _treeSlots)
 	{
 		slots.filled = 0;
@@ -2529,8 +2537,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			const auto drawn = static_cast<Group>(detail);
 			const bool fading = drawn == Group::Fading;
 			const bool gone = drawn == Group::Gone;
-			const auto level =
-			    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(detail));
+			const auto level = fading || gone
+			                       ? fadingLevel
+			                       : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(detail));
 			_renderContext.treeRuns.push_back({.mesh = meshId,
 			                                   .first = first,
 			                                   .count = count,

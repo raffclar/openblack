@@ -64,10 +64,51 @@ void AddCreaturesAtWork(std::vector<Scenario>& all, size_t count, std::string_vi
 	                    .villagers = 4 * k_VillagersPerTown},
 	});
 }
+
+/// A far view of the land, trees, huts, villagers and a vortex, with the player's "maximum detail" option off and on.
+/// The two views show the same place.
+void AddMaximumDetailView(std::vector<Scenario>& all)
+{
+	std::vector<ObjectSetup> things;
+	// Two lines of trees along the view, from near the camera to far away, on each side of the view
+	for (int step = 0; step < 16; ++step)
+	{
+		const float north = -700.0f + 100.0f * static_cast<float>(step);
+		things.push_back({.type = TreeInfo::Oak, .offset = {-60.0f, north}});
+		things.push_back({.type = TreeInfo::Conifer, .offset = {60.0f, north}});
+		// A hut and two villagers between the lines of trees, at each second step
+		if (step % 2 == 0)
+		{
+			things.push_back({.type = AbodeInfo::CelticHut, .offset = {-25.0f, north}});
+			things.push_back({.type = VillagerInfo::CelticFarmerMale, .offset = {10.0f, north}});
+			things.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {20.0f, north + 5.0f}});
+		}
+	}
+	for (const bool on : {false, true})
+	{
+		all.push_back({
+		    .id = on ? "objects.maximum_detail_far_view_on" : "objects.maximum_detail_far_view_off",
+		    .name = on ? "A far view with the maximum detail option on" : "A far view with the maximum detail option off",
+		    .facet = Facet::Objects,
+		    .description = "A low camera looks far along the land, past two lines of trees, huts, villagers and a vortex. "
+		                   "The two scenarios show the same view, with the \"maximum detail\" option off and on. The "
+		                   "inspector query engine.maximum_detail changes the option while the scenario runs.",
+		    .expected = on ? "All trees, huts and the land keep their full detail at all distances. Far villagers change "
+		                     "into their small shadows, as with the option off."
+		                   : "As in the game: far trees are flat cards, far huts and the land are coarse, and far "
+		                     "villagers change into their small shadows.",
+		    .environment = {.clockRuns = false, .dispenserGrid = false, .maximumDetail = on},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 45.0f, -800.0f}, .look = {0.0f, 0.0f, 600.0f}},
+		    .objects = things,
+		    .vortices = {{.type = VortexType::In, .offset = {0.0f, -350.0f}, .delaySeconds = 0.5f}},
+		});
+	}
+}
 } // namespace
 
 void testbed_scenarios::AddBenchmark(std::vector<Scenario>& all)
 {
+	AddMaximumDetailView(all);
 	// Steps close enough together that a cost growing faster than the crowd shows between them
 	AddCrowd(all, Crowd::Kind::Creatures, 1, "benchmark.creatures_1", "1 active creature");
 	AddCrowd(all, Crowd::Kind::Creatures, 4, "benchmark.creatures_4", "4 active creatures");
