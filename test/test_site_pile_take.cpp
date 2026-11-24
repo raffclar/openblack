@@ -241,7 +241,7 @@ TEST_F(SitePileTakeTest, AScaffoldHoldsWoodByItsValueAndGivesWoodToItsSite)
 {
 	_info->scaffold.woodValue = 100;
 	Locator::infoConstants::reset();
-	Locator::infoConstants::emplace(*_info);
+	Locator::infoConstants::emplace(*(_info.get()));
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto scaffold = registry.Create();
 	registry.Assign<Transform>(scaffold,
