@@ -180,7 +180,9 @@ private:
 	/// The sun in the sky, after the sky's dome
 	void DrawSun(RenderPass viewId, const DrawnFrame& frame) const;
 	/// The sun's glare over the finished view, dimmed by what hides the sun from the camera
-	void DrawSunGlare(const Camera& camera) const;
+	/// Tests which samples of the sun's glare the land or the sea hides from the camera, for the draw of the glare
+	void CollectSunGlare(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
+	void DrawSunGlare(const Camera& camera, const DrawnFrame& frame) const;
 	/// Asks the drawing of a glare sample's pixel, between two corners of the screen (0 to 1 from the top left), whether
 	/// anything is drawn there nearer than a depth
 	void AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft, glm::vec2 bottomRight,
@@ -329,7 +331,9 @@ private:
 	void DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDraw& shown,
 	                      const view_frustum::Frustum* seenBy = nullptr, DrawEncoder* encoder = nullptr) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
-	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
+	[[nodiscard]] RenderPass TranslucentView(RenderPass scene) const;
+	/// Whether the frame that the renderer draws shows the inside of the temple
+	[[nodiscard]] bool DrawsTemple() const noexcept;
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
 	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
 	/// The seeds of the miracles that the players cast, over the main room's map
@@ -750,6 +754,9 @@ private:
 	mutable bool _warmingUp {false};
 	/// The steps of the frame filled the effects for the next draw of the scene
 	mutable bool _effectsFilled {false};
+	/// The drawn copy of the frame that the renderer draws, for the passes that do not get it with their description.
+	/// The game keeps the copy for all of its frames.
+	mutable const DrawnFrame* _drawnFrame {nullptr};
 	/// The next frame holds a warm-up's draws, after which its views are set back
 	mutable bool _warmUpInFrame {false};
 	/// The colour that the main view clears the window to
@@ -1145,8 +1152,11 @@ private:
 	void ReleaseLightOfFrameBefore() const;
 	/// u_modelLight: the game's model light this frame
 	[[nodiscard]] glm::vec4 GetModelLight() const;
+	/// Copies what the passes read of the drawn hand: the colour that the flash of a known gesture adds to it, and the
+	/// place of its glow on the water
+	void CollectHands(DrawnFrame& frame) const;
 	/// Rebuilds the land's light for this frame from the palette; the texture of it
-	TextureHandle UpdateLandLight() const;
+	TextureHandle UpdateLandLight(const DrawnFrame& frame) const;
 	/// Works out the land's level of detail for this frame from the view's camera (see land_detail)
 	void UpdateLandDetail(const DrawSceneDesc& drawDesc) const;
 	/// The blocks' corners as they are drawn this frame (see land_detail::k_CornerTextureSide): the altitude of each

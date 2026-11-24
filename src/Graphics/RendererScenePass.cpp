@@ -229,14 +229,12 @@ std::optional<creature_reflection::Situation> CreatureMirrorSituation(entt::enti
 }
 
 /// The colour a recognised gesture's flash adds to the hand's light, 0 to 1 a channel
-glm::vec3 HandGlowColour()
+glm::vec3 HandGlowColour(entt::entity hand)
 {
-	if (!Locator::handSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	if (!Locator::entitiesRegistry::has_value())
 	{
 		return glm::vec3(0.0f);
 	}
-	const auto hand =
-	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* glow = Locator::entitiesRegistry::value().TryGet<ecs::components::HandGlow>(hand);
 	if (glow == nullptr)
 	{
@@ -248,6 +246,35 @@ glm::vec3 HandGlowColour()
 	       k_ByteMax;
 }
 } // namespace
+
+void Renderer::CollectHands(DrawnFrame& frame) const
+{
+	auto& hands = frame.hands;
+	hands.glow = HandGlowColour(hands.Drawn());
+	// The glow of the hand on the water shows only where the hand is near the low land
+	hands.waterGlowCentre.reset();
+	const auto* transform = Locator::entitiesRegistry::has_value()
+	                            ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(hands.Drawn())
+	                            : nullptr;
+	if (transform == nullptr || frame.land.island == nullptr)
+	{
+		return;
+	}
+	const glm::vec2 centre {transform->position.x, transform->position.z};
+	const auto& island = *frame.land.island;
+	const auto altitudeAt = [&island](int x, int z) -> std::optional<uint8_t> {
+		if (x < 0 || z < 0 || x >= LandIslandInterface::k_MapCellsPerSide || z >= LandIslandInterface::k_MapCellsPerSide)
+		{
+			return std::nullopt;
+		}
+		const auto* cell = island.FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
+		return cell != nullptr ? std::optional<uint8_t>(cell->altitude) : std::nullopt;
+	};
+	if (hand_water_glow::NearLowLand(centre, altitudeAt))
+	{
+		hands.waterGlowCentre = centre;
+	}
+}
 
 // A creature is drawn with its own pose, and its body blended from its meshes
 struct Renderer::EntityPose
@@ -342,7 +369,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	_shaderManager->SetCamera(skyViewId, *desc.camera, SceneTargetOf(desc));
 	_shaderManager->SetCamera(landViewId, *desc.camera, SceneTargetOf(desc));
 	_shaderManager->SetCamera(desc.viewId, *desc.camera, SceneTargetOf(desc));
-	_modelLight = GetModelLight();
+	_modelLight = frame.modelLight;
 	if (frame.camera != nullptr)
 	{
 		const auto& camera = *frame.camera;
@@ -381,7 +408,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// The sun's glare over everything else in the view
 	if (desc.viewId == RenderPass::Main && desc.drawSky)
 	{
-		DrawSunGlare(*desc.camera);
+		DrawSunGlare(*desc.camera, *desc.frame);
 	}
 	// The game draws the words of the pause and the speed after the glare, at the end of the frame
 	DrawPauseText(desc);
@@ -462,8 +489,8 @@ void Renderer::DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) c
 	                                                               : Profiler::Stage::MainPassDrawWater);
 	if (desc.drawWater)
 	{
-		const auto& ocean = Locator::oceanSystem::value();
-		const auto& mesh = ocean.GetMesh();
+		const auto& sea = desc.frame->sea;
+		const auto& mesh = *sea.mesh;
 		mesh.GetIndexBuffer().Bind(mesh.GetIndexBuffer().GetCount(), 0);
 		mesh.GetVertexBuffer().Bind();
 		// The sea is a backdrop, as the game draws it: over whatever was there and leaving no depth, so the land under
@@ -472,9 +499,9 @@ void Renderer::DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) c
 		constexpr auto k_SeaState =
 		    k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_CULL_MASK);
 		bgfx::setState(k_SeaState);
-		auto texture = Locator::resources::value().GetTextures().Handle(ocean.GetTexture());
+		auto texture = Locator::resources::value().GetTextures().Handle(sea.texture);
 		waterShader->SetTextureSampler("s_diffuse", 0, *texture);
-		waterShader->SetTextureSampler("s_reflection", 1, ocean.GetReflectionFramebuffer().GetColorAttachment());
+		waterShader->SetTextureSampler("s_reflection", 1, sea.reflection->GetColorAttachment());
 		SetSeaUniforms(*waterShader, *desc.camera);
 		// The sea is drawn in the sky's pass, which keeps its order, so that what is drawn before the land (a vortex's
 		// swirl) goes over the sea and under the land, as the game draws them in turn
@@ -500,7 +527,7 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 	const bool landShown = !IsMirrorScene(desc.viewId) || frame.land.reflected;
 	if (desc.drawIsland && landShown)
 	{
-		auto& island = Locator::terrainSystem::value();
+		const auto& island = *desc.frame->land.island;
 		auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
 
 		const auto& textures = Locator::resources::value().GetTextures();
@@ -1895,9 +1922,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		const bool atMapPlace = count == 1 && !instances.has_value() && renderCtx.mapPlaceLitInstances.contains(first);
 		sd.landLightRule = graphics::object_land_light::Of(atMapPlace);
 		// The game gives the rooms the temple's light; the hand keeps its own
-		const bool templeLit =
-		    Locator::temple::has_value() && Locator::temple::value().Active() && meshId != ecs::components::Hand::k_MeshId;
-		const auto light = templeLit ? Locator::temple::value().GetLight() : TempleLight {};
+		const bool templeLit = desc.frame->templeActive && meshId != ecs::components::Hand::k_MeshId;
+		const auto light = templeLit ? desc.frame->temple.light : TempleLight {};
 		sd.tint = glm::vec4(light.multiply, 0.0f);
 		// The temple's walking worshippers are drawn in a grey of their own, darker in the reflection
 		if (placers.templeGrey.has_value())
@@ -1907,7 +1933,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 		sd.lightMultiply = light.multiply;
 		// The hand glows as a recognised gesture flashes
-		sd.lightAdd = light.add + (meshId == ecs::components::Hand::k_MeshId ? HandGlowColour() : glm::vec3(0.0f));
+		sd.lightAdd = light.add + (meshId == ecs::components::Hand::k_MeshId ? desc.frame->hands.glow : glm::vec3(0.0f));
 		// Everything in the temple but the hand fades with its depth fog. The walls are fogged with the light's
 		// colour still added; the worshippers have only the fog's added, which takes the light's place.
 		sd.templeFog = templeLit;
@@ -1918,7 +1944,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 		else if (templeLit)
 		{
-			sd.fogFromFirstVertex = Locator::temple::value().GetPosition();
+			sd.fogFromFirstVertex = desc.frame->temple.position;
 		}
 		// The fog scales the colour in the temple's light in whole bytes, before the model light shades it
 		if (templeLit)
@@ -1976,9 +2002,9 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		// The rooms meet at their doorways, whose arches each room has a copy of: the player's room's is seen
 		sd.depthBias = placers.behindCurrentRoom ? k_OtherTempleRoomDepthBias : 0.0f;
 		sd.joints = {};
-		if (Locator::temple::has_value() && Locator::temple::value().Active())
+		if (desc.frame->templeActive)
 		{
-			sd.joints = Locator::temple::value().GetDoors().GetJoints();
+			sd.joints = desc.frame->temple.doorJoints;
 		}
 		sd.morphWithTerrain = placers.morphWithTerrain;
 		sd.program = objectProgramFor(sd.matrixCount, sd.morphWithTerrain);
@@ -1990,7 +2016,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			objectShaderReflectiveLightmapInstanced->SetTextureSampler(
 			    sd.encoder != nullptr ? *sd.encoder : _shaderManager->GetMainEncoder(), "s_reflection", 4,
-			    Locator::oceanSystem::value().GetReflectionFramebuffer().GetColorAttachment());
+			    desc.frame->sea.reflection->GetColorAttachment());
 		}
 
 		sd.morphTargets = nullptr;
@@ -2187,8 +2213,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			return true;
 		}
-		const auto& land = Locator::terrainSystem::value();
-		if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * land.HighestHeight()))
+		const auto& land = *desc.frame->land.island;
+		if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * desc.frame->land.highestHeight))
 		{
 			return false;
 		}

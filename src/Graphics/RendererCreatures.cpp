@@ -626,7 +626,7 @@ void Renderer::SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairL
 {
 	using namespace creature_hair_light;
 	const auto* program = _shaderManager->GetShader("HairLightKept");
-	const auto extent = Locator::terrainSystem::value().GetExtent();
+	const auto extent = _drawnFrame->land.island->GetExtent();
 	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const auto scale = source != nullptr ? source->landLightScale : 1.0f;
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, scale, 0.0f, 0.0f};
@@ -679,7 +679,7 @@ void Renderer::SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairL
 
 void Renderer::KeepWorldBodyColours() const
 {
-	const bool landFrame = !(Locator::temple::has_value() && Locator::temple::value().Active());
+	const bool landFrame = !DrawsTemple();
 	auto& kept = _worldBodyColours;
 	if (landFrame)
 	{
@@ -692,7 +692,7 @@ void Renderer::KeepWorldBodyColours() const
 		return;
 	}
 	// After a restore of the graphics device in the temple, the rows are written again from their places
-	if (kept.sources.empty() || !Locator::terrainSystem::has_value())
+	if (kept.sources.empty() || _drawnFrame == nullptr || _drawnFrame->land.island == nullptr)
 	{
 		return;
 	}
@@ -745,11 +745,11 @@ void Renderer::KeepCreatureHairLight() const
 	{
 		source = _hairLightKeptSource;
 	}
-	if ((!source.has_value() && !made) || !Locator::terrainSystem::has_value())
+	if ((!source.has_value() && !made) || _drawnFrame == nullptr || _drawnFrame->land.island == nullptr)
 	{
 		return;
 	}
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = DrawsTemple();
 	const bool landLit = !inTemple && _landLightTexture.has_value();
 	const std::array<glm::vec4, 2> haze {inTemple ? glm::vec4(0.0f) : _haze[0], _haze[1]};
 	const auto viewId = SetUpLandView(RenderPass::HairLight, *_hairLightKept, {2, 1});

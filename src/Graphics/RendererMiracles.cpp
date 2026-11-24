@@ -56,6 +56,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/AlphaTest.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/InstanceDesc.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ObjectDrawWay.h"
@@ -79,10 +80,9 @@ namespace visuals = openblack::magic::visuals;
 namespace
 {
 /// The colour of the player at this computer
-uint32_t OwnColour()
+uint32_t OwnColour(const DrawnFrame& frame)
 {
-	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	return ecs::game_players::Colour(own);
+	return ecs::game_players::Colour(frame.hands.ownPlayer);
 }
 constexpr float k_ByteMax = 255.0f;
 /// The freeze phial's creature takes its spell in this way
@@ -284,17 +284,14 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 
 void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
-	    !Locator::infoConstants::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->templeActive || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	// The seeds are the player's at this computer: theirs is the alignment that makes the flock's seed a bat. Each is
 	// drawn at its full size and colour, the land's light not on it.
-	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	const float alignment =
-	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(own) : 0.0f;
-	for (const auto& seed : Locator::temple::value().GetCaveSeeds())
+	const float alignment = desc.frame->hands.ownAlignment;
+	for (const auto& seed : desc.frame->temple.caveSeeds)
 	{
 		DrawSeedModel(desc, {.seed = seed.seed,
 		                     .middle = seed.point,
@@ -310,13 +307,12 @@ void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 
 void Renderer::DrawMapSpellSeeds(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
-	    !Locator::infoConstants::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->templeActive || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	// The map draws each seed at a tenth of its size, as the creature's room draws its seeds
-	for (const auto& seed : Locator::temple::value().GetMapSpellSeeds())
+	for (const auto& seed : desc.frame->temple.mapSpellSeeds)
 	{
 		DrawSeedModel(desc, {.seed = seed.seed,
 		                     .middle = seed.middle,
@@ -333,8 +329,7 @@ void Renderer::DrawMapSpellSeeds(const DrawSceneDesc& desc) const
 void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
-	if ((desc.viewId != RenderPass::Main && !reflection) ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
+	if ((desc.viewId != RenderPass::Main && !reflection) || desc.frame->templeActive || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
@@ -347,7 +342,7 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	const bool haveBubble = meshes.Contains(OneOffSpellSeed::k_MeshId.value());
 	const bool haveRing = meshes.Contains(OneOffSpellSeed::k_RingMeshId.value());
 	// A globe nobody owns shows its rings in the colour of the player at this computer
-	const auto ringColour = ColourOf(OwnColour());
+	const auto ringColour = ColourOf(OwnColour(*desc.frame));
 
 	// Of the globes on the land's blocks only those that the land's draw list draws show
 	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
@@ -420,8 +415,7 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
-	if ((desc.viewId != RenderPass::Main && !reflection) ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
+	if ((desc.viewId != RenderPass::Main && !reflection) || desc.frame->templeActive || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
@@ -448,8 +442,7 @@ void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
 void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
-	if ((desc.viewId != RenderPass::Main && !reflection) ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
+	if ((desc.viewId != RenderPass::Main && !reflection) || desc.frame->templeActive || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
@@ -626,15 +619,6 @@ void Renderer::DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDra
 namespace
 {
 /// The hand that the frame draws: the left hand of the god of this computer. Only this hand shows its miracles.
-entt::entity DrawnHand()
-{
-	using ecs::systems::HandSystemInterface;
-	if (!Locator::handSystem::has_value())
-	{
-		return entt::null;
-	}
-	return Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-}
 
 /// The hand that holds the miracles, its look and where it is drawn: its matrix and each of its bones' in the world
 struct HandPose
@@ -644,7 +628,7 @@ struct HandPose
 	std::vector<glm::mat4> bones;
 };
 
-std::optional<HandPose> PoseOfHand(const ecs::Registry& registry)
+std::optional<HandPose> PoseOfHand(const ecs::Registry& registry, entt::entity drawnHand)
 {
 	using ecs::components::Hand;
 	using ecs::components::HandMiracleFx;
@@ -655,7 +639,6 @@ std::optional<HandPose> PoseOfHand(const ecs::Registry& registry)
 		return std::nullopt;
 	}
 	std::optional<HandPose> found;
-	const auto drawnHand = DrawnHand();
 	registry.Each<const Hand, const HandMiracleFx, const Transform>([&](entt::entity entity, const Hand& hand,
 	                                                                    const HandMiracleFx& fx, const Transform& transform) {
 		if (found.has_value() || entity != drawnHand)
@@ -729,7 +712,7 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 		return std::nullopt;
 	}
 	std::optional<HandGlowLook> look;
-	const auto drawnHand = DrawnHand();
+	const auto drawnHand = desc.frame->hands.Drawn();
 	desc.entities.Each<const Hand, const HandMiracleFx>([&](entt::entity entity, const Hand&, const HandMiracleFx& fx) {
 		if (look.has_value() || !fx.glowing || entity != drawnHand)
 		{
@@ -737,7 +720,7 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 		}
 		// The flow's sheet, an eighth of it at a time, running backwards over the hand in its player's colour at four
 		// fifths
-		const auto rgb = OwnColour();
+		const auto rgb = OwnColour(*desc.frame);
 		look = HandGlowLook {
 		    .flow = flow,
 		    .uvOffset = visuals::GlowUvOffset(fx.glowFrame),
@@ -806,7 +789,7 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDept
 	{
 		return;
 	}
-	const auto pose = PoseOfHand(desc.entities);
+	const auto pose = PoseOfHand(desc.entities, desc.frame->hands.Drawn());
 	if (!pose.has_value() || (pose->fx->bands.bracelets.empty() && pose->fx->bands.flying.empty()))
 	{
 		return;
@@ -818,7 +801,7 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDept
 	const glm::mat4 cameraFrame {glm::vec4(camera.GetRight(), 0.0f), glm::vec4(camera.GetUp(), 0.0f),
 	                             glm::vec4(camera.GetForward(), 0.0f), glm::vec4(camera.GetOrigin(), 1.0f)};
 	const auto atCamera = cameraFrame * visuals::BandAtCamera(camera.GetNearClip());
-	const auto colour = ColourOf(OwnColour());
+	const auto colour = ColourOf(OwnColour(*desc.frame));
 	const auto ring = meshes.Handle(OneOffSpellSeed::k_RingMeshId.value());
 	const auto* program = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);

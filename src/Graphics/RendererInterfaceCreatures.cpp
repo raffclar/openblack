@@ -368,6 +368,8 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	{
 		return;
 	}
+	// The film hides the world, thus the frame has no fill of its effects. The film's draws read the rest of the copy.
+	_drawnFrame = desc.frame;
 	// The film's camera over the film's picture, with the depth cleared: the renderer draws the creature over the
 	// picture and in front of nothing else
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);

@@ -37,6 +37,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/LightColumn.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ObjectDrawWay.h"
@@ -153,8 +154,7 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
 {
 	// The temple's column is seen only from outside, so it is not drawn while the player is inside the temple
-	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value() || desc.frame->templeActive)
 	{
 		return;
 	}
@@ -170,7 +170,7 @@ void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
 	const auto seenBy = SceneFrustum(desc);
 	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
 	// Over each temple, where it stands, beating with its player's heart
-	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+	const float turnFraction = desc.frame->clock.turnFraction;
 	desc.entities.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
 		if (!light_column::Shown(temple.owner, influence.IsBorderShown(temple.owner)) ||
 		    !light_column::TempleShown(temple.destroying, temple.destructionClock))
@@ -236,7 +236,7 @@ void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& beam = *meshes.Handle(beamId);
-	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+	const float turnFraction = desc.frame->clock.turnFraction;
 	const float pulseShare =
 	    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
 

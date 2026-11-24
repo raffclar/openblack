@@ -14,7 +14,10 @@
 #include <span>
 #include <vector>
 
+#include "3D/DayNightClock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/OceanInterface.h"
+#include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Animal.h"
@@ -28,9 +31,11 @@
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameDetail.h"
@@ -129,7 +134,10 @@ DrawnFrame::Sky SkyOf()
 	DrawnFrame::Sky sky;
 	if (Locator::skyClockSystem::has_value())
 	{
-		sky.skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
+		const auto& skyClock = Locator::skyClockSystem::value();
+		sky.skyType = skyClock.GetCurrentSkyType();
+		sky.windowTime = skyClock.GetClock().GetVisualTime();
+		sky.windowNight = skyClock.GetClock().IsVisualNight();
 	}
 	if (Locator::alignmentSystem::has_value())
 	{
@@ -164,6 +172,75 @@ DrawnFrame::Sky SkyOf()
 	}
 	return sky;
 }
+/// Copies what the passes read of the temple into the copy that the frame keeps. The vectors keep their memory from
+/// frame to frame.
+void FillTemple(graphics::DrawnTemple& drawn, bool active)
+{
+	drawn.rooms = nullptr;
+	drawn.text.clear();
+	drawn.map.clear();
+	drawn.mapMarkers.clear();
+	drawn.mapSpellSeeds.clear();
+	drawn.caveTrophies.clear();
+	drawn.caveSeeds.clear();
+	if (!active)
+	{
+		drawn.roomsDrawn = {};
+		drawn.wayOutSeconds.reset();
+		drawn.mapInfluence.reset();
+		drawn.textTexture = nullptr;
+		return;
+	}
+	const auto& temple = Locator::temple::value();
+	drawn.position = temple.GetPosition();
+	drawn.light = temple.GetLight();
+	drawn.fog = temple.GetFog();
+	for (size_t room = 0; room < graphics::DrawnTemple::k_RoomCount; ++room)
+	{
+		drawn.roomsDrawn.at(room) = temple.IsRoomDrawn(static_cast<TempleRoom>(room));
+	}
+	drawn.wayOutSeconds = temple.GetWayOutSeconds();
+	drawn.visits = temple.GetVisits();
+	drawn.poolTime = temple.GetPoolTime();
+	drawn.mapMarkerTurn = temple.GetMapMarkerTurn();
+	drawn.text.assign(temple.GetText().begin(), temple.GetText().end());
+	drawn.textTexture = temple.GetTextTexture();
+	drawn.map.assign(temple.GetMap().begin(), temple.GetMap().end());
+	drawn.mapMarkers.assign(temple.GetMapMarkers().begin(), temple.GetMapMarkers().end());
+	drawn.mapSpellSeeds.assign(temple.GetMapSpellSeeds().begin(), temple.GetMapSpellSeeds().end());
+	drawn.mapInfluence = temple.GetMapInfluence();
+	drawn.caveTrophies.assign(temple.GetCaveTrophies().begin(), temple.GetCaveTrophies().end());
+	drawn.caveSeeds.assign(temple.GetCaveSeeds().begin(), temple.GetCaveSeeds().end());
+	drawn.doorJoints = temple.GetDoors().GetJoints();
+	drawn.rooms = &temple.GetRooms();
+}
+
+DrawnFrame::Hands HandsOf()
+{
+	DrawnFrame::Hands hands;
+	if (Locator::handSystem::has_value())
+	{
+		const auto& handSystem = Locator::handSystem::value();
+		hands.ownPlayer = handSystem.GetOwnPlayer();
+		const auto own = handSystem.GetOwnHands();
+		std::ranges::copy(own, hands.own.begin());
+	}
+	if (Locator::alignmentSystem::has_value())
+	{
+		hands.ownAlignment = Locator::alignmentSystem::value().GetPlayerAlignment(hands.ownPlayer);
+	}
+	return hands;
+}
+
+DrawnFrame::Sea SeaOf()
+{
+	if (!Locator::oceanSystem::has_value())
+	{
+		return {};
+	}
+	const auto& ocean = Locator::oceanSystem::value();
+	return {.reflection = &ocean.GetReflectionFramebuffer(), .mesh = &ocean.GetMesh(), .texture = ocean.GetTexture()};
+}
 } // namespace
 
 void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uint32_t time)
@@ -174,9 +251,25 @@ void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uin
 	frame.timeOfDay = config.timeOfDay;
 	frame.templeActive = Locator::temple::has_value() && Locator::temple::value().Active();
 	frame.sky = SkyOf();
+	if (Locator::time::has_value())
+	{
+		const auto& clock = Locator::time::value();
+		frame.clock = {.turnFraction = clock.GetTurnFraction(),
+		               .frameGameTime = clock.GetFrameGameTime(),
+		               .frameRealTime = clock.GetFrameRealTime(),
+		               .elapsed = clock.GetElapsedTime()};
+	}
+	else
+	{
+		frame.clock = {};
+	}
+	FillTemple(frame.temple, frame.templeActive);
+	frame.hands = HandsOf();
+	frame.sea = SeaOf();
 
-	frame.land.extent =
-	    Locator::terrainSystem::has_value() ? std::optional(Locator::terrainSystem::value().GetExtent()) : std::nullopt;
+	frame.land.island = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
+	frame.land.extent = frame.land.island != nullptr ? std::optional(frame.land.island->GetExtent()) : std::nullopt;
+	frame.land.highestHeight = frame.land.island != nullptr ? frame.land.island->HighestHeight() : 0.0f;
 	frame.land.reflected = config.detail.landReflection;
 	frame.land.coarse = config.detail.coarseLand;
 	frame.land.groundMarks.clear();

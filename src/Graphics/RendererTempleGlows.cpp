@@ -55,12 +55,12 @@ using namespace openblack::graphics;
 
 void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 {
-	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (IsMirrorScene(desc.viewId) || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& temple = Locator::temple::value();
-	const auto seconds = temple.GetWayOutSeconds();
+	const auto& temple = desc.frame->temple;
+	const auto seconds = temple.wayOutSeconds;
 	if (!seconds.has_value() || !temple.IsRoomDrawn(TempleRoom::Main))
 	{
 		return;
@@ -72,7 +72,7 @@ void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 	}
 	using namespace ecs::components;
 	// The rooms and their cones are things of the temple's rooms
-	const auto& registry = Locator::temple::value().GetRooms();
+	const auto& registry = *desc.frame->temple.rooms;
 	// The sheet is in the main room's space. Its texture drifts with the room's spot lights' textures, a step for each
 	// of the room's cones.
 	glm::mat4 model {1.0f};

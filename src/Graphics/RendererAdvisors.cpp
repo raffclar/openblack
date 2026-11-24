@@ -30,6 +30,7 @@
 #include "Camera/Camera.h"
 #include "Common/IntegerSteps.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
@@ -192,7 +193,7 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 	}
 	const auto& camera = *desc.camera;
 	// In the temple everything is drawn in the order it comes, in the scene's own pass
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = desc.frame->templeActive;
 	const auto translucentView = inTemple ? desc.viewId : TranslucentPassOf(desc.viewId);
 	const glm::mat4 toWorld = glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current));
 	const glm::vec3 right(toWorld[0]);
@@ -208,7 +209,7 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 	_shaderManager->SetCamera(RenderPass::Advisors, camera, detail::SceneTarget(desc.frameBuffer));
 
 	const auto* program = _shaderManager->GetShader("Advisor");
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *desc.frame->land.island;
 	const glm::vec4 islandExtent(island.GetExtent().minimum, island.GetExtent().maximum);
 	const glm::vec3 worldLight(_modelLight);
 	// The smoke is blended over what is behind it, tested against depth but leaving none, from both sides

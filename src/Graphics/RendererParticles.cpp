@@ -356,7 +356,7 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& textures = Locator::resources::value().GetTextures();
 	if (!meshes.Contains(Mist::k_MeshId) || !textures.Contains(Mist::k_TextureId) ||
-	    !textures.Contains(Mist::k_AlphaTextureId) || !Locator::terrainSystem::has_value())
+	    !textures.Contains(Mist::k_AlphaTextureId) || desc.frame->land.island == nullptr)
 	{
 		return;
 	}
@@ -380,7 +380,7 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	const auto* program = _shaderManager->GetShader("Mist");
 	const auto& camera = *desc.camera;
 	const auto origin = camera.GetOrigin();
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *desc.frame->land.island;
 	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 	// It faces the camera and shrinks edge on, lit from straight above as the clouds are
 	const glm::mat3 facing {camera.GetRight(), -camera.GetForward(), camera.GetUp()};
@@ -499,7 +499,7 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	auto alpha = draw.colour.a;
 	if (creator.faceCamera && creator.scriptHighlightPulse && Locator::scriptHighlightSystem::has_value())
 	{
-		const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+		const float turnFraction = desc.frame->clock.turnFraction;
 		const float share =
 		    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
 		const auto byte = static_cast<uint8_t>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
@@ -547,11 +547,11 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 	                        (static_cast<uint32_t>(fragment.rgb[1]) << 8u) | fragment.rgb[0];
 	// The model light shades each corner by its normal, as the model has it, against the light's way in the piece's
 	// own frame: from the piece's middle, as the game takes it
-	const auto light = GetModelLight();
+	const auto light = desc.frame->modelLight;
 	const auto localLight =
 	    model_light::LocalDirection(glm::vec3(light), fragment.axes[0], fragment.axes[1], fragment.axes[2], fragment.position);
 	const auto* program = _shaderManager->GetShader("Fragment");
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *desc.frame->land.island;
 	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 	const glm::vec4 origin {fragment.position, 0.0f};
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
@@ -1063,9 +1063,9 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 
 	const auto& textures = Locator::resources::value().GetTextures();
 	glm::vec4 islandExtent(0.0f);
-	if (Locator::terrainSystem::has_value())
+	if (desc.frame->land.island != nullptr)
 	{
-		const auto extent = Locator::terrainSystem::value().GetExtent();
+		const auto extent = desc.frame->land.island->GetExtent();
 		islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	}
 	const auto* program = _shaderManager->GetShader("ParticleInstanced");
@@ -1200,9 +1200,9 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 	}
 
 	glm::vec4 islandExtent(0.0f);
-	if (Locator::terrainSystem::has_value())
+	if (desc.frame->land.island != nullptr)
 	{
-		const auto extent = Locator::terrainSystem::value().GetExtent();
+		const auto extent = desc.frame->land.island->GetExtent();
 		islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	}
 	// Every surface's points in one buffer and their triangles in another. The lit ones are lit as the game lights its
@@ -1492,9 +1492,9 @@ void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
 	}
 	const auto* program = _shaderManager->GetShader("ParticleInstanced");
 	glm::vec4 islandExtent(0.0f);
-	if (Locator::terrainSystem::has_value())
+	if (desc.frame->land.island != nullptr)
 	{
-		const auto extent = Locator::terrainSystem::value().GetExtent();
+		const auto extent = desc.frame->land.island->GetExtent();
 		islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	}
 	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_Sheet));

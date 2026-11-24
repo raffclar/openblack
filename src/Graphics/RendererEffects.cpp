@@ -78,6 +78,7 @@
 #include "EngineConfig.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/HandLight.h"
 #include "Graphics/HandReflection.h"
@@ -110,15 +111,15 @@ using namespace openblack::ecs::systems;
 
 void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 {
-	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (IsMirrorScene(desc.viewId) || !desc.frame->templeActive)
 	{
 		return;
 	}
 	using namespace ecs::components;
-	const auto& temple = Locator::temple::value();
+	const auto& temple = desc.frame->temple;
 	const auto* shader = _shaderManager->GetShader("Beam");
 	// The mists are things of the temple's rooms
-	const auto& registry = temple.GetRooms();
+	const auto& registry = *temple.rooms;
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto smoke = entt::hashed_string("raw/smoke");
 	const auto smokeAlpha = entt::hashed_string("raw/smokea");
@@ -137,7 +138,7 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 	constexpr uint64_t k_State = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 	                             BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
 	// It turns to the camera as the camera is turned
-	const auto facing = glm::mat4(glm::mat3(Locator::camera::value().GetRotationMatrix()));
+	const auto facing = glm::mat4(glm::mat3(desc.frame->camera->GetRotationMatrix()));
 
 	registry.Each<const MistDome, const Transform, const TempleInteriorPart>(
 	    [&](const MistDome& mist, const Transform& transform, const TempleInteriorPart& part) {
@@ -182,17 +183,17 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 {
 	// The lower detail levels draw no light shafts
-	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
+	if (IsMirrorScene(desc.viewId) || !desc.frame->templeActive ||
 	    !detail_level::TempleLightShafts(Locator::config::value().detail))
 	{
 		return;
 	}
 	using namespace ecs::components;
-	const auto& temple = Locator::temple::value();
+	const auto& temple = desc.frame->temple;
 	const auto inDrawnRoom = [&temple](TempleRoom room) { return temple.IsRoomDrawn(room); };
 	const auto* beamShader = _shaderManager->GetShader("Beam");
 	// The cones and the rooms are things of the temple's rooms
-	const auto& registry = temple.GetRooms();
+	const auto& registry = *temple.rooms;
 	auto& resources = Locator::resources::value();
 
 	bgfx::VertexLayout layout;
@@ -305,7 +306,7 @@ void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId
 
 void Renderer::DrawMists(const DrawSceneDesc& desc) const
 {
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	if (desc.frame->templeActive)
 	{
 		return;
 	}
@@ -313,7 +314,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const auto& textures = Locator::resources::value().GetTextures();
 	using ecs::components::Mist;
 	if (!meshes.Contains(Mist::k_MeshId) || !textures.Contains(Mist::k_TextureId) ||
-	    !textures.Contains(Mist::k_AlphaTextureId) || !Locator::terrainSystem::has_value())
+	    !textures.Contains(Mist::k_AlphaTextureId) || desc.frame->land.island == nullptr)
 	{
 		return;
 	}
@@ -321,7 +322,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const auto texture = textures.Handle(Mist::k_TextureId);
 	const auto alphaTexture = textures.Handle(Mist::k_AlphaTextureId);
 	const auto* program = _shaderManager->GetShader("Mist");
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *desc.frame->land.island;
 	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 
 	// Every mist faces the camera: the mesh's x across the screen, its y towards the camera and its z up the screen
@@ -339,7 +340,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		const auto texel = _landLightTable->GetTexels().back();
 		fullLight = ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
 	}
-	const auto cloudColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyLand(), fullLight);
+	const auto cloudColour = clouds::Colour(desc.frame->sky.skyLand, fullLight);
 	// The storms' clouds are tinted from the land's colour this frame
 	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
 
@@ -538,9 +539,9 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	// In the temple, the main room shows the border at full strength over its map, while the influence button is on.
 	// Outside, the border only shows from high enough over the land.
 	std::optional<TempleMapInfluence> onMap;
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	if (desc.frame->templeActive)
 	{
-		onMap = Locator::temple::value().GetMapInfluence();
+		onMap = desc.frame->temple.mapInfluence;
 		if (!onMap.has_value())
 		{
 			return;
@@ -642,7 +643,7 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 {
 	using ecs::components::ChimneySmoke;
 	using ecs::components::Mist;
-	if (desc.viewId != RenderPass::Main || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (desc.viewId != RenderPass::Main || desc.frame->templeActive)
 	{
 		return;
 	}
@@ -699,8 +700,7 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 
 void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::waterRingSystem::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (desc.viewId != RenderPass::Main || !Locator::waterRingSystem::has_value() || desc.frame->templeActive)
 	{
 		return;
 	}
@@ -767,8 +767,7 @@ void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 {
 	// Taking the tiles counts them as drawn, which a warm-up must not do
-	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::snowfallSystem::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::snowfallSystem::has_value() || desc.frame->templeActive)
 	{
 		return;
 	}
@@ -848,8 +847,7 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
 {
 	// Taking the tiles counts them as drawn, which a warm-up must not do
-	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() || desc.frame->templeActive)
 	{
 		return;
 	}

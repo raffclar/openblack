@@ -33,6 +33,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Gestures/GestureHints.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/PixelCentres.h"
 #include "Graphics/ShaderManager.h"
@@ -112,7 +113,7 @@ void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = desc.frame->templeActive;
 	if (!_warmingUp && !hints::Shows(row, inTemple))
 	{
 		return;
@@ -204,7 +205,7 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = desc.frame->templeActive;
 	if (!_warmingUp && !hints::Shows(row, inTemple))
 	{
 		return;
@@ -256,9 +257,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 	};
 	// The seeds are the seeds of the player at this computer. The alignment of this player makes the seed of the flock
 	// a bat or a dove. The rings have the colour of this player.
-	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	const float alignment =
-	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(own) : 0.0f;
+	const auto own = desc.frame->hands.ownPlayer;
+	const float alignment = desc.frame->hands.ownAlignment;
 	const auto ringColour = ColourOf(ecs::game_players::Colour(own));
 
 	// The warm-up draws a globe of no size in the view of each picture, and each seed of no size in the first view.
@@ -292,7 +292,7 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 	const auto view = hints::CollarView();
 	const auto alpha = hints::PictureAlpha(row.alpha);
 	const auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
-	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+	const float turnFraction = desc.frame->clock.turnFraction;
 
 	size_t used = 0;
 	for (size_t slot = 0; slot < row.hints.size() && used < k_SeedPasses.size(); ++slot)
