@@ -96,3 +96,17 @@ void HelpSpeechSystem::Stop(audio::SpeechVoice voice, audio::SpeechBank bank)
 		}
 	});
 }
+
+void HelpSpeechSystem::StopLine(uint32_t text, audio::SpeechVoice voice)
+{
+	const auto sample = _table.Find(text);
+	if (!sample)
+	{
+		return;
+	}
+	if (Locator::sounds::has_value())
+	{
+		Locator::sounds::value().StopNumberedSoundEffect(sample->sound, audio::OwnerNumberOf(voice));
+	}
+	_voices.Forget(voice, *sample);
+}

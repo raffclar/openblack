@@ -40,10 +40,15 @@ public:
 	[[nodiscard]] virtual uint32_t KeepPointSound(entt::id_type sound, const glm::vec3& position) = 0;
 	/// Removes a sound that KeepPointSound keeps. A loop that plays continues to its end and does not start again.
 	virtual void EndPointSound(uint32_t kept) = 0;
-	/// Attaches a sound to an object, on, from the object's position, and returns the new tag. The object keeps all
-	/// the sounds it has: an object can keep up many sounds, also the same sound more than one time. When loops is
-	/// false, each start plays the sound one time.
-	virtual entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) = 0;
+	/// Attaches a sound to an object, on, and returns the new tag. The object keeps all the sounds it has: an object can
+	/// keep up many sounds, also the same sound more than one time. When loops is false, each start plays the sound one
+	/// time. When heardFromObject is false, the sound is heard everywhere at the centre, not from the object's position.
+	virtual entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops, bool heardFromObject) = 0;
+	/// Attaches a sound that comes from the object's position
+	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops)
+	{
+		return AttachObjectSound(entity, sound, loops, true);
+	}
 	/// Removes all the tags of a sound from an object: the tags attached to it and its own tag. The tags of other
 	/// sounds stay. A looping sound that plays continues to the end of its loop where it is, and does not start
 	/// again. A sound that plays one time continues to its end.

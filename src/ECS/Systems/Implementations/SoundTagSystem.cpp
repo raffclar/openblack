@@ -209,6 +209,22 @@ void SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const 
 	{
 		return;
 	}
+	if (!tag.heardFromObject)
+	{
+		// Heard at the centre wherever the camera is. It starts again each turn when it does not play.
+		if (!tag.active || IsPlaying(tag) || !Heard(tag.sound))
+		{
+			return;
+		}
+		StopSound(tag);
+		tag.emitter =
+		    audio.CreateEmitter(tag.sound, std::nullopt, tag.loops ? audio::PlayType::Repeat : audio::PlayType::Once, entity);
+		if (tag.emitter != entt::null)
+		{
+			audio.PlayEmitter(tag.emitter);
+		}
+		return;
+	}
 	const auto position = SoundPoint(registry, source, *transform) + tag.offset;
 	const auto reach = sounds.Handle(tag.sound)->maxDistance;
 	// The sound of an object follows the object: each turn its emitter moves to where the object is now. The audio
@@ -385,7 +401,7 @@ void SoundTagSystem::EndPointSound(uint32_t kept)
 	_tags.erase(entry);
 }
 
-entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops)
+entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops, bool heardFromObject)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const SoundTag fresh {
@@ -398,6 +414,8 @@ entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_typ
 	    .turns = 0,
 	    .owner = entity,
 	    .loops = loops,
+	    .silenced = false,
+	    .heardFromObject = heardFromObject,
 	};
 	// At a load, the sound takes back the tag that it had before the load, so that the loaded world keeps its entities
 	const auto unclaimed = std::ranges::find_if(_unclaimed, [&registry, entity, sound](entt::entity tag) {

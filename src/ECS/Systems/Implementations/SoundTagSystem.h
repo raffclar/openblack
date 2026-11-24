@@ -64,7 +64,8 @@ public:
 	void CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) override;
 	[[nodiscard]] uint32_t KeepPointSound(entt::id_type sound, const glm::vec3& position) override;
 	void EndPointSound(uint32_t kept) override;
-	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) override;
+	using SoundTagSystemInterface::AttachObjectSound;
+	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops, bool heardFromObject) override;
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
 	void ForgetSavedSounds() override;
 	void ForgetUnclaimedSounds() override;

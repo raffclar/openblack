@@ -45,6 +45,9 @@ public:
 	[[nodiscard]] virtual size_t GetLineCount() const = 0;
 	/// Stops what the voice is saying from a bank
 	virtual void Stop(audio::SpeechVoice voice, audio::SpeechBank bank) = 0;
+	/// Stops the help text's line on a voice. The voice rules stop the first voice that keeps the line's sample for this
+	/// voice, and the scripts no longer find the voice saying the line.
+	virtual void StopLine(uint32_t text, audio::SpeechVoice voice) = 0;
 	/// Which sample says each help text
 	[[nodiscard]] virtual const audio::HelpSpeechTable& GetTable() const = 0;
 };
