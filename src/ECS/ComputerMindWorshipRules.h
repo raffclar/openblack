@@ -138,6 +138,7 @@ template <typename Offset, typename OnMap, typename HasWood>
                                                         Offset&& offset, OnMap&& onMap, HasWood&& hasWood)
 {
 	auto place = start;
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the values of the original game
 	for (float angle = 0.0f; angle < k_FullTurn; angle += k_SiteWorkerDropStep)
 	{
 		const map_coords::MapCoords point = building + offset(angle);

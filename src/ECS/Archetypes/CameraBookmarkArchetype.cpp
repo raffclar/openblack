@@ -43,9 +43,9 @@ entt::entity CameraBookmarkArchetype::Create(uint8_t number)
 std::array<entt::entity, camera_bookmarks::k_KeySlots> CameraBookmarkArchetype::CreateAll()
 {
 	auto result = std::array<entt::entity, camera_bookmarks::k_KeySlots>();
-	for (uint8_t number = 0; number < result.size(); ++number)
+	for (size_t number = 0; number < result.size(); ++number)
 	{
-		result.at(number) = Create(number);
+		result.at(number) = Create(static_cast<uint8_t>(number));
 	}
 	return result;
 }

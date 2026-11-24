@@ -31,6 +31,7 @@ namespace openblack::ecs::puzzle_game
 	switch (type)
 	{
 	// These kinds always give yes
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case PuzzleGameType::None:
 	case PuzzleGameType::Maze1:
 	case PuzzleGameType::Maze2:

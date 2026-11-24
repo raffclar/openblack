@@ -109,7 +109,7 @@ template <typename Type>
 	else if constexpr (std::is_enum_v<Type>)
 	{
 		// An enumeration is written as its number
-		return Json(static_cast<int64_t>(value));
+		return static_cast<Json>(static_cast<int64_t>(value));
 	}
 	else if constexpr (std::is_same_v<Type, std::u16string>)
 	{
@@ -345,7 +345,7 @@ template <typename Type>
 				decoded = element.has_value();
 				if (!decoded)
 				{
-					error = "element " + std::to_string(i) + " " + error;
+					error = "element " + std::to_string(i).append(" ").append(error);
 				}
 				else if constexpr (detail::k_IsStdArray<Type>)
 				{

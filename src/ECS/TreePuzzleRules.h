@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <span>
 
@@ -121,14 +122,7 @@ inline constexpr float k_SolvedTreeFireSpeed = 1.0f;
 [[nodiscard]] constexpr bool SameState(script::PuzzleGameType type, std::span<const int8_t, k_Spots> counts) noexcept
 {
 	const auto first = ShownState(type, counts[0]);
-	for (const auto count : counts)
-	{
-		if (ShownState(type, count) != first)
-		{
-			return false;
-		}
-	}
-	return true;
+	return std::ranges::all_of(counts, [type, first](const auto count) { return ShownState(type, count) == first; });
 }
 
 /// The size of a tree after one turn of growth: one step more, but not more than its full size

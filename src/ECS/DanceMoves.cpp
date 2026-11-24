@@ -24,7 +24,6 @@ using namespace openblack::ecs;
 using components::Dance;
 using components::DanceGroup;
 using components::DanceMove;
-using dance_moves::Action;
 using map_coords::FtoL;
 using map_coords::MapCoords;
 

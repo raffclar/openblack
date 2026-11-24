@@ -45,7 +45,7 @@ namespace
 /// The game's turn goes the other way round from the drawn one
 glm::mat3 Rotation(float yAngle)
 {
-	return glm::mat3(portable_math::EulerAngleY(-yAngle));
+	return {portable_math::EulerAngleY(-yAngle)};
 }
 
 /// The heart levels the land round the corner below it (see temple_ground). The land then draws the new altitudes.
@@ -106,6 +106,7 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	// The temple itself is not a thing of the world; its heart is, and takes its place in the order of the things made
 	TakeThingMadePlace();
 	registry.Assign<Transform>(heart, position, rotation, size);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	registry.Assign<TempleHeart>(heart, entity);
 	// As the game makes the heart, the heart levels the land round it
 	LevelGroundUnderHeart(heartPlace.value_or(thing_map_place::Of(registry, heart)));
@@ -118,9 +119,11 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 		TakeThingMadePlace();
 	}
 	registry.Assign<Transform>(entrance, position, rotation, size);
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	registry.Assign<TempleEntrance>(entrance, entity);
 	// The entrance is never drawn: the cursor finds it by the entrance model's triangles, tested with the temple, once
 	// its player's temple has stood fully built
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	registry.Assign<UndrawnPickModel>(entrance, entt::hashed_string("temple/entrance_l3d").value(), entity, false);
 	// It takes its worship sites' places; standing built, its player's towns are given their sites at once, and one
 	// under construction gives them once it is finished

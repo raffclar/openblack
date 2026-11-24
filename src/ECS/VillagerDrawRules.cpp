@@ -124,7 +124,7 @@ std::optional<float> villager_draw::HeadingOf(const glm::mat3& rotation)
 
 glm::mat3 villager_draw::RotationOf(float heading)
 {
-	return glm::mat3(portable_math::EulerAngleY(-heading - k_ModelOffset));
+	return {portable_math::EulerAngleY(-heading - k_ModelOffset)};
 }
 
 glm::mat3 villager_draw::SlopeLeanedRotation(float easedHeading, float drawnHeading, glm::vec2 lift)

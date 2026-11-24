@@ -331,7 +331,7 @@ SingleSweep SweepOnce(const CircleSweepInput& input, glm::vec2 centre, float rad
 int32_t WholeSpeed(float metresPerSecond)
 {
 	const auto whole = std::lround(metresPerSecond * k_WholePerMetre / k_TurnsPerSecond);
-	return static_cast<int32_t>(std::clamp<long>(whole, 0, k_MaxWholeSpeed));
+	return static_cast<int32_t>(std::clamp<decltype(whole)>(whole, 0, k_MaxWholeSpeed));
 }
 
 float StepMetres(float metresPerSecond)

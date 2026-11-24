@@ -209,6 +209,7 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 			                                  .action = static_cast<audio::SoundAction>(sound.action)};
 			// The home's banter belongs to the home, which a homeless villager hasn't, and is heard as far off as the
 			// villager is
+			// NOLINTNEXTLINE(clang-analyzer-core.NullDereference): the route comes from a home only for a villager
 			const auto owner = route.fromHome ? villager->abode : entity;
 			const auto bank = route.bank == clip_sounds::Bank::Banter ? k_BanterBank : k_EditorBank;
 			if (route.end.has_value())

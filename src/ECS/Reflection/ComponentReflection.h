@@ -74,7 +74,7 @@ template <typename Type>
 [[nodiscard]] bool RefersTo(const Type& value, entt::entity target)
 {
 	if constexpr (std::is_same_v<Type, entt::entity>)
-	{
+	{ // NOLINT(bugprone-branch-clone): the branches stay apart to show each case
 		return value == target;
 	}
 	else if constexpr (detail::k_IsOptional<Type>)

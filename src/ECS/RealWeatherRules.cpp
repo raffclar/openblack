@@ -160,6 +160,7 @@ Applied ApplyPreset(const Preset* preset, components::WeatherInfo background, in
 		storm.thunderWait.y = preset->thunderMost.Apply(storm.thunderWait.y);
 		storm.thunderWait.x = preset->thunderLeast.Apply(storm.thunderWait.x);
 		last = preset->cloudCount.Apply(last);
+		// NOLINTNEXTLINE(bugprone-signed-char-misuse): the value is a signed byte, so the sign must stay
 		storm.cloudCount = CappedByte(last);
 		storm.rainSpeed = preset->rainSpeed.Apply(storm.rainSpeed);
 	}
@@ -256,7 +257,8 @@ std::vector<Country> ParseCountries(std::string_view text)
 		// The name goes three bytes after the start of the code, over the letters of the code after the third
 		if (code.size() >= 3)
 		{
-			code = code.substr(0, 3) + name;
+			code.resize(3);
+			code += name;
 		}
 		countries.push_back({.code = std::move(code), .name = std::move(name)});
 	}
@@ -267,7 +269,7 @@ std::string_view CountryName(std::span<const Country> countries, std::string_vie
 {
 	auto lastFirst = countries | std::views::reverse;
 	const auto found = std::ranges::find(lastFirst, code, &Country::code);
-	return found == lastFirst.end() ? k_NoCountryName : std::string_view(found->name);
+	return found == lastFirst.end() ? k_NoCountryName : std::string_view {found->name};
 }
 
 std::vector<uint8_t> DaysFile(std::span<const KeptDay> days)

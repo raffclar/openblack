@@ -26,6 +26,7 @@ namespace openblack::ecs::components
 {
 
 /// What a creature is doing with something, from walking up to it to the end of the animation that acts on it
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct CreatureObjectAction
 {
 	enum class Phase : uint8_t

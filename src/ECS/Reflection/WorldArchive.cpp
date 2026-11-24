@@ -506,7 +506,7 @@ struct RowLayout
 	else
 	{
 		std::ranges::transform(layout->fields, std::back_inserter(names),
-		                       [](const KeptField& field) { return std::string_view(field.info->name); });
+		                       [](const KeptField& field) { return std::string_view {field.info->name}; });
 	}
 	layout->left = FindLeaveOut(leaveOut, component.name, names);
 	// A field that only the reflection can write needs the way of each field
@@ -902,7 +902,7 @@ private:
 			{
 				visit(component.name, row,
 				      layout.shape->codec != nullptr ? k_WholeComponent
-				                                     : std::string_view(layout.shape->fields.at(field).info->name),
+				                                     : std::string_view {layout.shape->fields.at(field).info->name},
 				      bytes);
 			}
 		});
@@ -1289,7 +1289,7 @@ std::vector<std::pair<std::string, uint64_t>> openblack::ecs::reflection::RowOrd
 		else
 		{
 			std::ranges::transform(fields, std::back_inserter(names),
-			                       [](const KeptField& field) { return std::string_view(field.info->name); });
+			                       [](const KeptField& field) { return std::string_view {field.info->name}; });
 		}
 		const auto left = FindLeaveOut(leaveOut, component.name, names);
 		if (left.whole || std::ranges::all_of(left.fieldAlways, [](bool always) { return always; }))

@@ -35,7 +35,7 @@ struct DestructionGhost
 /// keeps it with the copy of its matrix. It is not the middle of the model's box.
 [[nodiscard]] inline glm::vec3 SortPoint(const DestructionGhost& ghost)
 {
-	return glm::vec3(ghost.model[3]);
+	return {ghost.model[3]};
 }
 
 } // namespace openblack::ecs::components
