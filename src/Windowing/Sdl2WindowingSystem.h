@@ -9,7 +9,7 @@
 
 #pragma once
 
-// TODO: Put a header guard against direct access
+// TODO(windowing): Put a header guard against direct access
 
 #include <cstdint>
 

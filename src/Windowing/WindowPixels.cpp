@@ -25,7 +25,7 @@ glm::vec2 PixelScale(glm::ivec2 windowSize, glm::ivec2 pixelSize)
 
 glm::ivec2 PointToPixels(glm::ivec2 point, glm::vec2 scale)
 {
-	return glm::ivec2(glm::floor(static_cast<glm::vec2>(point) * scale));
+	return {glm::floor(static_cast<glm::vec2>(point) * scale)};
 }
 
 glm::ivec2 MovementToPixels::Move(glm::ivec2 movement, glm::vec2 scale)
@@ -34,7 +34,7 @@ glm::ivec2 MovementToPixels::Move(glm::ivec2 movement, glm::vec2 scale)
 	// The whole pixels go toward zero, so that the part that stays has the sign of the movement
 	const auto whole = glm::trunc(exact);
 	_remainder = exact - whole;
-	return glm::ivec2(whole);
+	return {whole};
 }
 
 } // namespace openblack::windowing
