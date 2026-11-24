@@ -25,7 +25,7 @@ namespace
 /// A building's turn as the land's buildings are turned from the game's angle
 glm::mat3 TurnedBy(float yAngle)
 {
-	return glm::mat3(glm::eulerAngleY(-yAngle));
+	return {glm::eulerAngleY(-yAngle)};
 }
 } // namespace
 

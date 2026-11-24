@@ -29,9 +29,9 @@ TEST(OracleComputerCreatureTeach, LessonWishAsInTheGame)
 	size_t different = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
-		const auto sends = table->Bits(row, *table->Column("sends"));
+		const auto sends = table->Bits(row, table->Column("sends").value());
 		const float ours = MiracleLessonWish(sends);
-		const auto game = table->Bits(row, *table->Column("wish"));
+		const auto game = table->Bits(row, table->Column("wish").value());
 		if (std::bit_cast<uint32_t>(ours) != game && ++different <= 20)
 		{
 			ADD_FAILURE() << "row " << row << ": the game gives " << oracle::Hex(std::bit_cast<float>(game)) << ", ours gives "

@@ -23,6 +23,7 @@ namespace
 {
 std::vector<float> Grid(float depth = 0.0f)
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list would not call the count and value constructor
 	return std::vector<float>(snow_cover::k_Cells, depth);
 }
 

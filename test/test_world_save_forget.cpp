@@ -198,8 +198,10 @@ TEST(WorldSaveForget, ALoadGivesEachDanceTheFileOfItsRowAgain)
 		switch (type)
 		{
 		case DanceInfo::Worship:
+			// NOLINTNEXTLINE(performance-no-automatic-move): the lambda must copy the value on each call
 			return worship;
 		case DanceInfo::Meeting:
+			// NOLINTNEXTLINE(performance-no-automatic-move): the lambda must copy the value on each call
 			return meeting;
 		default:
 			return nullptr;

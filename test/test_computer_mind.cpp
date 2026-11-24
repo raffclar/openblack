@@ -92,11 +92,11 @@ public:
 /// The first node of the kind in the tree
 uint16_t NodeOf(const Mind& mind, NodeKind kind)
 {
-	for (uint16_t i = 0; i < mind.nodes.size(); ++i)
+	for (size_t i = 0; i < mind.nodes.size(); ++i)
 	{
 		if (mind.nodes[i].kind == kind)
 		{
-			return i;
+			return static_cast<uint16_t>(i);
 		}
 	}
 	return 0;

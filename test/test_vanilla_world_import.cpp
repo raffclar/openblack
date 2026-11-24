@@ -1036,7 +1036,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 	EXPECT_GT(kept, 0U);
 	EXPECT_GT(walking, 0U);
 	EXPECT_GT(working, 0U);
-	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working" << std::endl;
+	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working" << '\n' << std::flush;
 }
 
 /// Each walk of a villager of a saved game of Land 1 that goes straight, goes round a circle or goes out of a circle has
@@ -1403,7 +1403,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneHaveRowsForTheirStillThings)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(statics, 0U);
-	std::cout << "Read " << statics << " still and loose things" << std::endl;
+	std::cout << "Read " << statics << " still and loose things" << '\n' << std::flush;
 }
 
 // A flock keeps its place, the place that it comes back to, its reach, its shepherd and its line. An animal keeps its
@@ -1573,7 +1573,8 @@ TEST(VanillaSceneryImport, SavedGamesOfLandOneHaveTheirAnimalsInTheirFlocks)
 	EXPECT_GT(animals, 0U);
 	EXPECT_GT(flocks, 0U);
 	std::cout << "Read " << animals << " animals and " << flocks << " flocks, with " << villagers << " villagers in flocks"
-	          << std::endl;
+	          << '\n'
+	          << std::flush;
 }
 
 namespace script_import = openblack::ecs::vanilla_script_import;
@@ -1667,6 +1668,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepEveryValueOfTheirTotems)
 			EXPECT_EQ(totem.townCentre, world.Ref(record, "totemTownCentre")) << path;
 			const auto place = world.Raw(record, "position");
 			ASSERT_EQ(place.size(), sizeof(totem.position)) << path;
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			EXPECT_EQ(std::memcmp(place.data(), &totem.position, sizeof(totem.position)), 0) << path;
 			EXPECT_EQ(totem.heading, world.Float(record, "heading")) << path;
 			EXPECT_EQ(totem.scale, world.Float(record, "scale")) << path;
@@ -1684,7 +1686,8 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepEveryValueOfTheirTotems)
 			    << path;
 			std::cout << path.parent_path().filename().string() << " totem " << totem.number << " share " << totem.share
 			          << " held " << totem.heldShare << " word " << totem.word84 << " life " << totem.life << " heading "
-			          << totem.heading << std::endl;
+			          << totem.heading << '\n'
+			          << std::flush;
 			++totems;
 		}
 	});
@@ -1720,6 +1723,7 @@ TEST(VanillaScriptImport, SavedGamesOfLandOneKeepEveryValueOfTheirHighlights)
 			EXPECT_EQ(highlight.kind, script_import::HighlightRowOf(world.Word(record, "info").value_or(0))) << path;
 			const auto place = world.Raw(record, "position");
 			ASSERT_EQ(place.size(), sizeof(highlight.position)) << path;
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			EXPECT_EQ(std::memcmp(place.data(), &highlight.position, sizeof(highlight.position)), 0) << path;
 			EXPECT_EQ(highlight.active, world.Word(record, "highlightActive").value_or(0) != 0) << path;
 			EXPECT_EQ(highlight.drawHeight.has_value(), world.Word(record, "highlightHeightSet").value_or(0) != 0) << path;
@@ -1734,7 +1738,8 @@ TEST(VanillaScriptImport, SavedGamesOfLandOneKeepEveryValueOfTheirHighlights)
 			{
 				++active;
 				std::cout << "Active highlight " << highlight.number << " of row " << static_cast<int>(highlight.kind) << " in "
-				          << path.generic_string() << std::endl;
+				          << path.generic_string() << '\n'
+				          << std::flush;
 			}
 		}
 	});
@@ -1743,7 +1748,7 @@ TEST(VanillaScriptImport, SavedGamesOfLandOneKeepEveryValueOfTheirHighlights)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(highlights, 0U);
-	std::cout << *files << " Land 1 saves: " << highlights << " highlights, " << active << " active" << std::endl;
+	std::cout << *files << " Land 1 saves: " << highlights << " highlights, " << active << " active" << '\n' << std::flush;
 }
 
 // A temple of the file with no site stands whole
@@ -2657,7 +2662,8 @@ TEST(VanillaSceneryImport, SavedGamesOfLandOneHaveNoAnimalThatDecidesAgain)
 	EXPECT_GT(count, 0U);
 	EXPECT_GT(staged, 0U);
 	std::cout << "Animals " << count << ", birds " << birds << ", grazers " << grazers << ", with a move stage " << staged
-	          << ", held by a script with no move " << noMove << ", wander move " << wandering << std::endl;
+	          << ", held by a script with no move " << noMove << ", wander move " << wandering << '\n'
+	          << std::flush;
 }
 
 namespace
@@ -3432,6 +3438,7 @@ TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepEveryValueOfTheirFootpaths)
 				const auto& nodeRecord = *world.Record(node.number);
 				const auto place = world.Raw(nodeRecord, "pos");
 				ASSERT_EQ(place.size(), sizeof(node.coords)) << path;
+				// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 				EXPECT_EQ(std::memcmp(place.data(), &node.coords, sizeof(node.coords)), 0) << path;
 				EXPECT_EQ(node.flags, world.Byte(nodeRecord, "nodeFlags")) << path;
 				const auto followers = world.Refs(nodeRecord, "followers");
@@ -3476,21 +3483,22 @@ TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepEveryValueOfTheirFootpaths)
 		}
 		EXPECT_EQ(linked.size(), linkRecords) << path;
 		std::cout << path.parent_path().filename().string() << " footpaths " << imported.paths.size() << " links "
-		          << imported.links.size() << std::endl;
+		          << imported.links.size() << '\n'
+		          << std::flush;
 	});
 	if (!files.has_value())
 	{
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(paths, 0U);
-	std::cout << "Footpaths " << paths << ", nodes " << nodes << ", links " << links << std::endl;
+	std::cout << "Footpaths " << paths << ", nodes " << nodes << ", links " << links << '\n' << std::flush;
 	for (const auto& [type, count] : holderTypes)
 	{
-		std::cout << "Links on type 0x" << std::hex << type << std::dec << ": " << count << std::endl;
+		std::cout << "Links on type 0x" << std::hex << type << std::dec << ": " << count << '\n' << std::flush;
 	}
 	for (const auto& [value, count] : flags)
 	{
-		std::cout << "Node flags 0x" << std::hex << static_cast<int>(value) << std::dec << ": " << count << std::endl;
+		std::cout << "Node flags 0x" << std::hex << static_cast<int>(value) << std::dec << ": " << count << '\n' << std::flush;
 	}
 }
 
@@ -3575,14 +3583,15 @@ TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepTheFootpathWalksOfTheirVillag
 	}
 	EXPECT_GT(walks, 0U);
 	std::cout << "Walks " << walks << ", kept " << kept << ", with a next footpath " << withNext << ", towards the start "
-	          << towardsStart << ", no node " << noNode << ", walkers of nodes that walk on " << stale << std::endl;
+	          << towardsStart << ", no node " << noNode << ", walkers of nodes that walk on " << stale << '\n'
+	          << std::flush;
 	for (const auto& [state, count] : finals)
 	{
-		std::cout << "Final state " << static_cast<int>(state) << ": " << count << std::endl;
+		std::cout << "Final state " << static_cast<int>(state) << ": " << count << '\n' << std::flush;
 	}
 	for (const auto& [state, count] : moveStates)
 	{
-		std::cout << "Move state 0x" << std::hex << static_cast<int>(state) << std::dec << ": " << count << std::endl;
+		std::cout << "Move state 0x" << std::hex << static_cast<int>(state) << std::dec << ": " << count << '\n' << std::flush;
 	}
 }
 
@@ -3783,7 +3792,8 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneHaveNoVillagerThatDecidesAgain)
 	EXPECT_GT(disciples, 0U);
 	std::cout << "Villagers " << villagers << ", shepherd values " << shepherds << ", script values " << scripts << ", dead "
 	          << dead << ", idle disciples " << idleDisciples << ", disciples " << disciples << ", followers " << followers
-	          << std::endl;
+	          << '\n'
+	          << std::flush;
 }
 
 // A dance of the file keeps its groups with their values and dancers, the order in which newcomers try them, and its key
@@ -4192,7 +4202,7 @@ TEST(VanillaWorldImport, SavedGamesTellWhichDancesTheImportMakes)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_EQ(all, ofSites + made);
-	std::cout << "Dances " << all << ", of worship sites " << ofSites << ", made on their own " << made << std::endl;
+	std::cout << "Dances " << all << ", of worship sites " << ofSites << ", made on their own " << made << '\n' << std::flush;
 }
 
 // Each group of a dance in the saves belongs to a thing that keeps groups of a dance, and its dancers are living things
@@ -4702,7 +4712,8 @@ TEST(VanillaWorldImport, SavedGamesHaveReactionsAndMemoriesThatTheImportReads)
 			const auto* target = world.Record(reaction.target);
 			std::cout << path.filename() << " reaction " << reaction.number << " kind " << reaction.type << " target "
 			          << reaction.target << " of type " << (target != nullptr ? target->type : 0) << " takers "
-			          << reaction.takers.size() << " first taken " << reaction.firstTaken.value_or(0) << std::endl;
+			          << reaction.takers.size() << " first taken " << reaction.firstTaken.value_or(0) << '\n'
+			          << std::flush;
 		}
 		reactions += read.size();
 		for (const auto& record : world.Records())
@@ -4716,7 +4727,7 @@ TEST(VanillaWorldImport, SavedGamesHaveReactionsAndMemoriesThatTheImportReads)
 	{
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
-	std::cout << "Reactions " << reactions << ", living things that remember reactions " << memories << std::endl;
+	std::cout << "Reactions " << reactions << ", living things that remember reactions " << memories << '\n' << std::flush;
 }
 
 // The arenas come the oldest first, with their places, their radii and their fights. An arena with no radius is left out.
@@ -4780,7 +4791,8 @@ TEST(VanillaWorldImport, SavedGamesHaveArenasThatTheImportReads)
 			EXPECT_EQ(world.Ref(*record, "arenaNone"), std::optional(0U)) << path << " " << arena.number;
 			std::cout << path.filename() << " arena " << arena.number << " at " << arena.position.x << " " << arena.position.z
 			          << " radius " << arena.radius << " fight " << arena.fightOn << " creatures " << arena.creatures[0] << " "
-			          << arena.creatures[1] << std::endl;
+			          << arena.creatures[1] << '\n'
+			          << std::flush;
 		}
 		for (const auto& reaction : reaction_import::ReadReactions(world))
 		{
@@ -4797,7 +4809,7 @@ TEST(VanillaWorldImport, SavedGamesHaveArenasThatTheImportReads)
 	{
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
-	std::cout << "Arenas " << arenas << std::endl;
+	std::cout << "Arenas " << arenas << '\n' << std::flush;
 }
 
 namespace

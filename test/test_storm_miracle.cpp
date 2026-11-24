@@ -401,8 +401,8 @@ protected:
 	}
 	void Run(Effect& effect, float seconds)
 	{
-		const auto steps = std::lround(seconds / k_Step);
-		for (long i = 0; i < steps; ++i)
+		const auto steps = static_cast<int64_t>(std::lround(seconds / k_Step));
+		for (int64_t i = 0; i < steps; ++i)
 		{
 			effect.Step(k_Step);
 		}

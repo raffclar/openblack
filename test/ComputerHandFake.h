@@ -25,6 +25,7 @@
 #include "ECS/ComputerHand.h"
 
 /// A fake world for the tests of the steps of the hand of a computer god
+// NOLINTNEXTLINE(google-build-namespaces): only test files include this header, each in its own unit
 namespace
 {
 

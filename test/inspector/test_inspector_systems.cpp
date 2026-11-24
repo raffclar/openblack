@@ -573,6 +573,8 @@ TEST(InspectorCoverage, EveryQueryAnswersWithNoGame)
 		{
 			++queries;
 			// Reads only: a write with no game is refused all the same, but needn't be tried
+			// A test, so the temporary strings do not matter.
+			// NOLINTNEXTLINE(performance-inefficient-string-concatenation)
 			const auto query = provider + "." + name;
 			const auto answer = AskAny(
 			    inspector,

@@ -154,7 +154,7 @@ TEST(GodsRingMapPackage, ThePackageHasNoLineOfTheGameData)
 	while (start < package->frame.size())
 	{
 		const auto end = package->frame.find('\n', start);
-		const auto line = std::string_view(package->frame).substr(start, end - start);
+		const auto line = std::string_view {package->frame}.substr(start, end - start);
 		start = end + 1;
 		++lines;
 		EXPECT_TRUE(line.empty() || line.starts_with("rem ")) << line;

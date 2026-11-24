@@ -235,6 +235,7 @@ TEST(CreatureTurnPose, ThePosedBonesAreTheBonesInTheWorld)
 		{
 			const auto kept = posed.At(bone);
 			const auto made = creature::PosedBone(bone, bones, placement);
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			ASSERT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << bone;
 		}
 	}
@@ -257,6 +258,7 @@ TEST(CreatureTurnPose, ThePosedBonesAreTheBonesInTheWorld)
 		{
 			const auto kept = creature::PosedTriangle(vertices, triangleBones, morph, posed, *order);
 			const auto made = creature::PosedTriangle(vertices, triangleBones, morph, bones, placement, *order);
+			// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 			ASSERT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << round;
 		}
 	}

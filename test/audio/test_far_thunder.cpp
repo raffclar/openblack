@@ -65,6 +65,8 @@ TEST(FarThunder, FarThunderGetsQuieterAsRealThunderDoes)
 	EXPECT_NEAR(HearingAt(k_ChannelLength, k_SampleReach).gain, atChannel, 1e-5f);
 	EXPECT_NEAR(HearingAt(10000.0f, k_SampleReach).gain, atChannel * 0.5f, 1e-5f);
 	float last = 1.0f;
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float distance = k_SampleReach; distance < k_SilentDistance; distance += 250.0f)
 	{
 		const float gain = HearingAt(distance, k_SampleReach).gain;
@@ -134,6 +136,8 @@ TEST(FarThunder, TheCrackBecomesARumble)
 	ASSERT_TRUE(at2300.has_value());
 	EXPECT_NEAR(*at2300, 500.0f * std::pow(2.0f, std::log(3.75f / 2.8f) / std::log(5.0f / 2.8f)), 0.5f);
 	float last = 20000.0f;
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float distance = 700.0f; distance < k_SilentDistance; distance += 50.0f)
 	{
 		const auto cutOff = HearingAt(distance, k_SampleReach).cutOff;
@@ -154,11 +158,11 @@ TEST(FarThunder, ThePitchOfALossComesFromTheTable)
 	{
 		if (loss < k_AirAbsorption.back().second)
 		{
-			EXPECT_NEAR(*PitchOfAbsorption(loss), pitch, pitch * 1e-4f) << pitch;
+			EXPECT_NEAR(PitchOfAbsorption(loss).value(), pitch, pitch * 1e-4f) << pitch;
 		}
 	}
 	EXPECT_FALSE(PitchOfAbsorption(k_AirAbsorption.back().second).has_value());
-	EXPECT_EQ(*PitchOfAbsorption(0.01f), k_AirAbsorption.front().first);
+	EXPECT_EQ(PitchOfAbsorption(0.01f).value(), k_AirAbsorption.front().first);
 }
 
 // The low-pass filter keeps a low pitch and takes a high pitch

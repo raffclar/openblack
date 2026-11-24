@@ -233,6 +233,7 @@ TEST(TextSplitter, TrickyStringsCountAsBefore)
 	    u"Cadena de texto no v\u00E1lida",
 	    u"  dos\tpalabras \r\n",
 	    u"una\n\notra",
+	    // NOLINTNEXTLINE(bugprone-suspicious-missing-comma): the strings join on purpose
 	    u"a\xF8FE"
 	    u"b",
 	    u"a \xF8FE b\xF8FE",

@@ -66,6 +66,8 @@ CreatureLocomotion Walking()
 std::vector<float> FractionsOfOneTurn(float frameMs)
 {
 	std::vector<float> fractions;
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float ms = frameMs; ms < k_TurnMs; ms += frameMs)
 	{
 		fractions.push_back(ms / k_TurnMs);

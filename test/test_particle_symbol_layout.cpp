@@ -139,7 +139,9 @@ void ExpectSameAsFrame(const Creator& creator, const Effect::DrawWalk& walk, Dra
 	ASSERT_EQ(box.has_value(), laidBox.has_value());
 	if (box.has_value())
 	{
+		// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		EXPECT_EQ(std::memcmp(&box->first, &laidBox->first, sizeof(glm::vec3)), 0);
+		// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		EXPECT_EQ(std::memcmp(&box->second, &laidBox->second, sizeof(glm::vec3)), 0);
 	}
 
@@ -160,6 +162,7 @@ void ExpectSameAsFrame(const Creator& creator, const Effect::DrawWalk& walk, Dra
 	{
 		const auto& expected = frame.sprites.at(frameOrder[i]);
 		const auto& actual = layout.Sprite(places[firstPlace + i]);
+		// NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): the compare must be bit exact
 		EXPECT_EQ(std::memcmp(&expected, &actual, sizeof(sprites::SpriteInstance)), 0) << "sprite " << i;
 	}
 }

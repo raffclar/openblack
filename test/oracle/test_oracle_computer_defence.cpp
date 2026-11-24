@@ -56,8 +56,8 @@ TEST(OracleComputerDefence, DefendTownAsInTheGame)
 				const auto name = std::to_string(index) + "_" + std::to_string(slot);
 				attacks.push_back({.town = index,
 				                   .attacker = static_cast<PlayerNames>(slot),
-				                   .lastTurn = table->Bits(row, *table->Column("last" + name)),
-				                   .aggression = table->Float(row, *table->Column("aggression" + name))});
+				                   .lastTurn = table->Bits(row, table->Column("last" + name).value()),
+				                   .aggression = table->Float(row, table->Column("aggression" + name).value())});
 			}
 		}
 		const auto ours = ChooseDefence(attacks, table->Bits(row, *turn));

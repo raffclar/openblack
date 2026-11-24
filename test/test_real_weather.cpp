@@ -195,9 +195,8 @@ RealWeatherSystem MakeSystem(FakeLobby& lobby, bool turnedOn = true, FakeClock* 
 	    PresetBytes(2, true).Change(k_Rain, 0, 40.0f).Change(k_CloudCount, 0, 2.0f).Change(k_CloudHeight, 0, 200.0f),
 	    PresetBytes(4).Change(k_Overcast, 0, 30.0f).Change(k_Rain, 0, 10.0f),
 	});
-	return RealWeatherSystem(
-	    turnedOn, lobby, [file]() { return std::optional(file); }, []() { return k_Today; },
-	    [clock]() { return clock != nullptr ? clock->now : std::chrono::steady_clock::time_point {}; });
+	return {turnedOn, lobby, [file]() { return std::optional(file); }, []() { return k_Today; },
+	        [clock]() { return clock != nullptr ? clock->now : std::chrono::steady_clock::time_point {}; }};
 }
 
 } // namespace
@@ -617,11 +616,13 @@ RealWeatherSystem MakeSystemWithFiles(FakeLobby& lobby, std::vector<std::vector<
 {
 	auto presets = FileOf({PresetBytes(2, true).Change(k_Rain, 0, 40.0f)});
 	const std::string countries = "gb=Great Britain\r\nno=Norway\r\n";
-	return RealWeatherSystem(
-	    true, lobby, [presets]() { return std::optional(presets); }, []() { return k_Today; },
-	    [clock]() { return clock != nullptr ? clock->now : std::chrono::steady_clock::time_point {}; },
-	    [countries]() { return std::optional(std::vector<uint8_t>(countries.begin(), countries.end())); },
-	    [&written](std::span<const uint8_t> bytes) { written.emplace_back(bytes.begin(), bytes.end()); });
+	return {true,
+	        lobby,
+	        [presets]() { return std::optional(presets); },
+	        []() { return k_Today; },
+	        [clock]() { return clock != nullptr ? clock->now : std::chrono::steady_clock::time_point {}; },
+	        [countries]() { return std::optional(std::vector<uint8_t>(countries.begin(), countries.end())); },
+	        [&written](std::span<const uint8_t> bytes) { written.emplace_back(bytes.begin(), bytes.end()); }};
 }
 
 } // namespace

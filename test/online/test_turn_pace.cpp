@@ -166,7 +166,7 @@ TEST(PreciseWait, TheWaitEndsAtItsTimeAndNotBefore)
 		int previous {GetThreadPriority(GetCurrentThread())};
 		PriorityScope() { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL); }
 		~PriorityScope() { SetThreadPriority(GetCurrentThread(), previous); }
-	} priority;
+	} const priority;
 #endif
 	openblack::precise_wait::Waiter waiter;
 	// A sleep of the thread on Windows goes past its time by up to the period of the system timer. The waiter must not.

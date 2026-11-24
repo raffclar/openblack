@@ -27,11 +27,11 @@ constexpr uint32_t k_NoStep = 0xFFFFFFFF;
 
 std::vector<creature_tree::Episode> ExamplesOf(const oracle::Table& table, size_t row)
 {
-	const auto count = table.Bits(row, *table.Column("count"));
+	const auto count = table.Bits(row, table.Column("count").value());
 	std::vector<creature_tree::Episode> episodes;
 	for (uint32_t i = 0; i < count && i < k_MostExamples; ++i)
 	{
-		episodes.push_back({.feedback = table.Float(row, *table.Column("f" + std::to_string(i)))});
+		episodes.push_back({.feedback = table.Float(row, table.Column("f" + std::to_string(i)).value())});
 	}
 	return episodes;
 }

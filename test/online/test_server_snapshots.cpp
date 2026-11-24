@@ -123,6 +123,7 @@ uint64_t Checksum(const std::vector<uint8_t>& bytes)
 
 std::vector<uint8_t> World(uint32_t turn)
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list would not call the count and value constructor
 	return std::vector<uint8_t>(64, static_cast<uint8_t>(turn));
 }
 

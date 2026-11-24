@@ -256,6 +256,8 @@ TEST(LandgenFeatures, StandsHaveTheSizesOfTheGroupsOfTheStory)
 	EXPECT_EQ(features::StandSize(0.9f, false), 15u);
 	EXPECT_EQ(features::StandSize(0.9f, true), 30u);
 	EXPECT_GE(features::StandSize(0.999f, false), 150u);
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float u = 0.0f; u < 0.99f; u += 0.01f)
 	{
 		EXPECT_LE(features::StandSize(u, false), features::StandSize(u + 0.01f, false));
@@ -390,6 +392,8 @@ TEST(LandgenFeatures, ClumpsOfRocksHaveTheSizesOfTheClumpsOfTheStory)
 	EXPECT_EQ(ClumpSize(RockClass::Boulder, 0.4f), 1u);
 	EXPECT_EQ(ClumpSize(RockClass::Slab, 1.0f), 5u);
 	EXPECT_GE(ClumpSize(RockClass::Small, 0.999f), 14u);
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float u = 0.0f; u < 0.99f; u += 0.01f)
 	{
 		EXPECT_LE(ClumpSize(RockClass::Boulder, u), ClumpSize(RockClass::Boulder, u + 0.01f));
@@ -411,6 +415,8 @@ TEST(LandgenFeatures, SlabsLieOnSteepGroundAndBouldersOnHighGround)
 	EXPECT_EQ(MainClassAt(0.0f, 100.0f, 0.3f), RockClass::Boulder);
 	const auto count = [](float slope, float height, RockClass rockClass) {
 		int found = 0;
+		// The test adds the step on purpose, and the values must stay the same.
+		// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 		for (float u = 0.0f; u < 1.0f; u += 0.001f)
 		{
 			found += MainClassAt(slope, height, u) == rockClass ? 1 : 0;

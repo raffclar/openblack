@@ -440,8 +440,12 @@ TEST_F(CitadelReach, TheAnswersForAllPlayersAtOnceAreTheAnswersForEachPlayer)
 	const auto shield = registry.Create();
 	registry.Assign<components::AntiInfluence>(shield, PlayerNames::PLAYER_THREE, 70.0f);
 	at(shield, 2000.0f, 1000.0f);
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float x = 900.0f; x <= 2200.0f; x += 25.0f)
 	{
+		// The test adds the step on purpose, and the values must stay the same.
+		// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 		for (float z = 900.0f; z <= 1200.0f; z += 25.0f)
 		{
 			const auto position = map_coords::FromMetres({x, z});

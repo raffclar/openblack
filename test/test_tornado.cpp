@@ -158,6 +158,8 @@ TEST(TornadoMaths, ItReachesWiderForAMightierTribeAndPicksUpWhatFits)
 TEST(TornadoMaths, TheLineNoiseRunsSmoothlyThroughItsLattice)
 {
 	const maths::ValueNoise noise;
+	// The test adds the step on purpose, and the values must stay the same.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float x = -3.0f; x < 3.0f; x += 0.25f)
 	{
 		const float value = noise.Smooth(x);

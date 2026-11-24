@@ -102,6 +102,7 @@ glm::ivec2 RingPixel(const EdgeArea& area, float place)
 	const auto across = 0.45f * static_cast<float>(area.width) * std::cos(place);
 	const auto down = 0.45f * static_cast<float>(area.viewHeight) * std::sin(place);
 	const auto side = std::abs(across) < 0.5f ? 0.0f : (across > 0.0f ? 1.0f : -1.0f);
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): the conversion is explicit
 	return glm::ivec2(glm::round(
 	    glm::vec2(static_cast<float>(area.screen.x) * 0.5f + across + side * static_cast<float>(area.Folded()) * 0.5f,
 	              static_cast<float>(openblack::WholeQuotient(area.screen.y, 2)) + down)));

@@ -171,6 +171,7 @@ TEST(TurnStream, TheClientAnswersThePingOfTheServerAndTimesItsOwnPing)
 	ASSERT_TRUE(player.stream.SendPing());
 	sent = player.sockets.TakeSent(player.connection);
 	const auto ping = std::get<turn_codec::Ping>(*turn_codec::Decode(sent[0].bytes).frame);
+	// NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores): the fake clock is read by reference
 	clock += 48'000;
 	player.sockets.ServerBinary(player.connection, turn_codec::Encode(turn_codec::Pong {.id = ping.id, .time = ping.time}));
 	player.sockets.Poll();

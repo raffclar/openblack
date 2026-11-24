@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 
@@ -47,14 +48,7 @@ constexpr std::array<uint16_t, 8> k_AllModifiers {
 bool GameUsesKeyWithAnyModifier(Platform platform, SDL_Scancode key)
 {
 	const auto& bindings = DefaultKeyBindings(platform);
-	for (const auto mod : k_AllModifiers)
-	{
-		if (GameUsesKey(bindings, platform, key, mod))
-		{
-			return true;
-		}
-	}
-	return false;
+	return std::ranges::any_of(k_AllModifiers, [&](const auto mod) { return GameUsesKey(bindings, platform, key, mod); });
 }
 
 constexpr Modifiers k_None {};
