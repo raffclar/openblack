@@ -448,6 +448,7 @@ private:
 	void AnnounceHeldMiracle(const components::SpellSeed& seed);
 	/// The hum of an armed seed, following the hand
 	void StartHoldLoop();
+	void PlayHoldLoop();
 	void StopHoldLoop();
 	/// The player's prayer power, if they have a store
 	[[nodiscard]] components::PrayerPower* PrayerOf(PlayerNames player) const;
@@ -618,6 +619,8 @@ private:
 	/// The hum that the press of an armed seed starts. After a use of the armed seed on a fireball, it continues until
 	/// the next let go of an armed seed.
 	entt::entity _holdLoop {entt::null};
+	/// The press started the hum, and its sound starts at the next game turn
+	bool _holdLoopWaits {false};
 	/// The pour of food or wood lifting and tipping the hand
 	magic::PourState _pour;
 	/// The creature that the pour of a phial follows: the hand stays at its head. Null when the pour follows no creature.

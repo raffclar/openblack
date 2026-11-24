@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/LeashOwnership.h"
+#include "Gestures/GestureRecorder.h"
 #include "InfoConstants.h"
 #include "Magic/AreaEffect.h"
 #include "Magic/CastInput.h"
@@ -117,6 +118,22 @@ TEST(CastInput, AGestureSeedIsArmedOnPressAndCastOnRelease)
 	EXPECT_TRUE(release.stopHoldLoop);
 	EXPECT_EQ(release.cast, CastTarget::Point);
 	EXPECT_EQ(input.state, CastInput::State::Idle);
+}
+
+// The hum sounds from the land under the newest point of the gesture path, not from the hand. A point over the sky
+// keeps the land of the point before it. With no point in the path, the hum sounds from the hand.
+TEST(CastInput, TheHumSoundsFromTheLandUnderTheNewestPointOfThePath)
+{
+	constexpr glm::vec3 k_Hand {5.0f, 30.0f, 5.0f};
+	gesture::GestureRecorder path;
+	EXPECT_EQ(HumPlace(path, k_Hand), k_Hand);
+	path.AddPoint({100.0f, 100.0f}, {10.0f, 1.0f, 20.0f});
+	path.AddPoint({140.0f, 100.0f}, {12.0f, 2.0f, 21.0f});
+	EXPECT_EQ(HumPlace(path, k_Hand), glm::vec3(12.0f, 2.0f, 21.0f));
+	path.AddPoint({180.0f, 60.0f});
+	EXPECT_EQ(HumPlace(path, k_Hand), glm::vec3(12.0f, 2.0f, 21.0f));
+	path.Reset();
+	EXPECT_EQ(HumPlace(path, k_Hand), k_Hand);
 }
 
 // A seed that a press armed on a thing is used on the thing at once. The seed is then not armed, the hum continues, and

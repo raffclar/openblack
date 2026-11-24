@@ -13,6 +13,8 @@
 
 #include <optional>
 
+#include <glm/vec3.hpp>
+
 #include "Enums.h"
 
 // How the action button casts the miracle in the hand. Pressing it over the land or over an object the seed may be cast
@@ -27,6 +29,11 @@
 // be cast just isn't applied there, and stays locked until the button comes up. Dropping the seed (a scribble or a
 // shake) calls off whatever was started.
 // A pure state machine: it is told what the hand is over and says what to do.
+
+namespace openblack::gesture
+{
+class GestureRecorder;
+}
 
 namespace openblack::magic
 {
@@ -127,5 +134,10 @@ struct CastInput
 [[nodiscard]] CastActions Cancel(CastInput& input);
 /// How many turns a locked miracle has been held
 [[nodiscard]] uint32_t TurnsHeld(const CastInput& input, uint32_t turn);
+
+/// The place of the hum of an armed seed. The hum starts at the game turn after the press. It sounds from the land under
+/// the newest point of the gesture path at that turn, and it does not move after it starts. When the path has no
+/// point, the game reads a place that nothing set (vanilla-bugs 2500). Then the hum sounds from the hand.
+[[nodiscard]] glm::vec3 HumPlace(const gesture::GestureRecorder& path, glm::vec3 hand);
 
 } // namespace openblack::magic

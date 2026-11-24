@@ -307,7 +307,8 @@ void AddFireballCatching(std::vector<Scenario>& all)
 	                   "seconds later.",
 	    .expected = "The press arms the seed on the ball, and the gesture step of the same frame takes the ball in: the "
 	                "ball goes, and the seed stays in the hand, a twentieth stronger. The hum of the hand starts at the "
-	                "press and continues after the let go, as in the original game. The let go casts nothing.",
+	                "game turn after the press and continues after the let go, as in the original game. The let go "
+	                "casts nothing.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 8.0f, 10.0f}},
 	    .miracles = {{.type = MagicType::Fireball,

@@ -251,8 +251,9 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                   "spiral) and a scribble calls the power-up off. The failure on letting go of a storm with no circle is "
 	                   "in miracles.hand_circle_casts, the leash "
 	                   "gesture's in leash.gesture_picker.",
-	    .expected = "While the circle is drawn with the Action button held, the hand hums (the gesture loop, heard from "
-	                "the hand) until it lets go and the shield is cast. Each recognised gesture but the scribble "
+	    .expected = "While the circle is drawn with the Action button held, the hand hums (the gesture loop). The hum "
+	                "starts one game turn after the press, from the land under the pointer, and stays there while the "
+	                "hand draws, until it lets go and the shield is cast. Each recognised gesture but the scribble "
 	                "plays the recognition chime, heard without position, as its trail appears. Each power-up adds "
 	                "the band's sound and the announcer's power-up voice (first, then second). The scribble has no "
 	                "chime: the hand shakes with the shake sound. Drawing without the Action button makes no sound of "
