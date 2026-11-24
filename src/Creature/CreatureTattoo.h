@@ -77,6 +77,8 @@ struct Mask
 	std::vector<uint8_t> levels;
 
 	[[nodiscard]] uint8_t At(uint32_t x, uint32_t y) const { return levels.at((y * size) + x); }
+
+	bool operator==(const Mask&) const = default;
 };
 
 /// A design at each of its sizes, the largest first

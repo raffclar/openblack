@@ -588,73 +588,74 @@ void Trample(ecs::Registry& registry, entt::entity only)
 	};
 	std::vector<Moved> moves;
 	std::vector<entt::entity> starting;
-	registry.Each<const Creature, const Transform, const CreatureAnimation>(
-	    [&](entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation) {
-		    if (creature != only)
-		    {
-			    return;
-		    }
-		    const auto* points = PointsOf(body);
-		    if (points == nullptr)
-		    {
-			    return;
-		    }
-		    auto* spheres = registry.TryGet<CreatureDestruction>(creature);
-		    const auto start = BodyStartOf(animation.body);
-		    if (spheres == nullptr)
-		    {
-			    // The first time that the spheres come on, the creature gets them after this pass
-			    if (creature_stomp::SwitchFor(start) == creature_stomp::Switch::On)
-			    {
-				    starting.push_back(creature);
-			    }
-			    return;
-		    }
-		    const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, PlacementOf(transform));
-		    const auto bones = PartBones(*points, animation);
-		    const auto at = [&](size_t part) {
-			    const auto bone = bones.at(part);
-			    return bone < animation.boneMatrices.size()
-			               ? glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3])
-			               : transform.position;
-		    };
-		    const auto size = ShownSize(body);
-		    if (spheres->slapped || !(spheres->seen == start))
-		    {
-			    // A slap turns the spheres on as its reaction starts, whatever the body action is
-			    const auto change = spheres->slapped ? creature_stomp::Switch::On : creature_stomp::SwitchFor(start);
-			    spheres->slapped = false;
-			    spheres->seen = start;
-			    if (change == creature_stomp::Switch::On)
-			    {
-				    spheres->on = true;
-				    for (size_t part = 0; part < creature_stomp::k_PartCount; ++part)
-				    {
-					    spheres->last.at(part) = at(part);
-					    spheres->radius.at(part) = creature_stomp::SphereRadius(static_cast<creature_stomp::Part>(part), size);
-				    }
-				    return;
-			    }
-			    if (change == creature_stomp::Switch::Off)
-			    {
-				    spheres->on = false;
-			    }
-		    }
-		    if (!spheres->on)
-		    {
-			    return;
-		    }
-		    for (size_t part = 0; part < creature_stomp::k_PartCount; ++part)
-		    {
-			    const auto now = at(part);
-			    if (!creature_stomp::MovedEnough(spheres->last.at(part), now, size))
-			    {
-				    continue;
-			    }
-			    moves.push_back({creature, now, now - spheres->last.at(part), spheres->radius.at(part)});
-			    spheres->last.at(part) = now;
-		    }
-	    });
+	// Only the creature of this turn tramples. The search for it reads its components directly, not each creature.
+	const auto pass = [&](entt::entity creature, const Creature& body, const Transform& transform,
+	                      const CreatureAnimation& animation) {
+		const auto* points = PointsOf(body);
+		if (points == nullptr)
+		{
+			return;
+		}
+		auto* spheres = registry.TryGet<CreatureDestruction>(creature);
+		const auto start = BodyStartOf(animation.body);
+		if (spheres == nullptr)
+		{
+			// The first time that the spheres come on, the creature gets them after this pass
+			if (creature_stomp::SwitchFor(start) == creature_stomp::Switch::On)
+			{
+				starting.push_back(creature);
+			}
+			return;
+		}
+		const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, PlacementOf(transform));
+		const auto bones = PartBones(*points, animation);
+		const auto at = [&](size_t part) {
+			const auto bone = bones.at(part);
+			return bone < animation.boneMatrices.size() ? glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3])
+			                                            : transform.position;
+		};
+		const auto size = ShownSize(body);
+		if (spheres->slapped || !(spheres->seen == start))
+		{
+			// A slap turns the spheres on as its reaction starts, whatever the body action is
+			const auto change = spheres->slapped ? creature_stomp::Switch::On : creature_stomp::SwitchFor(start);
+			spheres->slapped = false;
+			spheres->seen = start;
+			if (change == creature_stomp::Switch::On)
+			{
+				spheres->on = true;
+				for (size_t part = 0; part < creature_stomp::k_PartCount; ++part)
+				{
+					spheres->last.at(part) = at(part);
+					spheres->radius.at(part) = creature_stomp::SphereRadius(static_cast<creature_stomp::Part>(part), size);
+				}
+				return;
+			}
+			if (change == creature_stomp::Switch::Off)
+			{
+				spheres->on = false;
+			}
+		}
+		if (!spheres->on)
+		{
+			return;
+		}
+		for (size_t part = 0; part < creature_stomp::k_PartCount; ++part)
+		{
+			const auto now = at(part);
+			if (!creature_stomp::MovedEnough(spheres->last.at(part), now, size))
+			{
+				continue;
+			}
+			moves.push_back({creature, now, now - spheres->last.at(part), spheres->radius.at(part)});
+			spheres->last.at(part) = now;
+		}
+	};
+	if (registry.Valid(only) && registry.AllOf<Creature, Transform, CreatureAnimation>(only))
+	{
+		pass(only, registry.Get<const Creature>(only), registry.Get<const Transform>(only),
+		     registry.Get<const CreatureAnimation>(only));
+	}
 	// A new set of spheres starts off; the next pass sees the action start and turns them on
 	for (const auto creature : starting)
 	{

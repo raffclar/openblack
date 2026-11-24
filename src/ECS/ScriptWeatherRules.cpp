@@ -349,6 +349,11 @@ script_weather::ThingAfterTurn script_weather::AfterTurn(bool stormLives, bool h
 	return heldByScript ? ThingAfterTurn::StaysWithoutStorm : ThingAfterTurn::Goes;
 }
 
+openblack::map_coords::MapCoords script_weather::ThingPlace(glm::vec3 stormPosition)
+{
+	return openblack::map_coords::FromMetres({stormPosition.x, stormPosition.z});
+}
+
 float script_weather::ThingSpeed(const components::Storm* storm)
 {
 	return storm != nullptr ? storm->speed : 0.0f;

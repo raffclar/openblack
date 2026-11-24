@@ -50,6 +50,9 @@ struct SoundTag
 	/// True when the load of a saved game did not attach this sound again. The tag stays in the world, but its sound
 	/// does not play in this run, as the game keeps no sound in its saves. A save does not keep it.
 	bool silenced {false};
+	/// True when the sound comes from the object, in the range of its sound. False when it is heard everywhere at the
+	/// centre, but only while the object stays. Only a script attaches such a tag.
+	bool heardFromObject {true};
 };
 
 } // namespace openblack::ecs::components

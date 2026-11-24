@@ -167,3 +167,91 @@ TEST(CreatureSkin, TheLidColourComesFromTheFirstEyeWithALid)
 	eyes.points.at(2).enabled = true;
 	EXPECT_EQ(eyes.LidColourPoint(), &eyes.points.at(2));
 }
+
+// A paint with the same texels as the skin holds changes nothing, so the renderer does not take up the skin again
+TEST(CreatureSkin, APaintWithTheSameTexelsKeepsTheHeldTexels)
+{
+	std::vector<uint16_t> held {1, 2, 3};
+	std::vector<uint16_t> painted {1, 2, 3};
+	EXPECT_FALSE(KeepIfChanged(held, painted));
+	EXPECT_EQ(held, (std::vector<uint16_t> {1, 2, 3}));
+}
+
+TEST(CreatureSkin, APaintWithDifferentTexelsReplacesTheHeldTexels)
+{
+	std::vector<uint16_t> held {1, 2, 3};
+	std::vector<uint16_t> painted {1, 9, 3};
+	EXPECT_TRUE(KeepIfChanged(held, painted));
+	EXPECT_EQ(held, (std::vector<uint16_t> {1, 9, 3}));
+}
+
+// The first paint of a skin always changes it, as the skin holds no texels before it
+TEST(CreatureSkin, TheFirstPaintOfASkinChangesIt)
+{
+	std::vector<uint16_t> held;
+	std::vector<uint16_t> painted {0, 0};
+	EXPECT_TRUE(KeepIfChanged(held, painted));
+	EXPECT_EQ(held.size(), 2U);
+}
+
+namespace
+{
+creature_tattoo::Design FakeDesign(uint8_t level)
+{
+	creature_tattoo::Design design {};
+	design.at(0) = {.size = 1, .levels = {level}};
+	return design;
+}
+
+PaintSources FakeSources(const creature_tattoo::Slots& slots, const creature_tattoo::Masks* masks,
+                         const creature_marks::Marks& marks)
+{
+	return SourcesOfPaint(1, 2, 3, 128, false, true, slots, masks, marks);
+}
+} // namespace
+
+// The aging of the marks paints the skins again. With no marks and nothing else changed, the sources are the same.
+TEST(CreatureSkin, APaintWithNoMarksAndNoChangeHasTheSameSources)
+{
+	const creature_tattoo::Slots slots {};
+	const creature_marks::Marks before {.wounds = {}, .blood = {}, .counts = 0};
+	const creature_marks::Marks after {.wounds = {}, .blood = {}, .counts = 5};
+	EXPECT_EQ(FakeSources(slots, nullptr, before), FakeSources(slots, nullptr, after));
+}
+
+TEST(CreatureSkin, AMarkThatAgedChangesTheSources)
+{
+	const creature_tattoo::Slots slots {};
+	creature_marks::Marks marks {};
+	marks.blood.push_back({.u = 10, .v = 20, .skin = 0, .age = 1, .type = 0, .column = 0});
+	const auto before = FakeSources(slots, nullptr, marks);
+	marks.blood.front().age = 2;
+	EXPECT_NE(before, FakeSources(slots, nullptr, marks));
+}
+
+// The paint does not read the mask of an empty slot, so a change of that mask does not change the sources
+TEST(CreatureSkin, OnlyTheMasksOfSlotsThatAreNotEmptyCount)
+{
+	creature_tattoo::Slots slots {};
+	slots.at(1) = {.design = 0, .site = 0, .colour = {}};
+	creature_tattoo::Masks first {};
+	creature_tattoo::Masks second {};
+	first.at(0) = FakeDesign(3);
+	second.at(0) = FakeDesign(9);
+	first.at(1) = FakeDesign(4);
+	second.at(1) = FakeDesign(4);
+	const creature_marks::Marks marks {};
+	EXPECT_EQ(FakeSources(slots, &first, marks), FakeSources(slots, &second, marks));
+	second.at(1) = FakeDesign(5);
+	EXPECT_NE(FakeSources(slots, &first, marks), FakeSources(slots, &second, marks));
+}
+
+// No masks and the masks of empty slots paint the same: no tattoo
+TEST(CreatureSkin, NoMasksAreTheSameSourcesAsNoMaskForEachSlot)
+{
+	creature_tattoo::Slots slots {};
+	slots.at(0) = {.design = 0, .site = 0, .colour = {}};
+	const creature_tattoo::Masks none {};
+	const creature_marks::Marks marks {};
+	EXPECT_EQ(FakeSources(slots, nullptr, marks), FakeSources(slots, &none, marks));
+}

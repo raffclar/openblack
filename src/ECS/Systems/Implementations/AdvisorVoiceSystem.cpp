@@ -187,3 +187,21 @@ help::AdvisorVoices::Hooks AdvisorVoiceSystem::VoiceHooks()
 	};
 	return hooks;
 }
+
+void AdvisorVoiceSystem::StopLineSound(uint32_t line)
+{
+	const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::HelpSprites, line);
+	if (!sound)
+	{
+		return;
+	}
+	if (Locator::sounds::has_value())
+	{
+		Locator::sounds::value().StopNumberedSoundEffect(*sound, audio::k_AdvisorOwnerNumber);
+	}
+	// When the length of its sample times the line, the line of this sample ends now
+	if (_voices.GetSentence() == line)
+	{
+		static_cast<void>(audio::CutShort(_advisorPlayback, NowMs()));
+	}
+}

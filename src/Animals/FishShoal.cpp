@@ -45,7 +45,8 @@ std::optional<glm::vec2> FindCentre(glm::vec2 farm, const std::function<bool(glm
 {
 	// How many rings running each direction has been open sea on
 	std::array<uint8_t, k_RingDirections> runs {};
-	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the values of the original game
+	// The original game adds the float step each pass. An integer counter changes the result.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float radius = k_RingStep; radius < k_RingLimit; radius += k_RingStep)
 	{
 		for (uint32_t direction = 0; direction < k_RingDirections; ++direction)

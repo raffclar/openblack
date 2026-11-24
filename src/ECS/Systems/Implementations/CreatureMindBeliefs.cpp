@@ -965,7 +965,8 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			}
 		}
 		// The things that stay put, then the things that move
-		for (const auto thing : map.GetAllInCell(cell))
+		map.AllInCellInto(cell, _sweptCell);
+		for (const auto thing : _sweptCell)
 		{
 			// The thing in the map's cells for a temple is the temple's heart. The creature believes in the heart and
 			// watches the heart.

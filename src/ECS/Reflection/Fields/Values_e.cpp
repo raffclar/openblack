@@ -252,7 +252,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::art>("art");
 	Reflect<openblack::ecs::components::CreatureSkin::Skin>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Skin::id>("id")
-	    .Field<&openblack::ecs::components::CreatureSkin::Skin::texels>("texels");
+	    .Field<&openblack::ecs::components::CreatureSkin::Skin::texels>("texels")
+	    .Field<&openblack::ecs::components::CreatureSkin::Skin::revision>("revision");
 	Reflect<openblack::ecs::components::DrawnIntoVortex::Flight>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::velocity>("velocity")
 	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::position>("position")

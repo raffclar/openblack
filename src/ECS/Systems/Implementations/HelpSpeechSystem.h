@@ -27,6 +27,7 @@ public:
 	[[nodiscard]] size_t GetSpokenTextCount() const override;
 	[[nodiscard]] size_t GetLineCount() const override { return _voices.GetCount(); }
 	void Stop(audio::SpeechVoice voice, audio::SpeechBank bank) override;
+	void StopLine(uint32_t text, audio::SpeechVoice voice) override;
 	[[nodiscard]] const audio::HelpSpeechTable& GetTable() const override { return _table; }
 	void AdvanceClock(uint32_t milliseconds) override { _clockMs += milliseconds; }
 	[[nodiscard]] uint32_t GetClockMs() const override { return _clockMs; }

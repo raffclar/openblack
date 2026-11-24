@@ -435,9 +435,20 @@ void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 	const auto speech = Pop().intVal != 0;
 	if (speech)
 	{
-		// The sample is then a help text whose spoken line is stopped. No script passes it.
-		// TODO(raffclar): stop a help text's speech
-		NotImplemented();
+		// The sample is then a help text, and the stop looks for its line by the owners of the spoken lines. A text of
+		// the good advisor stops the advisors' voice. Any other text stops the second voice of the scripts and an owner
+		// that no line has, so the first voice, the narration and the evil advisor are not stopped (see
+		// docs/vanilla-bugs.md). No shipped script uses this form.
+		const auto text = static_cast<uint32_t>(sample);
+		if (Locator::helpTextSystem::has_value() &&
+		    Locator::helpTextSystem::value().GetNarrator(text) == help::k_NarratorGoodAdvisor)
+		{
+			Locator::helpTextSystem::value().StopAdvisorSpeech(text);
+		}
+		else if (Locator::helpSpeechSystem::has_value())
+		{
+			Locator::helpSpeechSystem::value().StopLine(text, audio::SpeechVoice::Second);
+		}
 		return;
 	}
 	// A script's sound has its sample number as its owner, so the stop leaves the copies that the game plays
@@ -468,21 +479,15 @@ void AttachSoundTag() // 447 ATTACH_SOUND_TAG
 	{
 		return;
 	}
-	if (!threeD)
-	{
-		// A sound kept up by an object but not heard from it. No script asks for one.
-		// TODO(raffclar): sound tags that aren't heard from their object
-		NotImplemented();
-		return;
-	}
 	const auto sound = BankSound(bank, sample);
 	if (!sound.has_value() || !Locator::soundTagSystem::has_value())
 	{
 		return;
 	}
 	// A script's tag plays its sound one time each start, and the next turn starts it again when it is finished. It
-	// adds to the sounds that the object keeps up already.
-	Locator::soundTagSystem::value().AttachObjectSound(object, *sound, false);
+	// adds to the sounds that the object keeps up already. Without the 3D flag it is heard everywhere at the centre
+	// while the object stays. No shipped script asks for that form.
+	Locator::soundTagSystem::value().AttachObjectSound(object, *sound, false, threeD);
 }
 
 void DetachSoundTag() // 448 DETACH_SOUND_TAG

@@ -56,10 +56,14 @@ Step CastAtItself(uint32_t magicType, uint32_t self)
 }
 } // namespace
 
+bool creature_mind::Frightens(float height, float distance)
+{
+	return distance < height * k_FrighteningHeights;
+}
+
 bool creature_mind::NothingFrighteningNear(float height, std::span<const float> otherCreatures)
 {
-	const auto reach = height * k_FrighteningHeights;
-	return std::ranges::none_of(otherCreatures, [reach](float distance) { return distance < reach; });
+	return std::ranges::none_of(otherCreatures, [height](float distance) { return Frightens(height, distance); });
 }
 
 bool creature_mind::FarFromHome(float homeDistance)

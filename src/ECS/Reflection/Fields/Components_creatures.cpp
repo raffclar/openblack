@@ -40,6 +40,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatures(entt::meta_
 	Reflect<components::CreatureSkin>(context)
 	    .Field<&components::CreatureSkin::skins>("skins")
 	    .Field<&components::CreatureSkin::painted>("painted")
+	    .Field<&components::CreatureSkin::paintedFrom>("paintedFrom")
 	    .Field<&components::CreatureSkin::revision>("revision")
 	    .Field<&components::CreatureSkin::lidColour>("lidColour");
 	Reflect<components::CreatureDrips>(context).Field<&components::CreatureDrips::drips>("drips");

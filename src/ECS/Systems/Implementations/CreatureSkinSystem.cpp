@@ -145,6 +145,14 @@ void ShowLidColour(const CreatureSkin& skin, CreatureEyes& eyes)
 void Paint(const CreatureSkinSystem::PaintJob& job, const creature_skin::Art* art, bool lowResolution)
 {
 	auto& skin = *job.skin;
+	// A paint that reads the same sources as the paint that made the texels gives the same texels. The skins keep them.
+	auto sources = creature_skin::SourcesOfPaint(job.rigId, job.wanted.baseMesh, job.wanted.variantMesh, job.wanted.weight,
+	                                             lowResolution, art != nullptr, *job.tattoos, job.masks, job.marks->marks);
+	if (skin.paintedFrom == sources)
+	{
+		skin.painted = job.wanted;
+		return;
+	}
 	const auto& base = *job.base;
 	const auto& variantFile = *job.variant;
 	const auto& rig = *job.rig;
@@ -155,14 +163,17 @@ void Paint(const CreatureSkinSystem::PaintJob& job, const creature_skin::Art* ar
 	std::ranges::transform(baseSkins, std::back_inserter(baseOrder), &l3d::L3DTexture::id);
 	std::ranges::transform(variantSkins, std::back_inserter(variantOrder), &l3d::L3DTexture::id);
 
+	// A skin whose texels change takes the next revision. A paint that changes no texels keeps the revision, so the
+	// renderer does not take up the same texels again.
+	const auto nextRevision = skin.revision + 1;
+	bool changed = false;
 	skin.skins.resize(baseSkins.size());
 	for (size_t i = 0; i < baseSkins.size(); ++i)
 	{
 		const auto& baseSkin = baseSkins[i];
 		auto& painted = skin.skins[i];
-		painted.id = baseSkin.id;
 		const auto baseTexels = TexelsOf(base, baseSkin, lowResolution);
-		painted.texels.resize(baseTexels.size());
+		std::vector<uint16_t> texels(baseTexels.size());
 		// A neutral creature, or one whose evil or good mesh lacks the skin, starts from its base skin
 		std::vector<uint16_t> variant;
 		if (job.variant != job.base)
@@ -176,17 +187,28 @@ void Paint(const CreatureSkinSystem::PaintJob& job, const creature_skin::Art* ar
 				}
 			}
 		}
-		creature_skin::Compose(painted.texels, baseTexels, variant, job.wanted.weight,
+		creature_skin::Compose(texels, baseTexels, variant, job.wanted.weight,
 		                       {.skinIndex = static_cast<uint8_t>(i),
 		                        .tattoos = *job.tattoos,
 		                        .sites = rig.tattooSites,
 		                        .marks = job.marks->marks,
 		                        .art = art,
 		                        .masks = job.masks});
+		const bool newId = painted.id != baseSkin.id;
+		painted.id = baseSkin.id;
+		if (creature_skin::KeepIfChanged(painted.texels, texels) || newId)
+		{
+			painted.revision = nextRevision;
+			changed = true;
+		}
 	}
 	skin.lidColour = LidColourOf(skin, rig);
-	++skin.revision;
+	if (changed)
+	{
+		skin.revision = nextRevision;
+	}
 	skin.painted = job.wanted;
+	skin.paintedFrom = std::move(sources);
 }
 /// The entity of the player that a creature belongs to. A creature of nobody's uses the masks of the local player.
 std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames owner)
@@ -300,6 +322,7 @@ void CollectIfChanged(std::vector<CreatureSkinSystem::PaintJob>& jobs, CreatureS
 	    .masks = masks,
 	    .marks = &marks,
 	    .rig = &rig,
+	    .rigId = rigId,
 	};
 	// A skin gets one paint in a frame. If a skin comes again, its last paint replaces the paint that waits, so that
 	// two threads never write the same skin.

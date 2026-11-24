@@ -100,4 +100,33 @@ struct Layers
 /// A slot without a mask paints nothing. On a skin of 128 the tattoos, wounds and blood follow their half-size rules.
 void Compose(std::span<uint16_t> out, std::span<const uint16_t> base, std::span<const uint16_t> variant, uint8_t weight,
              const Layers& layers);
+
+/// What a paint of a creature's skins reads. Two paints that read equal sources give the same texels, so a paint whose
+/// sources did not change can keep the texels that the skins have.
+struct PaintSources
+{
+	/// The rig of the species, which gives the sites of the tattoos
+	entt::id_type rig;
+	entt::id_type baseMesh;
+	entt::id_type variantMesh;
+	uint8_t weight;
+	bool lowResolution;
+	bool art;
+	creature_tattoo::Slots tattoos;
+	/// The mask of each slot that is not empty. The paint does not read the mask of an empty slot.
+	std::array<std::optional<creature_tattoo::Design>, creature_tattoo::k_SlotCount> masks;
+	std::vector<creature_marks::Mark> wounds;
+	std::vector<creature_marks::Mark> blood;
+
+	bool operator==(const PaintSources&) const = default;
+};
+
+/// The sources of a paint. The paint reads no masks when masks is null.
+[[nodiscard]] PaintSources SourcesOfPaint(entt::id_type rig, entt::id_type baseMesh, entt::id_type variantMesh, uint8_t weight,
+                                          bool lowResolution, bool art, const creature_tattoo::Slots& tattoos,
+                                          const creature_tattoo::Masks* masks, const creature_marks::Marks& marks);
+
+/// Keeps a new paint of a skin in place of the texels that the skin holds, when the two are different. The function
+/// returns true when it changed the held texels. A paint with the same texels as before thus needs no new upload.
+[[nodiscard]] bool KeepIfChanged(std::vector<uint16_t>& held, std::vector<uint16_t>& painted);
 } // namespace openblack::creature_skin

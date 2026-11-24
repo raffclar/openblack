@@ -241,6 +241,7 @@ void HelpTextSystem::AdvisorSays(int32_t narrator, uint32_t text)
 	const auto& sounds = Locator::resources::value().GetSounds();
 	if (sound && sounds.Contains(*sound))
 	{
+		_scriptAdvisorSample = sample->sample;
 		_scriptAdvisorLine = audio::SilentPlayback {
 		    .startMs = Locator::helpSpeechSystem::value().GetClockMs() + help::AdvisorVoices::SayDelayMs(hoverX),
 		    .lengthMs = audio::MeasureSoundParts(sounds.Handle(*sound)->buffer) * 1000.0f,
@@ -266,6 +267,25 @@ void HelpTextSystem::InterruptAdvisorsByEscape()
 		voices->Interrupt(k_EvilAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
 	}
 	_scriptAdvisorLine.reset();
+}
+
+void HelpTextSystem::StopAdvisorSpeech(uint32_t text)
+{
+	// The stop looks in the bank of the text's line, and the advisors speak only from their own bank
+	const auto sample = Locator::helpSpeechSystem::value().GetTable().Find(text);
+	if (!sample || sample->bank != audio::SpeechBank::HelpSprites)
+	{
+		return;
+	}
+	if (auto* voices = Voices(); voices != nullptr)
+	{
+		voices->StopLineSound(sample->sample);
+	}
+	// The scripts time the line on their clock: a line of this sample that plays ends now
+	if (_scriptAdvisorLine.has_value() && _scriptAdvisorSample == sample->sample)
+	{
+		static_cast<void>(audio::CutShort(*_scriptAdvisorLine, Locator::helpSpeechSystem::value().GetClockMs()));
+	}
 }
 
 int32_t HelpTextSystem::GetNarrator(uint32_t text) const

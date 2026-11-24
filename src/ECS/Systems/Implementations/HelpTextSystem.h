@@ -54,6 +54,7 @@ public:
 	void ShowTextAgain() override;
 	void InterruptAdvisors() override;
 	void InterruptAdvisorsByEscape() override;
+	void StopAdvisorSpeech(uint32_t text) override;
 	[[nodiscard]] int32_t GetNarrator(uint32_t text) const override;
 	[[nodiscard]] std::u16string GetWords(uint32_t text) const override;
 	[[nodiscard]] const help::TextFrame* Layout(glm::ivec2 screen, int barPixels, const help::WidthFn& widthFn) const override;
@@ -76,6 +77,8 @@ private:
 	TextChoices _textChoices;
 	/// The advisors' line as the scripts time it on their clock: from its start delay, for the length of its sample
 	std::optional<audio::SilentPlayback> _scriptAdvisorLine;
+	/// The sample of the advisors' bank that says that line
+	uint32_t _scriptAdvisorSample {0};
 	/// The player's click and key that came since the last turn of the dialogue
 	bool _pendingClick {false};
 	bool _pendingSkipKey {false};

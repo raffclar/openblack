@@ -577,14 +577,17 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	}
 	case ObjectType::WeatherThing:
 	{
-		// A weather thing of a kind of weather, bringing a small storm of that weather to the place
+		// A weather thing of a kind of weather brings a small storm of that weather to the place. The storm starts on
+		// the land at the map position of the place.
 		const auto& info = Locator::infoConstants::value();
 		if (!script::create_rules::IsRow(subtype, info.weather.size()) || !Locator::weatherSystem::has_value())
 		{
 			break;
 		}
+		const auto centre =
+		    map_coords::ToWorld(Locator::terrainSystem::value(), map_coords::FromMetres({position.x, position.z}));
 		return Locator::weatherSystem::value().CreateWeatherThing(
-		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), OnGround(position)));
+		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), centre));
 	}
 	case ObjectType::Store:
 	{
