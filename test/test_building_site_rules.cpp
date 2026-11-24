@@ -575,3 +575,35 @@ TEST(BuildingSiteRules, APitchPutsItsBuildersOnACircle)
 		EXPECT_NEAR(glm::distance(glm::vec2(place.x, place.z), glm::vec2(10.0f, -20.0f)), 30.0f, 1e-3f);
 	}
 }
+
+// A temple's site takes all resources that come to a point. A workshop's site passes all resources to its workshop. All
+// other sites take only wood, and a script's "any" resource gets nothing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(BuildingSiteRules, OnlyATempleSiteOrAWorkshopSiteTakesMoreThanWood)
+{
+	for (const auto type : {ResourceType::Food, ResourceType::Wood, ResourceType::Any, ResourceType::None})
+	{
+		EXPECT_TRUE(SiteTakesIn(SiteWoodKind::Temple, type, true));
+		EXPECT_FALSE(SiteTakesIn(SiteWoodKind::Temple, type, false));
+		EXPECT_TRUE(SiteTakesIn(SiteWoodKind::Workshop, type, false));
+		const bool wood = type == ResourceType::Wood;
+		EXPECT_EQ(SiteTakesIn(SiteWoodKind::Other, type, true), wood);
+		EXPECT_EQ(SiteTakesIn(SiteWoodKind::WorshipSite, type, false), wood);
+	}
+}
+
+// A temple's site gives only wood to a hand, and all resources to all other askers. A workshop's site gives food and
+// wood. All other sites give only wood, and a script's "any" resource gets nothing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(BuildingSiteRules, OnlyATempleSiteOrAWorkshopSiteGivesMoreThanWood)
+{
+	for (const auto type : {ResourceType::Food, ResourceType::Wood, ResourceType::Any, ResourceType::None})
+	{
+		const bool wood = type == ResourceType::Wood;
+		EXPECT_EQ(SiteGivesOut(SiteWoodKind::Temple, type, true), wood);
+		EXPECT_TRUE(SiteGivesOut(SiteWoodKind::Temple, type, false));
+		EXPECT_EQ(SiteGivesOut(SiteWoodKind::Workshop, type, false), wood || type == ResourceType::Food);
+		EXPECT_EQ(SiteGivesOut(SiteWoodKind::Other, type, false), wood);
+		EXPECT_EQ(SiteGivesOut(SiteWoodKind::WorshipSite, type, true), wood);
+	}
+}
