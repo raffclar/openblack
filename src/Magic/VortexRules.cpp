@@ -197,7 +197,7 @@ uint8_t LevelledAltitude(uint8_t original, float average, float distance, float 
 	const float height = (pull * amount) + altitude;
 	// Rounded to the nearest, halves to even, and kept to a cell's heights
 	const auto rounded = std::lrint(height);
-	return static_cast<uint8_t>(std::clamp<long>(rounded, 0, 255));
+	return static_cast<uint8_t>(std::clamp<decltype(rounded)>(rounded, 0, 255));
 }
 
 std::array<uint8_t, k_LevelCellCount> LevelSquare(glm::vec2 centre, std::span<const uint8_t> originals, float average,
