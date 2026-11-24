@@ -1356,6 +1356,19 @@
   "writes": true
  },
  {
+  "description": "Tools: the player's \"maximum detail\" option, as the debug menu's Model Detail choice sets it. Without on, it only tells",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "True shows the most detail at all distances, false the game's own detail",
+    "name": "on",
+    "type": "boolean"
+   }
+  ],
+  "query": "engine.maximum_detail",
+  "writes": true
+ },
+ {
   "description": "Tools: the pictures of the sky's dome that the debug menu shows, the game's own pictures or the larger pictures of the sky pack in the profile folder. Without upscaled, it only tells",
   "kind": "object",
   "parameters": [
