@@ -270,8 +270,8 @@ reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity livi
 	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
 }
 
-/// Where a thing is now, as the turn knows it. A hand is where the last report of its player put it: its drawn place
-/// follows the pointer of one computer only. Empty when the thing has no place.
+/// Where a thing is now, as the turn knows it. A hand is at the point under the cursor that the last report of its player
+/// gave, not at its drawn place, which follows the pointer of one computer only. Empty when the thing has no place.
 std::optional<glm::vec3> TurnPlaceOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (thing == entt::null || !registry.Valid(thing))
@@ -280,7 +280,7 @@ std::optional<glm::vec3> TurnPlaceOf(const ecs::Registry& registry, entt::entity
 	}
 	if (const auto* reported = registry.TryGet<const ReportedHand>(thing))
 	{
-		return reported->handPoint;
+		return reported->collidePoint;
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(thing))
 	{

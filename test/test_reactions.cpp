@@ -2542,16 +2542,18 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 	}
 }
 
-// The turn finds the hand where the last report of its player put it. The drawn hand follows the pointer of one
-// computer only, so the turn does not use it.
-TEST_F(Reactions, TheTurnFindsTheHandAtItsReportedPlaceAndNotAtItsDrawnPlace)
+// The turn finds the hand at the point under the cursor that the last report of its player gave. The drawn hand follows
+// the pointer of one computer only, and the reported hand can be far from the point, so the turn uses neither.
+TEST_F(Reactions, TheTurnFindsTheHandAtThePointUnderItsCursor)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	PlayTurn();
 	PlayTurn();
 	const auto hand = registry.Create();
 	registry.Assign<Transform>(hand, k_Here + glm::vec3(1000.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<ReportedHand>(hand).handPoint = k_Here;
+	auto& reported = registry.Assign<ReportedHand>(hand);
+	reported.collidePoint = k_Here;
+	reported.handPoint = k_Here + glm::vec3(0.0f, 0.0f, 1000.0f);
 	auto source = Miracle(Reaction::ReactToHandPickUp);
 	source.initiator = hand;
 	_reactions.Create(source);

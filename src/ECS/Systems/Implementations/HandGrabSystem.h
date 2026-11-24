@@ -125,6 +125,9 @@ private:
 	[[nodiscard]] hand_grab::Gate GateOf(entt::entity object) const;
 	[[nodiscard]] hand_grab::Gate GateAt(entt::entity object, std::optional<glm::vec3> point) const;
 	[[nodiscard]] bool MayTake(entt::entity object) const;
+	/// Where the reaction to a take of the hand is: the point under the cursor that the last report of the hand's player
+	/// gave. Before the first report, this is the origin of the world.
+	[[nodiscard]] glm::vec3 PickUpReactionPlace() const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);
 	/// What the player clicked, made on the hand when first needed; none without a hand

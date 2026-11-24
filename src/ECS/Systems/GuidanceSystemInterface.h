@@ -89,6 +89,9 @@ public:
 	virtual void AlignmentTurn(float change) = 0;
 	/// A remark said at most once a land, at its chance
 	virtual void SayOneOff(guidance::OneOff oneOff) = 0;
+	/// At the end of the turn of a player: once in a long while, a hand of a player who is not the player here, near the
+	/// point under the cursor, can make the advisors warn of miracles near the player
+	virtual void WatchPlayer([[maybe_unused]] PlayerNames player) {}
 	/// The advisors say a text at once, as they say a remark of this kind, and the kind counts as heard
 	virtual void SayText([[maybe_unused]] uint32_t text, [[maybe_unused]] guidance::Kind kind) {}
 	/// The player here killed a villager: the advisors speak of it when the villager is on screen
