@@ -154,10 +154,12 @@ struct Window
 
 INT_PTR CALLBACK DialogProc(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	// NOLINTNEXTLINE(performance-no-int-to-ptr): the window system passes a pointer in this integer
 	auto* window = reinterpret_cast<Window*>(GetWindowLongPtrW(dialog, DWLP_USER));
 	switch (message)
 	{
 	case WM_INITDIALOG:
+		// NOLINTNEXTLINE(performance-no-int-to-ptr): the window system passes a pointer in this integer
 		window = reinterpret_cast<Window*>(lParam);
 		SetWindowLongPtrW(dialog, DWLP_USER, reinterpret_cast<LONG_PTR>(window));
 		window->Open(dialog);
