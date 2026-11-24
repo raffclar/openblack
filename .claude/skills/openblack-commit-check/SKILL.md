@@ -13,9 +13,8 @@ checkout and every worktree (lane worktrees, merge-train cars `prm-wt*`, scratch
 - **Every commit is the developer's.** Commit with **no** `--author`, so git's configured identity is used. This
   includes work that uses or adapts code from other forks.
 - Do not name another person as author or co-author in a commit unless that person wrote the change and agreed to it.
-- Every message ends with the Claude trailer: `commit.trailer` in `.claude/openblack.local.json`
-  (`python .claude/obconfig.py get commit.trailer`), for example
-  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Use the name of the model that wrote the change.
+- Add no attribution line to a commit message or a PR body: no `Co-Authored-By` trailer and no "Generated with"
+  line. This includes merge commits and merge-train cars. The developer is the only author.
 
 ## 2. The commit message (ASD-STE100 Simplified Technical English)
 
@@ -25,7 +24,7 @@ Every commit message follows the ASD-STE100 Simplified Technical English (STE) s
   statement, in STE. No full stop at the end.
 - **Body:** only if it is absolutely necessary. Most commits have no body. If you must write one, leave one blank line
   after the subject, write it in STE, and wrap every line at 72 characters.
-- **The trailer** (`Co-Authored-By: ...`, section 1) is not a body. Every commit has it, after one blank line.
+- **No trailer.** A commit has no `Co-Authored-By` line (section 1).
 
 ### Core rules (the project checklist)
 
@@ -98,7 +97,7 @@ Stage files by name; never `git add -A` or `git add .`.
 
 ## 6. After committing
 
-`git log -1 --format="%an <%ae> | %s"`: check the author matches section 1, and the subject is at most 72 characters
+`git log -1 --format="%an <%ae> | %s"`: check the author matches section 1, the message has no attribution line, and the subject is at most 72 characters
 and in STE (section 2). If the commit is the latest and not pushed:
 
 - a wrong author: fix it with `git commit --amend --no-edit --reset-author`;

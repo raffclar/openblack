@@ -27,7 +27,6 @@ worktree finds the file in the main checkout. The values the train uses:
 | `paths.gateReference` | The gate pictures of the live web build, for the web check of each car (default `E:/openblack/deploy-gate/reference`). |
 | `tools.obBuild` | The build tool. Default: `tools/build/ob-build` in the main checkout. |
 | `tools.clangFormat` | clang-format for the automatic conflict fixes. |
-| `commit.trainTrailer` | The trailer of the train's commits. |
 | `train.extraCheck` | Optional. A script that checks the car on another machine: called with `start <worktree> <batch>` before the build, and `report <worktree> <batch>` after it. A failed report stops the car. |
 | `train.linuxGccServer` | `true` or `false` (default `false`). When true, each car builds openblack-server on Linux GCC 13 in WSL (`scripts/linux_gcc_server.sh`: preset `ninja-multi-vcpkg-shipping`, Release, the component `-Werror`, the repository overlay ports) after the ship build, and stops with exit 19 on a compile error. Also `train.linuxGccDistro` (WSL distribution, empty = default), `train.linuxGccDir` (warm cache in the WSL file system, default `/root/openblack-gcc`: src, vcpkg clone, build tree, vcpkg binary cache) and `train.linuxGccJobs` (ninja jobs, empty = all). |
 
@@ -139,7 +138,7 @@ Never take a number another open branch holds (for example a deviation signed on
 ## Rules that always apply
 
 - Never edit the main checkout by hand; never force-push or amend a pushed commit.
-- Commits: your own git identity, strict STE, the trailer (skill `openblack-commit-check`).
+- Commits: your own git identity, strict STE, no attribution line in commits or PR bodies (skill `openblack-commit-check`).
 - A refused command is not tried another way: stop and report it.
 - Visual changes need an approved look before their car runs; deviations need the maintainer's sign-off.
   Vanilla-faithful choices need no ask (record "ANSWERED by the lead").

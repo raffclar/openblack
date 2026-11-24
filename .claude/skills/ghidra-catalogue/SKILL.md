@@ -123,10 +123,10 @@ exec python "<openblack checkout>/.claude/skills/ghidra-catalogue/check_commit_m
 ```
 
 - `get` (first fetch or `--refresh`) and `note` commit the changed file at once, with an STE subject such as
-  `Add analysis of GameThingWithPos::CanCreatureEatMe at 0x004E4B90`, a `Lane: <by>.` body and the Claude
-  trailer. Always pass `--by <lane>` so the history says who did what.
+  `Add analysis of GameThingWithPos::CanCreatureEatMe at 0x004E4B90`, a `Lane: <by>.` body. In openblack
+  the rule is no attribution line; the catalogue repo is separate and the tool keeps its own trailer. Always pass `--by <lane>` so the history says who did what.
 - If you must change a file outside the tool, commit it yourself before you continue, one file or one topic a
-  commit, with your own git identity (no `--author`) and the Claude trailer (`commit.trailer`).
+  commit, with your own git identity (no `--author`) and, in openblack, no attribution line.
 - Commit messages follow ASD-STE100 Simplified Technical English: an instruction verb first (Add, Change,
   Remove, Correct), at most 72 characters in the subject, no full stop, an empty line before the body, at most
   25 words a sentence, approved words only. The repository's commit-msg hook

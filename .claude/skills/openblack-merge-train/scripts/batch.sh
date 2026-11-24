@@ -35,7 +35,7 @@ for car in "$@"; do
       git merge --abort; OUT+=("$short:$branch"); continue
     fi
   fi
-  git commit -q -m "Merge $branch into batch $NAME" -m "$OB_TRAIN_TRAILER"
+  git commit -q -m "Merge $branch into batch $NAME"
   IN+=("$short:$branch"); echo "IN $short"
 done
 source "$HERE/car_checks.sh"

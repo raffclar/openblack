@@ -33,10 +33,6 @@
     "ghidraBridge": "http://127.0.0.1:8080",
     "ghidraBinary": "BW1W120"
   },
-  "commit": {
-    "trailer": "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
-    "trainTrailer": "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
-  },
   "train": {
     "extraCheck": "",
     "linuxGccServer": false,
