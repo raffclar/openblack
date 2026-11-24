@@ -700,6 +700,14 @@ class ArgumentsTest(SessionBase):
         request = mcp.call_request("ecs.entities", '{"component": "Temple"}', self.CATALOGUE)
         self.assertEqual(request, {"query": "ecs.entities", "params": {"component": "Temple"}})
 
+    def test_call_a_text_that_starts_with_an_at_sign_names_a_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "request.json")
+            with open(path, "w", encoding="utf-8") as file:
+                file.write('{"params": {"events": [{"frame": 1}]}}')
+            request = mcp.call_request("input.replay", "@" + path, self.CATALOGUE)
+        self.assertEqual(request, {"query": "input.replay", "params": {"events": [{"frame": 1}]}})
+
     def test_call_shaping_options_stay_beside_the_parameters(self):
         request = mcp.call_request("ecs.entities", '{"component": "Tree", "near": [0, 0], "radius": 50, "limit": 5}',
                                    self.CATALOGUE)

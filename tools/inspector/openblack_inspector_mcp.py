@@ -1743,9 +1743,13 @@ def call_tool_name(name):
 def call_request(query, text, catalogue=None):
     """The request --call QUERY [JSON] sends. The JSON is the query's parameters, as in {"component": "Temple"}, with
     any shaping options (near, radius, fields, where, limit and the like) beside them; a key that is one of the
-    query's parameters is always taken as one. A JSON with "params" is instead the rest of the request as the game
+    query's parameters is always taken as one. A text that starts with "@" names a file that holds the JSON. A JSON with "params" is instead the rest of the request as the game
     reads it, as before: {"params": {"component": "Tree"}, "near": [0, 0], "radius": 50}."""
     catalogue = CATALOGUE if catalogue is None else catalogue
+    if text.startswith("@"):
+        # A long request, such as the events of a recorded input, does not fit on a command line: "@path" names a file
+        with open(text[1:], encoding="utf-8") as file:
+            text = file.read()
     given = json.loads(text) if text.strip() else {}
     if not isinstance(given, dict):
         raise ValueError("the request must be a JSON object")
