@@ -138,6 +138,7 @@ public:
 		constexpr float k_FarAway = 1e20f;
 		float nearestTime = 0.0f;
 		float nearest = k_FarAway;
+		// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the values of the original game
 		for (float time = 0.0f; time < k_Search; time += k_Step)
 		{
 			const glm::vec3 at = eyeAt(std::chrono::milliseconds(static_cast<int64_t>(time * 1000.0f)));

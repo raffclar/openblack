@@ -97,6 +97,7 @@ Flight camera_fly::Plan(Reason reason, const camera_limits::Ground& ground, cons
 	const float focusDistance = x87::Distance<x87::SumOrder::Zyx>(place, screenCentre);
 	const float originDistance = x87::Distance<x87::SumOrder::Zyx>(place, origin);
 	Flight flight {.focus = place};
+	// NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores): the start value stays as a guard for later changes
 	float distance = originDistance;
 	bool bestBearing = true;
 	if (originDistance > k_FarDistance * k_DistanceFactor && focusDistance > k_FarFocusMinimum)
