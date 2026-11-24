@@ -126,7 +126,7 @@ private:
 		{
 			return;
 		}
-		// TODO: the game ends a beam on a creature at one of its bones rather than at its middle
+		// TODO(particles): the game ends a beam on a creature at one of its bones rather than at its middle
 		if (const auto info = effect.Services().world.Target(data.object, true))
 		{
 			data.a = glm::vec4(info->position, 0.0f);

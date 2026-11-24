@@ -126,6 +126,7 @@ struct Gathering
 /// each material rather than one each time the material changes
 void GatherCommutingRuns(Gathering& gathering, std::vector<uint32_t>& items)
 {
+	// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): the constructor sets the reference
 	const auto& frame = gathering.frame;
 	const auto commutes = [&gathering](uint32_t index) { return gathering.commutes[index] != 0; };
 	const auto materialOf = [&frame](uint32_t index) { return frame.spriteMaterials[frame.items[index].index]; };

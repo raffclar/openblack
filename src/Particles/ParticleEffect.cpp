@@ -602,6 +602,7 @@ void Effect::UpdateCollection(Collection& collection)
 	{
 		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections, prefetch::Fields::Stepped);
 		auto& atom = collection.atoms[a];
+		// NOLINTNEXTLINE(modernize-loop-convert): the loop goes by index, because a rule can add to the list
 		for (size_t s = 0; s < atom->subCollections.size(); ++s)
 		{
 			UpdateCollection(*atom->subCollections[s]);
@@ -715,6 +716,7 @@ void Effect::StepOnce(float dt)
 	_dt = dt;
 	UpdateFloatProviders();
 	// By index: a rule may make a group's collection at the start while they are walked
+	// NOLINTNEXTLINE(modernize-loop-convert): the loop goes by index, because a rule can add to the list
 	for (size_t r = 0; r < _roots.size(); ++r)
 	{
 		UpdateCollection(*_roots[r]);

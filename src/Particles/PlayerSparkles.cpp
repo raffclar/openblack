@@ -36,6 +36,7 @@ constexpr uint32_t Darker(uint32_t channel)
 
 uint32_t Colour(uint32_t playerColour, uint32_t tint)
 {
+	// NOLINTNEXTLINE(misc-const-correctness): the structured binding below changes the channels
 	std::array<uint32_t, 3> channels {
 	    ((playerColour >> 16u) & 0xFFu) >> 1u,
 	    ((playerColour >> 8u) & 0xFFu) >> 1u,

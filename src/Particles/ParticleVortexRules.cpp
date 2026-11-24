@@ -67,7 +67,7 @@ public:
 		for (auto& owned : collection.atoms)
 		{
 			auto& atom = *owned;
-			const auto kept = atom.data.find(this);
+			auto* const kept = atom.data.find(this);
 			if (kept == atom.data.end() || !kept->second.started)
 			{
 				continue;
