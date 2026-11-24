@@ -120,6 +120,12 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 			throw std::runtime_error("Could not initialize SDL Video Subsystem: " + std::string(SDL_GetError()));
 		}
 
+		// A game without controller support still plays: the keyboard and the mouse do all
+		if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Controllers are off: {}", SDL_GetError());
+		}
+
 		if (SDL_InitSubSystem(SDL_INIT_TIMER) != 0)
 		{
 			throw std::runtime_error("Could not initialize SDL Timer Subsystem: " + std::string(SDL_GetError()));

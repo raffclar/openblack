@@ -13,6 +13,7 @@
 
 #include <LobbiesJson.h>
 #include <LobbyApiJson.h>
+#include <SDL_gamecontroller.h>
 #include <SDL_keycode.h>
 #include <gtest/gtest.h>
 
@@ -614,4 +615,20 @@ TEST(LobbyScreenRules, TheThumbnailOfAMapIsItsFileName)
 	// A map that is not a land of a network game has no thumbnail
 	EXPECT_EQ(ThumbnailName({.file = "Scripts/Land1.txt", .name = "Land", .sha256 = {}, .size = 0}), "");
 	EXPECT_EQ(ThumbnailName({}), "");
+}
+
+TEST(LobbyScreenRules, TheControllerButtons)
+{
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_A, false), ControllerAction::Accept);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_B, true), ControllerAction::Back);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_DPAD_DOWN, false), ControllerAction::FocusNext);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_DPAD_UP, false), ControllerAction::FocusPrevious);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, true), ControllerAction::FocusNext);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_DPAD_LEFT, true), ControllerAction::FocusPrevious);
+	// In the list, the pad up and down pick the lines, and the shoulders leave the list
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_DPAD_DOWN, true), ControllerAction::ListDown);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_DPAD_UP, true), ControllerAction::ListUp);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, true), ControllerAction::FocusNext);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_LEFTSHOULDER, true), ControllerAction::FocusPrevious);
+	EXPECT_EQ(ControllerActionOf(SDL_CONTROLLER_BUTTON_X, false), ControllerAction::None);
 }

@@ -3854,6 +3854,20 @@
   "writes": true
  },
  {
+  "description": "A button of a game controller goes down and up again, as the player's controller does it. The screens of the lobby sessions take A, B and the pad",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "SDL's name of the button: a, b, x, y, dpup, dpdown, dpleft, dpright, leftshoulder, rightshoulder, start, back",
+    "name": "button",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "input.pad",
+  "writes": true
+ },
+ {
   "description": "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It presses no key. The answer does not repeat the letters. While the new player's name box waits before the first land (game.state loading \"new player\"), the letters go to the box at once",
   "kind": "object",
   "parameters": [

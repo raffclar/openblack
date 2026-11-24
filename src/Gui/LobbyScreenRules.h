@@ -360,4 +360,26 @@ struct KeyPress
 };
 [[nodiscard]] KeyAction KeyActionOf(KeyScreen screen, const KeyPress& press) noexcept;
 
+/// What a button of a controller does in the lobby screens
+enum class ControllerAction : uint8_t
+{
+	None,
+	/// The focus goes to the next control
+	FocusNext,
+	/// The focus goes to the previous control
+	FocusPrevious,
+	/// The picked line of the list goes up
+	ListUp,
+	/// The picked line of the list goes down
+	ListDown,
+	/// A: the same as Return, or a click on the control that has the focus
+	Accept,
+	/// B: the same as Escape
+	Back,
+};
+/// The action of a button of a controller (an SDL game controller button). The pad up and down move the picked line
+/// while the list has the focus, and move the focus in other cases. The shoulder buttons always move the focus, so that
+/// the player can leave the list.
+[[nodiscard]] ControllerAction ControllerActionOf(int button, bool listHasFocus) noexcept;
+
 } // namespace openblack::gui::lobby_screens

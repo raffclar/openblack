@@ -219,9 +219,14 @@ void Game::UpdateInput()
 		// The scripted mouse's moves and buttons take effect as they are pumped, as a real mouse's do in SDL: after the
 		// action map's frame has read the pointer
 		actions.PumpScriptedPointer();
+		if (!std::exchange(_controllersOpened, true))
+		{
+			_controllers.OpenConnected();
+		}
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0)
 		{
+			_controllers.Handle(e);
 			// While an agent drives the game, the player's mouse and keyboard are kept out of it
 			if (!actions.AdmitEvent(e))
 			{
