@@ -147,7 +147,8 @@ std::optional<glm::ivec2> creature_arena::FindClearPlace(glm::ivec2 start, float
 
 std::optional<Placed> creature_arena::Place(glm::ivec2 start, float wantedRadius, const UsableCell& usable)
 {
-	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the values of the original game
+	// The original game adds the float step each pass. An integer counter changes the result.
+	// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter)
 	for (float scale = 1.0f; scale > k_SmallestScale; scale -= k_ScaleStep)
 	{
 		const float radius = scale * wantedRadius;
