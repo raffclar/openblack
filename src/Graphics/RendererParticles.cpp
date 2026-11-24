@@ -59,6 +59,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/InterfaceCreatures.h"
@@ -153,13 +154,13 @@ constexpr uint64_t k_FragmentState =
     BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
 
 /// Where the hand is drawn this frame, which the miracle in it is drawn just after
-std::optional<glm::vec3> HandPoint()
+std::optional<glm::vec3> HandPoint(const DrawnFrame& frame)
 {
-	if (!Locator::rendereringSystem::has_value())
+	if (frame.models == nullptr)
 	{
 		return std::nullopt;
 	}
-	const auto& context = Locator::rendereringSystem::value().GetContext();
+	const auto& context = *frame.models;
 	const auto hand = context.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
 	if (hand == context.instancedDrawDescs.end() || hand->second.count == 0 ||
 	    hand->second.offset >= context.instanceUniforms.size())
@@ -193,54 +194,55 @@ glm::mat3 FacingCamera(glm::mat3 axes, const glm::vec3& position, const glm::vec
 }
 } // namespace
 
-void Renderer::CollectParticles() const
+void Renderer::CollectParticles(DrawnEffects& effects) const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ParticlesGather);
-	_townBeliefFrameCount = 0;
+	effects.townBeliefCount = 0;
+	auto& particleFrame = effects.particles;
 	if (!Locator::particleSystem::has_value() || !Locator::time::has_value())
 	{
-		_particleFrame.Clear();
+		particleFrame.Clear();
 		return;
 	}
 	// In the temple only its rooms' effects and the pool of drops, dust, smoke and motes are drawn
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	Locator::particleSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), _particleFrame, inTemple);
+	Locator::particleSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), particleFrame, inTemple);
 	if (inTemple)
 	{
 		if (Locator::liquidParticleSystem::has_value())
 		{
-			Locator::liquidParticleSystem::value().CollectDrawFrame(_particleFrame);
+			Locator::liquidParticleSystem::value().CollectDrawFrame(particleFrame);
 		}
 		return;
 	}
 	// What burns, among the other things that blend
 	if (Locator::fireSystem::has_value())
 	{
-		Locator::fireSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), _particleFrame);
+		Locator::fireSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), particleFrame);
 	}
 	if (Locator::explosionSystem::has_value())
 	{
-		Locator::explosionSystem::value().CollectDrawFrame(_particleFrame);
+		Locator::explosionSystem::value().CollectDrawFrame(particleFrame);
 	}
 	// The dust of a reward chest that fell
 	if (Locator::rewardSystem::has_value())
 	{
-		Locator::rewardSystem::value().CollectDrawFrame(_particleFrame);
+		Locator::rewardSystem::value().CollectDrawFrame(particleFrame);
 	}
 	// The drops, the dust, the smoke and the motes
 	if (Locator::liquidParticleSystem::has_value())
 	{
-		Locator::liquidParticleSystem::value().CollectDrawFrame(_particleFrame);
+		Locator::liquidParticleSystem::value().CollectDrawFrame(particleFrame);
 	}
 	// The explorers' boat's wake
 	if (Locator::boatLaunchSystem::has_value())
 	{
-		Locator::boatLaunchSystem::value().CollectDrawFrame(_particleFrame);
+		Locator::boatLaunchSystem::value().CollectDrawFrame(particleFrame);
 	}
-	CollectTownBeliefParticles();
+	CollectTownBeliefParticles(effects);
 }
 
-void Renderer::CollectTownBeliefParticles() const
+void Renderer::CollectTownBeliefParticles(DrawnEffects& effects) const
 {
 	if (!Locator::townSystem::has_value() || !Locator::entitiesRegistry::has_value())
 	{
@@ -251,7 +253,7 @@ void Renderer::CollectTownBeliefParticles() const
 	const float turnFraction = Locator::time::value().GetTurnFraction();
 	// Each village centre's symbols of belief go in a frame of their own. The frames keep their room from frame to frame.
 	// The effects that draw only symbols go into one layout for all the centres.
-	_townBeliefSymbols.Clear();
+	effects.townBeliefSymbols.Clear();
 	Locator::entitiesRegistry::value().Each<const ecs::components::Abode>(
 	    [&](entt::entity entity, const ecs::components::Abode& abode) {
 		    if (abode.type != AbodeNumber::TownCentre)
@@ -263,21 +265,21 @@ void Renderer::CollectTownBeliefParticles() const
 		    {
 			    return;
 		    }
-		    if (_townBeliefFrameCount == _townBeliefFrames.size())
+		    if (effects.townBeliefCount == effects.townBeliefs.size())
 		    {
-			    _townBeliefFrames.emplace_back();
+			    effects.townBeliefs.emplace_back();
 		    }
-		    auto& entry = _townBeliefFrames[_townBeliefFrameCount];
-		    entry.symbolRun = particles.CollectEffectSymbols(*effect, turnFraction, _townBeliefSymbols, entry.frame);
+		    auto& entry = effects.townBeliefs[effects.townBeliefCount];
+		    entry.symbolRun = particles.CollectEffectSymbols(*effect, turnFraction, effects.townBeliefSymbols, entry.frame);
 		    if (entry.symbolRun.has_value())
 		    {
-			    if (!_townBeliefSymbols.Draws(*entry.symbolRun))
+			    if (!effects.townBeliefSymbols.Draws(*entry.symbolRun))
 			    {
 				    return;
 			    }
 			    entry.centre = entity;
-			    entry.spriteBox = _townBeliefSymbols.Run(*entry.symbolRun).spriteBox;
-			    ++_townBeliefFrameCount;
+			    entry.spriteBox = effects.townBeliefSymbols.Run(*entry.symbolRun).spriteBox;
+			    ++effects.townBeliefCount;
 			    return;
 		    }
 		    if (entry.frame.Empty())
@@ -286,11 +288,19 @@ void Renderer::CollectTownBeliefParticles() const
 		    }
 		    entry.centre = entity;
 		    entry.spriteBox = particles::draw::SpriteBox(entry.frame);
-		    ++_townBeliefFrameCount;
+		    ++effects.townBeliefCount;
 		    // The light maps and shadows of the symbols stamp the land with those of the other effects
-		    _particleFrame.lightStamps.insert(_particleFrame.lightStamps.end(), entry.frame.lightStamps.begin(),
-		                                      entry.frame.lightStamps.end());
+		    effects.particles.lightStamps.insert(effects.particles.lightStamps.end(), entry.frame.lightStamps.begin(),
+		                                         entry.frame.lightStamps.end());
 	    });
+	// The sprites of each laid centre, also of a centre that no view sees. Thus the draw only reads the layout.
+	for (const auto& entry : effects.TownBeliefs())
+	{
+		if (entry.symbolRun.has_value())
+		{
+			effects.townBeliefSymbols.MakeSprites(*entry.symbolRun);
+		}
+	}
 }
 
 const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) const
@@ -916,21 +926,22 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	{
 		WarmUpParticles(desc);
 	}
-	if (_particleFrame.items.empty())
+	const auto& particleFrame = desc.frame->effects.particles;
+	if (particleFrame.items.empty())
 	{
 		return;
 	}
 	auto section = Locator::profiler::value().BeginScoped(reflection ? Profiler::Stage::ReflectionDrawParticles
 	                                                                 : Profiler::Stage::MainPassDrawParticles);
 	const auto origin = desc.camera->GetOrigin();
-	particles::draw::Order(_particleFrame, origin, reflection ? std::nullopt : HandPoint(), _particleCommands,
+	particles::draw::Order(particleFrame, origin, reflection ? std::nullopt : HandPoint(*desc.frame), _particleCommands,
 	                       _particleSpriteOrder, _particleOrderLists);
 	// A vortex's swirl is drawn before the land, after the sea in the sky's pass, which keeps its order. Its sprites
 	// follow the others' in the one buffer of instances.
 	_particleBeforeLandCommands.clear();
 	if (!reflection)
 	{
-		particles::draw::OrderBeforeLand(_particleFrame, _particleBeforeLandCommands, _particleBeforeLandSprites);
+		particles::draw::OrderBeforeLand(particleFrame, _particleBeforeLandCommands, _particleBeforeLandSprites);
 		const auto offset = static_cast<uint32_t>(_particleSpriteOrder.size());
 		for (auto& command : _particleBeforeLandCommands)
 		{
@@ -942,16 +953,17 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		_particleSpriteOrder.insert(_particleSpriteOrder.end(), _particleBeforeLandSprites.begin(),
 		                            _particleBeforeLandSprites.end());
 	}
-	SubmitParticleFrame(desc, _particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
+	SubmitParticleFrame(desc, particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
 }
 
 void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 {
-	if ((desc.viewId != RenderPass::Main && !IsMirrorScene(desc.viewId)) || _particleFrame.meshes.empty())
+	const auto& particleFrame = desc.frame->effects.particles;
+	if ((desc.viewId != RenderPass::Main && !IsMirrorScene(desc.viewId)) || particleFrame.meshes.empty())
 	{
 		return;
 	}
-	particles::draw::MeshesWithLearningWords(_particleFrame, _learningBulbMeshes);
+	particles::draw::MeshesWithLearningWords(particleFrame, _learningBulbMeshes);
 	// The bulbs come in the order of their marks. The words of a mark go just before its bulb, so the words of a later
 	// mark show over the bulb of an earlier mark.
 	const bool withWords = desc.viewId == RenderPass::Main && desc.submitLearningWords;
@@ -961,7 +973,7 @@ void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 		{
 			desc.submitLearningWords(static_cast<uint32_t>(mark));
 		}
-		DrawParticleMesh(desc, _particleFrame.meshes[_learningBulbMeshes[mark]], graphics::zsort::k_AfterSolidBeforeSorted);
+		DrawParticleMesh(desc, particleFrame.meshes[_learningBulbMeshes[mark]], graphics::zsort::k_AfterSolidBeforeSorted);
 	}
 }
 
@@ -973,8 +985,9 @@ void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity c
 	{
 		return;
 	}
-	const auto frames = std::span(_townBeliefFrames).first(_townBeliefFrameCount);
-	const auto found = std::ranges::find(frames, centre, &TownBeliefFrame::centre);
+	const auto& effects = desc.frame->effects;
+	const auto frames = effects.TownBeliefs();
+	const auto found = std::ranges::find(frames, centre, &DrawnEffects::TownBelief::centre);
 	if (found == frames.end() || found->frame.items.empty())
 	{
 		return;
@@ -986,7 +999,7 @@ void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity c
 		return;
 	}
 	const auto origin = desc.camera->GetOrigin();
-	particles::draw::Order(found->frame, origin, reflection ? std::nullopt : HandPoint(), _townBeliefCommands,
+	particles::draw::Order(found->frame, origin, reflection ? std::nullopt : HandPoint(*desc.frame), _townBeliefCommands,
 	                       _townBeliefSpriteOrder, _townBeliefOrderLists);
 	SubmitParticleFrame(desc, found->frame, _townBeliefCommands, _townBeliefSpriteOrder, {}, origin);
 }
@@ -996,9 +1009,10 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
 	const bool drawsSymbols = desc.viewId == RenderPass::Main || reflection;
-	const auto frames = std::span(_townBeliefFrames).first(_townBeliefFrameCount);
+	const auto& effects = desc.frame->effects;
+	const auto frames = effects.TownBeliefs();
 	const auto origin = desc.camera->GetOrigin();
-	const auto hand = drawsSymbols && !reflection ? HandPoint() : std::nullopt;
+	const auto hand = drawsSymbols && !reflection ? HandPoint(*desc.frame) : std::nullopt;
 
 	// The draws of each centre whose symbols are in the layout, in turn. Symbols that are all out of the view put no
 	// pixel on the screen. Only the symbols that the pass draws get their sprites.
@@ -1011,7 +1025,7 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 	for (const auto centre : centres)
 	{
 		TownBeliefSymbolDraw draw {};
-		const auto found = drawsSymbols ? std::ranges::find(frames, centre, &TownBeliefFrame::centre) : frames.end();
+		const auto found = drawsSymbols ? std::ranges::find(frames, centre, &DrawnEffects::TownBelief::centre) : frames.end();
 		if (found != frames.end() && found->symbolRun.has_value())
 		{
 			draw.laid = true;
@@ -1021,8 +1035,7 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 			const auto& box = found->spriteBox;
 			if (seenBy == nullptr || !box.has_value() || view_frustum::SeesWorldBox(*seenBy, box->first, box->second))
 			{
-				_townBeliefSymbols.MakeSprites(draw.run);
-				particles::draw::OrderSymbols(_townBeliefSymbols, draw.run, origin, hand, commands, places,
+				particles::draw::OrderSymbols(effects.townBeliefSymbols, draw.run, origin, hand, commands, places,
 				                              _townBeliefSymbolLists);
 			}
 			draw.commandCount = static_cast<uint32_t>(commands.size()) - draw.firstCommand;
@@ -1034,12 +1047,12 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 	// All the sprites of the pass in one buffer of instances, in the order drawn. When the buffer has no room for all of
 	// them, each centre asks for its own sprites, as a frame of its own does.
 	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
-	const auto fill = [this, &places](bgfx::InstanceDataBuffer& instances, uint32_t first, uint32_t count) {
+	const auto fill = [&effects, &places](bgfx::InstanceDataBuffer& instances, uint32_t first, uint32_t count) {
 		bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
 		auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
 		for (uint32_t i = first; i < first + count; ++i)
 		{
-			*out++ = _townBeliefSymbols.Sprite(places[i]);
+			*out++ = effects.townBeliefSymbols.Sprite(places[i]);
 		}
 	};
 	const auto total = static_cast<uint32_t>(places.size());
@@ -1091,7 +1104,7 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 			base = draw.firstSprite;
 		}
 		const auto& instances = onePass ? passInstances : ownInstances;
-		const auto& run = _townBeliefSymbols.Run(draw.run);
+		const auto& run = effects.townBeliefSymbols.Run(draw.run);
 		for (const auto& command : std::span(commands).subspan(draw.firstCommand, draw.commandCount))
 		{
 			const auto& material = *run.materials.at(command.material);

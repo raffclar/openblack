@@ -32,11 +32,13 @@ public:
 
 	void ConfigureView(RenderPass /*viewId*/, glm::u16vec2 /*resolution*/, uint32_t /*clearColor*/) const noexcept override {}
 	void Reset(glm::u16vec2 /*resolution*/) const noexcept override {}
+	void FillDrawnEffects(DrawnFrame& /*frame*/, const DrawSceneDesc& /*drawDesc*/) const noexcept override {}
 	void DrawScene(const DrawSceneDesc& /*drawDesc*/) const noexcept override {}
 	void Frame() noexcept override {}
 	void BakeLandShadows(bool /*drawVegetation*/) const noexcept override {}
 	void PrepareCreatureSkins(size_t /*count*/) const noexcept override {}
-	[[nodiscard]] bool WarmUpScene(const DrawSceneDesc& /*drawDesc*/, uint32_t /*part*/) const noexcept override
+	[[nodiscard]] bool WarmUpScene(DrawnFrame& /*frame*/, const DrawSceneDesc& /*drawDesc*/,
+	                               uint32_t /*part*/) const noexcept override
 	{
 		return false;
 	}

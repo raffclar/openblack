@@ -23,6 +23,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "Graphics/DrawnEffects.h"
 
 namespace openblack
 {
@@ -140,6 +141,8 @@ struct DrawnFrame
 	std::vector<EntityLook> drawnEntityLooks;
 	/// The bones of all the looks
 	std::vector<glm::mat4> bones;
+	/// What the effects draw. The renderer fills it after the rest, only in a frame that draws the world.
+	DrawnEffects effects;
 
 	[[nodiscard]] std::span<const glm::mat4> BonesOf(BoneRun run) const
 	{

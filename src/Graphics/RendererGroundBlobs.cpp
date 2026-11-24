@@ -56,6 +56,7 @@
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/HandLight.h"
@@ -80,11 +81,37 @@ using namespace openblack::graphics;
 using namespace openblack::graphics::detail;
 using namespace openblack::ecs::systems;
 
-void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
+namespace
+{
+/// The texture of the ground blobs
+constexpr auto k_GroundBlobTextureId = entt::hashed_string("raw/human_shadow");
+/// The sheet of the creatures' footprints and its alpha
+constexpr auto k_FootprintTextureId = entt::hashed_string("raw/misc0");
+constexpr auto k_FootprintAlphaTextureId = entt::hashed_string("raw/misc0a");
+
+/// The layout of the corners of the flat effects on the land: a position, a place on the texture and a colour
+const bgfx::VertexLayout& FlatEffectLayout()
+{
+	static const auto k_Layout = [] {
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+		    .end();
+		return layout;
+	}();
+	return k_Layout;
+}
+} // namespace
+
+void Renderer::CollectCreatureFootprints(DrawnEffects& effects, const DrawSceneDesc& desc) const
 {
 	namespace prints = creature_footprints;
+	auto& vertices = effects.footprints;
+	vertices.clear();
 	// Drawn once, after the land: the land mirrored in the sea has none
-	if (desc.viewId != RenderPass::Main || !Locator::footprintSystem::has_value() ||
+	if (desc.viewId != RenderPass::Main || !desc.drawIsland || !Locator::footprintSystem::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
@@ -96,21 +123,7 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	// White where the prints' pictures are, and their shapes in the alpha beside it
-	static constexpr auto k_TextureId = entt::hashed_string("raw/misc0");
-	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/misc0a");
-	const auto& textures = Locator::resources::value().GetTextures();
-	if (!textures.Contains(k_TextureId.value()) || !textures.Contains(k_AlphaTextureId.value()))
-	{
-		return;
-	}
-	struct Vertex
-	{
-		glm::vec3 position;
-		glm::vec2 uv;
-		uint32_t colour;
-	};
-	std::vector<Vertex> vertices;
+	using Vertex = DrawnEffects::Vertex;
 	vertices.reserve(footprints.GetPrints().size() * prints::k_Indices.size());
 	for (const auto& print : footprints.GetPrints())
 	{
@@ -125,27 +138,33 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 	{
 		vertices.resize(prints::k_Indices.size(), Vertex {.position = glm::vec3(0.0f), .uv = glm::vec2(0.0f), .colour = 0});
 	}
-	if (vertices.empty())
+}
+
+void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
+{
+	const auto& vertices = desc.frame->effects.footprints;
+	if (desc.viewId != RenderPass::Main || vertices.empty())
 	{
 		return;
 	}
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-	    .end();
+	// White where the prints' pictures are, and their shapes in the alpha beside it
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (!textures.Contains(k_FootprintTextureId.value()) || !textures.Contains(k_FootprintAlphaTextureId.value()))
+	{
+		return;
+	}
 	const auto count = static_cast<uint32_t>(vertices.size());
+	const auto& layout = FlatEffectLayout();
 	if (bgfx::getAvailTransientVertexBuffer(count, layout) < count)
 	{
 		return;
 	}
 	bgfx::TransientVertexBuffer buffer;
 	bgfx::allocTransientVertexBuffer(&buffer, count, layout);
-	std::memcpy(buffer.data, vertices.data(), vertices.size() * sizeof(Vertex));
+	std::memcpy(buffer.data, vertices.data(), vertices.size() * sizeof(DrawnEffects::Vertex));
 	const auto* program = _shaderManager->GetShader("WorldTextured");
-	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
-	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_FootprintTextureId));
+	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_FootprintAlphaTextureId));
 	bgfx::setVertexBuffer(0, &buffer);
 	// Unlit, blended over the land, tested against depth but leaving none, both sides
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
@@ -163,28 +182,24 @@ constexpr size_t k_CasterRunsPerLane = 4;
 
 } // namespace
 
-void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
+void Renderer::CollectGroundBlobs(DrawnEffects& effects, const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::terrainSystem::has_value() ||
+	auto& vertices = effects.groundBlobs;
+	vertices.clear();
+	// Only the main view draws the blobs, with the things on the land
+	if (desc.viewId != RenderPass::Main || !desc.drawEntities || !Locator::terrainSystem::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
 	}
-	static constexpr auto k_TextureId = entt::hashed_string("raw/human_shadow");
 	const auto& textures = Locator::resources::value().GetTextures();
-	if (!textures.Contains(k_TextureId.value()))
+	if (!textures.Contains(k_GroundBlobTextureId.value()))
 	{
 		return;
 	}
 	const auto& island = Locator::terrainSystem::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	struct Vertex
-	{
-		glm::vec3 position;
-		glm::vec2 uv;
-		uint32_t colour;
-	};
-	std::vector<Vertex> vertices;
+	using Vertex = DrawnEffects::Vertex;
 	const auto addQuadTo = [](std::vector<Vertex>& to, const ground_blobs::Quad& quad) {
 		for (const auto corner : ground_blobs::k_Indices)
 		{
@@ -349,26 +364,31 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 			addQuad(quad);
 		}
 	}
-	if (vertices.empty())
+}
+
+void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
+{
+	const auto& vertices = desc.frame->effects.groundBlobs;
+	if (desc.viewId != RenderPass::Main || vertices.empty())
 	{
 		return;
 	}
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-	    .end();
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (!textures.Contains(k_GroundBlobTextureId.value()))
+	{
+		return;
+	}
 	const auto count = static_cast<uint32_t>(vertices.size());
+	const auto& layout = FlatEffectLayout();
 	if (bgfx::getAvailTransientVertexBuffer(count, layout) < count)
 	{
 		return;
 	}
 	bgfx::TransientVertexBuffer buffer;
 	bgfx::allocTransientVertexBuffer(&buffer, count, layout);
-	std::memcpy(buffer.data, vertices.data(), vertices.size() * sizeof(Vertex));
+	std::memcpy(buffer.data, vertices.data(), vertices.size() * sizeof(DrawnEffects::Vertex));
 	const auto* program = _shaderManager->GetShader("Blob");
-	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_GroundBlobTextureId));
 	bgfx::setVertexBuffer(0, &buffer);
 	// Blended over the land, tested against depth but leaving none, both sides
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);

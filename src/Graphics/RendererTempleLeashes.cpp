@@ -22,6 +22,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/ZSort.h"
@@ -43,7 +44,6 @@ constexpr float k_White = 255.0f;
 void Renderer::DrawTempleLeashes(const DrawSceneDesc& desc) const
 {
 	using ecs::components::LeashPost;
-	using ecs::components::Transform;
 	if (desc.camera == nullptr)
 	{
 		return;
@@ -89,13 +89,8 @@ void Renderer::DrawTempleLeashes(const DrawSceneDesc& desc) const
 		drawCollar(glm::mat4(0.0f), 0.0f, LeashType::Rope, 0);
 		return;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const LeashPost, const Transform>([&](const LeashPost& post, const Transform& transform) {
-		if (transform.scale == glm::vec3(0.0f))
-		{
-			return;
-		}
-		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		drawCollar(model, post.look.scroll, post.type, std::max(zsort::Depth(transform.position, eye), 1u) - 1);
-	});
+	for (const auto& collar : desc.frame->effects.leashCollars)
+	{
+		drawCollar(collar.model, collar.scroll, collar.type, std::max(zsort::Depth(collar.position, eye), 1u) - 1);
+	}
 }

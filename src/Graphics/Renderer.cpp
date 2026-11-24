@@ -661,7 +661,7 @@ graphics::ShaderManager* Renderer::GetShaderManager() const noexcept
 	return _shaderManager.get();
 }
 
-bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
+bool Renderer::WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::WarmUpScene");
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
@@ -695,6 +695,7 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 	const auto window = WarmUpPartWindow(part, warm_up::k_DrawsPerPart);
 	const bool parted = _shaderManager->OpenDrawWindow(window.first, window.count, k_PartedViews);
 	_warmingUp = true;
+	FillDrawnEffects(frame, drawDesc);
 	DrawScene(drawDesc);
 	_warmingUp = false;
 	_warmUpInFrame = true;
@@ -703,9 +704,11 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 	       WarmUpPartsLeft(part, *draws, warm_up::k_DrawsPerPart);
 }
 
-void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
+void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::FillDrawnEffects");
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::DrawnEffectsFill);
+	auto& effects = frame.effects;
 	// The draw only reads the world. Thus side threads find the changed footprints and test the casters of the shadows
 	// while the draw continues, and the passes that paint them take the results.
 	if (drawDesc.drawIsland)
@@ -752,7 +755,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		_snowAlphaTexture = textures.Find(snow_cover::k_AlphaTextureId.value());
 	}
 	// The light maps and shadows of the frame that ended stamp the land in this frame
-	_landStamps.swap(_particleFrame.lightStamps);
+	_landStamps.swap(effects.particles.lightStamps);
 	// The land's light of the frame that ended, before this frame makes its own
 	KeepLightOfFrameBefore();
 	DrawLandLuminosityPass(drawDesc);
@@ -762,7 +765,24 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		drawDesc.landShaded();
 	}
 	// What the particle effects draw, once for the land's colours and every pass
-	CollectParticles();
+	CollectParticles(effects);
+	// What the other effects draw, from the world as the frame shows it
+	CollectGroundBlobs(effects, drawDesc);
+	CollectCreatureFootprints(effects, drawDesc);
+	CollectLeashes(effects, drawDesc);
+	CollectTempleLooks(effects, drawDesc);
+	_effectsFilled = true;
+}
+
+void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
+{
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
+	// The steps of the frame fill the effects of the drawn copy before each draw
+	if (!_effectsFilled)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "The frame drew the scene with no fill of its effects");
+	}
+	_effectsFilled = false;
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
 	UpdateLandLight();

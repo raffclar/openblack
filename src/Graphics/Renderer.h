@@ -119,9 +119,10 @@ public:
 
 	void ConfigureView(RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept final;
 
+	void FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept final;
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
-	[[nodiscard]] bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
+	[[nodiscard]] bool WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
 	bool SetPipelinePrefetch(bool enabled) noexcept final;
 	[[nodiscard]] uint32_t GetPipelinePrefetchPending() const noexcept final;
@@ -218,10 +219,18 @@ private:
 	/// The smoke from the homes' chimneys, each in its place among what blends, in the main view
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
 	/// Gathers what the particle effects draw this frame, once for every pass
-	void CollectParticles() const;
+	void CollectParticles(DrawnEffects& effects) const;
 	/// Gathers the symbols of belief of each village centre into a frame of its own, as the game draws them after the
 	/// centre's column and not with the other effects
-	void CollectTownBeliefParticles() const;
+	void CollectTownBeliefParticles(DrawnEffects& effects) const;
+	/// Makes the corners of the ground blobs that the main view draws
+	void CollectGroundBlobs(DrawnEffects& effects, const DrawSceneDesc& desc) const;
+	/// Makes the corners of the creatures' footprints that the main view draws
+	void CollectCreatureFootprints(DrawnEffects& effects, const DrawSceneDesc& desc) const;
+	/// Keeps the ropes of the leashes that the frame shows
+	void CollectLeashes(DrawnEffects& effects, const DrawSceneDesc& desc) const;
+	/// Keeps the glow shells over the temples' hearts and the collars of the leash posts
+	void CollectTempleLooks(DrawnEffects& effects, const DrawSceneDesc& desc) const;
 	/// The symbols of belief of one village centre, among the other things that blend. When a view is given, the symbols
 	/// are not drawn when all of them are out of it: then they put no pixel on the screen.
 	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre,
@@ -737,6 +746,8 @@ private:
 	bool _bgfxProfile = false;
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
 	mutable bool _warmingUp {false};
+	/// The steps of the frame filled the effects for the next draw of the scene
+	mutable bool _effectsFilled {false};
 	/// The next frame holds a warm-up's draws, after which its views are set back
 	mutable bool _warmUpInFrame {false};
 	/// The colour that the main view clears the window to
@@ -1146,11 +1157,10 @@ private:
 	/// The land's light, or a texture to bind in its place before it is first built
 	[[nodiscard]] TextureHandle GetLandLightTexture() const;
 	std::unique_ptr<Mesh> _plane;
-	/// What the particle effects draw this frame, and the order of the pass being drawn, kept for their room
-	mutable particles::draw::Frame _particleFrame;
 	/// The light maps and shadows that the particles drew in the frame before: the game stamps them on the land at the
 	/// start of the next frame
 	mutable std::vector<particles::draw::LightStamp> _landStamps;
+	/// The order of the particles of the pass being drawn, kept for their room
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
 	/// What the effect over a seed of the gestures' hints draws, and its order
@@ -1159,25 +1169,9 @@ private:
 	mutable std::unique_ptr<Camera> _hintCamera;
 	mutable std::vector<particles::draw::Command> _hintParticleCommands;
 	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
-	/// What the symbols of belief of one village centre draw this frame
-	struct TownBeliefFrame
-	{
-		entt::entity centre {entt::null};
-		particles::draw::Frame frame;
-		/// The run of the symbols in the layout of the symbols, when the effect draws only symbols. Then the frame is
-		/// clear.
-		std::optional<uint32_t> symbolRun;
-		/// The lowest and the highest corners of a box that holds every corner of the frame's sprites. It is none when
-		/// the frame has more than sprites.
-		std::optional<std::pair<glm::vec3, glm::vec3>> spriteBox;
-	};
-	/// The frames of the village centres' symbols of belief. Only the first _townBeliefFrameCount are of this frame.
-	mutable std::vector<TownBeliefFrame> _townBeliefFrames;
-	mutable size_t _townBeliefFrameCount {0};
+	/// The order of the symbols of belief of one village centre in the pass being drawn
 	mutable std::vector<particles::draw::Command> _townBeliefCommands;
 	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
-	/// The symbols of belief of the centres whose effects draw only symbols, all in one layout
-	mutable particles::draw::SymbolLayout _townBeliefSymbols;
 	/// What one pass draws of the layout of the symbols for a centre: its commands, and its sprites in the sprite order
 	struct TownBeliefSymbolDraw
 	{
