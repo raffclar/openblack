@@ -560,8 +560,8 @@ public:
 	[[nodiscard]] escape_key::Situation EscapeSituation(uint16_t keyModifiers) const;
 
 private:
-	static Game* s_Instance;
 	// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the old callers find the game through this pointer
+	static Game* s_Instance;
 
 	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
 	/// choices of the command line.

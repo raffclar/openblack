@@ -389,8 +389,7 @@ uint32_t TempleScrollTexture::LayOut(std::u16string_view text, uint32_t position
 		// A line runs up to the next "<N>", or "<E>" which ends the text, as long as the line fits its buffer
 		size_t length = 0;
 		bool ended = false;
-		bool found = false;
-		while (!found)
+		while (true)
 		{
 			if (length > k_MaxLineLength || at + length >= text.size())
 			{
