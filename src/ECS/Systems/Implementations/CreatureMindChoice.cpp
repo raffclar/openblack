@@ -665,10 +665,14 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 		return std::nullopt;
 	}
 	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
+	const auto beliefs = mind.beliefs.HeldNewestFirst();
+	// The lists get their memory one time, not again as they grow
 	std::vector<ChosenActivity> found;
+	found.reserve(beliefs.size());
 	std::vector<float> worth;
+	worth.reserve(beliefs.size());
 	const bool lookedAt = LookedAtByItsPlayer(creature);
-	for (const auto* held : mind.beliefs.HeldNewestFirst())
+	for (const auto* held : beliefs)
 	{
 		const auto& belief = *held;
 		const auto kind = creature_activity::WholeOf(belief.kind);

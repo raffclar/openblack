@@ -25,6 +25,8 @@ namespace openblack::creature_mind
 {
 /// Another creature nearer than this many times the creature's height frightens it too much to rest
 constexpr float k_FrighteningHeights = 8.0f;
+/// Whether another creature at a distance in metres frightens a creature of a height
+[[nodiscard]] bool Frightens(float height, float distance);
 /// Whether no other creature is near enough to frighten a creature of a height, by the distances in metres of the others
 [[nodiscard]] bool NothingFrighteningNear(float height, std::span<const float> otherCreatures);
 

@@ -699,6 +699,9 @@ private:
 	uint32_t _comeAcrossDepth {0};
 	/// While the tests of the beliefs run, the things that they come across, in their sequence
 	std::vector<entt::entity>* _comeAcrossLog {nullptr};
+	/// The things in the map cell that the eyes of a creature sweep now. The list keeps its memory from one cell to the
+	/// next.
+	std::vector<entt::entity> _sweptCell;
 	/// When the chains of the gestures step in the frames that draw their creatures
 	frame_pace::Pace _gestureChainPace;
 	/// The registry whose removals remove the chains of the gestures
