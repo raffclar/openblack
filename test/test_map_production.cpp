@@ -922,6 +922,6 @@ TEST_F(MapProductionFiling, AFishFarmIsAFixedThingOfItsOwnCell)
 	map.Sync();
 	map.Refile(farm);
 	ASSERT_TRUE(registry.AllOf<MapCellResident>(farm));
-	EXPECT_EQ(registry.Get<MapCellResident>(farm).cells.size(), 1U);
+	EXPECT_EQ(registry.Get<const MapCellResident>(farm).cells.size(), 1U);
 	EXPECT_EQ(std::ranges::count(map.GetFixedInGridCell(place), farm), 1);
 }

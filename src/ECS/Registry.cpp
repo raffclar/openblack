@@ -15,9 +15,12 @@
 #include "Components/Animal.h"
 #include "Components/Creature.h"
 #include "Components/Disciple.h"
+#include "Components/FixedOutline.h"
 #include "Components/Flock.h"
 #include "Components/LivingListPlace.h"
 #include "Components/LivingReaction.h"
+#include "Components/MapCellResident.h"
+#include "Components/MapPlace.h"
 #include "Components/ScriptControl.h"
 #include "Components/SpellDispenser.h"
 #include "Components/Town.h"
@@ -75,6 +78,10 @@ Registry::Registry()
 	_registry.on_construct<components::LivingReaction>().connect<&Registry::ReactionChanged>(*this);
 	_registry.on_update<components::LivingReaction>().connect<&Registry::ReactionChanged>(*this);
 	_registry.on_destroy<components::LivingReaction>().connect<&Registry::ReactionGoing>(*this);
+	// The hash of the world saves again only the rows of these components that changed
+	MarkHashRows<components::FixedOutline>();
+	MarkHashRows<components::MapCellResident>();
+	MarkHashRows<components::MapPlace>();
 	// The stores that the rules of life and the walks test most exist from the start, and the registry keeps them
 	KeptStores::MakeStores(_registry);
 	_kept = std::make_unique<KeptStores>(*this);
@@ -137,6 +144,8 @@ void Registry::ReactionGoing(entt::registry& /*registry*/, entt::entity entity)
 
 void Registry::StoresWritten() noexcept
 {
+	// A direct write to the stores does not mark the rows that it changes
+	_rowMarks.Forget();
 	_livingList->rebuild = true;
 	reaction_groups::Recount(*this);
 }
@@ -176,6 +185,8 @@ void Registry::Reset()
 	}
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
+	// The next entities can have the ids and the versions of the entities that went
+	_rowMarks.Forget();
 	_entitiesMade = 0;
 	++_resets;
 	++_townMemberChanges;
