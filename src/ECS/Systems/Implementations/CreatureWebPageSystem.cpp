@@ -167,7 +167,6 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto turn = Locator::time::value().GetTurn();
 	const auto local = OwnPlayer();
-	const auto player = _player ? _player() : std::nullopt;
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureAnimation>(entity))
 	{
@@ -212,6 +211,8 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	    Locator::helpTextSystem::has_value() ? Locator::helpTextSystem::value().GetWords(text) : std::u16string {});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game took picture {} of creature {}: action {}, score {}", *slot,
 	                   entt::to_integral(entity), plan.action, score);
+	// The code reads the name of the player only for a kept picture, because the read copies the whole profile
+	const auto player = _player ? _player() : std::nullopt;
 	if (!player.has_value() || !Locator::rendererRequests::has_value() || !creature_web_page::MayAskForPicture(_waiting.size()))
 	{
 		return;
