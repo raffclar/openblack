@@ -15,6 +15,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -239,6 +240,54 @@ class ShiftedInput(unittest.TestCase):
         events = self.shifted(False)
         self.assertEqual([event["frame"] for event in events],
                          [net_check.INPUT_OFFSET_FRAMES + 10, net_check.INPUT_OFFSET_FRAMES + 70])
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class TurnInput(unittest.TestCase):
+    """An input that a client plays from a game turn counts its frames from the start of the replay"""
+
+    def write(self, folder, camera=None):
+        path = os.path.join(folder, "recorded.json")
+        value = {"events": [{"frame": 10, "event": {"kind": "button_down", "button": 3}},
+                            {"frame": 70, "event": {"kind": "button_up", "button": 3}}]}
+        if camera:
+            value["camera"] = camera
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(value, file)
+        return path
+
+    def test_the_frames_do_not_use_the_offset_of_the_load(self):
+        with tempfile.TemporaryDirectory() as folder:
+            events, camera = net_check.turn_input(self.write(folder))
+        self.assertEqual([event["frame"] for event in events],
+                         [net_check.INPUT_LEAD_FRAMES + 10, net_check.INPUT_LEAD_FRAMES + 70])
+        self.assertIsNone(camera)
+
+    def test_the_camera_of_the_caller_wins_over_the_camera_of_the_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.write(folder, {"yaw": 30})
+            self.assertEqual(json.loads(net_check.turn_input(path)[1]), {"yaw": 30})
+            self.assertEqual(net_check.turn_input(path, 0, '{"yaw": 5}')[1], '{"yaw": 5}')
+
+    def test_the_start_closes_the_box_puts_the_camera_and_replays(self):
+        calls = []
+
+        def call(pid, query, request):
+            calls.append(query)
+            return {} if query != "gui.windows" else {"items": []}
+
+        with mock.patch.object(net_check, "set_camera", lambda pid, camera: calls.append("camera") or True):
+            started = net_check.start_turn_input(7, ([{"frame": 11}], '{"yaw": 1}'), call)
+        self.assertTrue(started)
+        self.assertEqual(calls, ["gui.windows", "camera", "input.replay"])
+
+    def test_a_camera_that_does_not_go_in_stops_the_start(self):
+        calls = []
+        with mock.patch.object(net_check, "set_camera", lambda pid, camera: False):
+            started = net_check.start_turn_input(7, ([{"frame": 11}], '{"yaw": 1}'),
+                                                 lambda pid, query, request: calls.append(query) or {"items": []})
+        self.assertFalse(started)
+        self.assertNotIn("input.replay", calls)
 
 
 @unittest.skipIf(net_check is None, "net_check needs the cryptography package")
