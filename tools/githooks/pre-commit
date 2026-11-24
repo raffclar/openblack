@@ -11,6 +11,15 @@
 #   4. clang-format-17 on PATH;
 #   5. clang-format on PATH.
 #
+# After the format check, clang-tidy 17 checks the staged lines (tools/githooks/tidy_gate.py): a finding on a staged
+# line, or a NOLINT without a check name or a reason, stops the commit. A finding on a line that you did not change
+# never does. If clang-tidy 17 or a compile_commands.json is not found, the hook prints one line and passes (the
+# merge-train car runs the same check and does not pass without them). Settings for it:
+#   clang-tidy 17 folder:  OB_CLANG_TIDY_DIR, git config openblack.clangTidyDir, tools.clangTidy17Dir
+#   build folder:          OB_TIDY_BUILD_DIR, git config openblack.tidyBuildDir, tools.tidyBuildDir
+#                          (else <paths.builds>/<work tree name>)
+#   MSVC folder (Windows): OB_TIDY_MSVC_DIR, git config openblack.tidyMsvcDir, tools.tidyMsvcDir
+#
 # Skip it once: not allowed for openblack work (no --no-verify).
 
 top=$(git rev-parse --show-toplevel) || exit 1
@@ -98,4 +107,17 @@ if [ -n "$out" ] && printf '%s' "$out" | grep -q '^@@'; then
 	echo "pre-commit: fix them with: python \"$GCF\" --binary \"$CF\" --staged  (then git add the files again)" >&2
 	exit 1
 fi
-exit 0
+
+# clang-tidy 17 on the staged lines.
+gate="$top/tools/githooks/tidy_gate.py"
+if [ ! -f "$gate" ]; then
+	echo "pre-commit: $gate is not in this work tree: the clang-tidy check is skipped." >&2
+	exit 0
+fi
+py=$(command -v python || command -v python3)
+if [ -z "$py" ]; then
+	echo "pre-commit: Python is not found: the clang-tidy check is skipped." >&2
+	exit 0
+fi
+"$py" "$gate" staged --jobs 2 --timeout 120 </dev/null
+exit $?

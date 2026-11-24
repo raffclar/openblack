@@ -299,6 +299,10 @@ The hooks look for clang-format 17 in this order:
 
 To get clang-format 17, run `python -m pip install --target <folder> clang-format==17.0.6`.
 
+After the format check, `pre-commit` also runs clang-tidy 17 on the staged lines. A finding on a changed line stops the
+commit. A `NOLINT` needs a check name and a reason comment. The settings and the fix steps are in
+`tools/githooks/README.md`.
+
 # Extracting asset files from original game
 
 As mentioned before, the original game assets are required in order to run

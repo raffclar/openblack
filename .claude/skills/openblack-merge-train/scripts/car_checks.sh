@@ -9,6 +9,7 @@ echo "--- format (clang-format 17, every changed C++ file)"; bash "$HERE/format_
 extra_check start "$WT" "$NAME"
 if [ -f tools/build/check_draw_order.py ]; then echo "--- draw order"; python tools/build/check_draw_order.py || { echo "STOP: two random draws in no fixed order (tools/build/check_draw_order.py)"; exit 13; }; fi
 echo "--- configure"; $OB configure --fresh > car-cfg.log 2>&1 || { tail -20 car-cfg.log; echo "STOP: configure"; exit 4; }
+echo "--- tidy (clang-tidy 17, changed lines)"; bash "$HERE/tidy_check.sh" "$WT" "$($OB dir)" </dev/null || { s=$?; [ $s = 23 ] && echo "STOP: tidy: a changed line has a clang-tidy 17 finding, or a NOLINT without a check name or a reason (see the lines above)" || echo "STOP: tidy: the check cannot run (clang-tidy 17 or compile_commands.json is missing, or a file timed out)"; exit $s; }
 echo "--- debug"; $OB build > car-dbg.log 2>&1 || { grep -E "error|warning" car-dbg.log | head; echo "STOP: debug build"; exit 5; }
 dw=$(warnings car-dbg.log); echo "debug warnings: $dw"
 echo "--- relwdi"; $OB build --config RelWithDebInfo > car-rel.log 2>&1 || { grep -E "error|warning" car-rel.log | head; echo "STOP: relwdi build"; exit 6; }
