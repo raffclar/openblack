@@ -41,6 +41,7 @@ public:
 	void MakeReward(size_t kind, const map_coords::MapCoords& spot) override;
 	[[nodiscard]] glm::vec3 CameraPosition() const override;
 	[[nodiscard]] bool InView(glm::vec3 point) const override;
+	[[nodiscard]] bool MaximumDetail() const override;
 	[[nodiscard]] std::optional<components::Sprite> Look() const override;
 };
 

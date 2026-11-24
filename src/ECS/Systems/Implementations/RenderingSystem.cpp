@@ -185,18 +185,20 @@ struct ViewPoint
 };
 
 /// How a thing is drawn this frame by how deep into the view the middle of `box` is, drawn by `model`: the box of its
-/// own mesh, or of a villager's standard mesh. Whether it fades out is only asked of one that has come that far.
+/// own mesh, or of a villager's standard mesh. Whether it fades out is only asked of one that has come that far. With
+/// the player's "maximum detail" option, only a thing that `keepsFarEnd` (a villager) fades out.
 template <typename Disappears>
 openblack::graphics::mesh_detail::Choice ChooseDetail(const openblack::AxisAlignedBoundingBox& box, float importance,
                                                       const glm::mat4& model, float scale, Disappears&& disappears,
-                                                      const ViewPoint& camera, float modelDetail)
+                                                      const ViewPoint& camera, float modelDetail, bool keepsFarEnd = false)
 {
 	namespace mesh_detail = openblack::graphics::mesh_detail;
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 	const float depth = mesh_detail::ViewDepth(centre, camera.eye, camera.forward);
 	const float reach = mesh_detail::Reach(importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
 	const bool maximumDetail = openblack::Locator::config::has_value() && openblack::Locator::config::value().maximumDetail;
-	const auto choice = mesh_detail::Finest(mesh_detail::Choose(depth, reach, true), maximumDetail);
+	const auto choice = mesh_detail::Finest(
+	    mesh_detail::Choose(depth, reach, mesh_detail::FadesOut(true, maximumDetail, keepsFarEnd)), maximumDetail);
 	if ((choice.alpha.has_value() || !choice.mesh.has_value()) && !disappears())
 	{
 		return mesh_detail::Finest(mesh_detail::Choose(depth, reach, false), maximumDetail);
@@ -1143,7 +1145,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				        [&registry, &detailStores, entity] {
 					        return detailStores.Disappears(entity, IsTownCentre(registry, entity));
 				        },
-				        *view, modelDetail);
+				        *view, modelDetail, stores.AllOf<Villager>(entity));
 				    if (noteKept)
 				    {
 					    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox,
@@ -2267,7 +2269,8 @@ std::optional<uint8_t> RenderingSystem::DetailNow(entt::entity thing)
 		return ChooseDetail(
 		           *box, object_detail::Importance(registry, thing), *placed, transform.scale.x,
 		           [&registry, thing] { return object_detail::Disappears(registry, thing, IsTownCentre(registry, thing)); },
-		           ViewPoint::Of(Locator::camera::value()), Locator::config::value().detail.modelDetail)
+		           ViewPoint::Of(Locator::camera::value()), Locator::config::value().detail.modelDetail,
+		           registry.AllOf<Villager>(thing))
 		    .mesh;
 	});
 	if (!drawn.has_value())

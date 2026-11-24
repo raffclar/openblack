@@ -55,6 +55,17 @@ TEST(CreatureReflection, TheBlockMustBeInViewAndNear)
 	EXPECT_FALSE(creature_reflection::Shown(situation));
 }
 
+// With the "maximum detail" option, the block can be at any distance, but it must still be in view
+TEST(CreatureReflection, MaximumDetailMirrorsTheCreatureAtAnyDistance)
+{
+	auto situation = Mirrored();
+	situation.maximumDetail = true;
+	situation.blockDistance = 5000.0f;
+	EXPECT_TRUE(creature_reflection::Shown(situation));
+	situation.blockInView = false;
+	EXPECT_FALSE(creature_reflection::Shown(situation));
+}
+
 TEST(CreatureReflection, TheBodyMustStandLowerThanSix)
 {
 	auto situation = Mirrored();

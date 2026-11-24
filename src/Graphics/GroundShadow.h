@@ -148,12 +148,18 @@ struct GroundShadow
 	/// Whether a moving shadow at a place can show. The game finds the block of the place, and the blocks of eight more
 	/// points 60 units round it. For each point, it truncates each coordinate times one tenth towards zero. The shadow
 	/// shows only when these two conditions are true:
-	/// - The block of the place is off the map, absent, or nearer than k_BlockRange.
-	/// - The block of one of the nine points is present, in view and nearer than k_BlockRange.
+	/// - The block of the place is off the map, absent, or nearer than `range`.
+	/// - The block of one of the nine points is present, in view and nearer than `range`.
 	/// When one condition is false, the shadow has no opacity, whatever the fade.
-	[[nodiscard]] static bool NearBlockShows(const glm::vec3& place, const BlockSights& sights);
+	[[nodiscard]] static bool NearBlockShows(const glm::vec3& place, const BlockSights& sights, float range = k_BlockRange);
 	/// The fade, 0 to 255, at a camera distance from the ground beneath a body of a radius
 	[[nodiscard]] static float Fade(float cameraDistance, float radius);
+	/// The range of the blocks for a creature's or the hand's shadow. The player's "maximum detail" option removes the
+	/// range.
+	[[nodiscard]] static float CreatureBlockRange(bool maximumDetail);
+	/// The fade, 0 to 255, of a creature's or the hand's shadow. With the player's "maximum detail" option, the shadow
+	/// does not fade with the distance. A body of no radius has no shadow.
+	[[nodiscard]] static float CreatureFade(float cameraDistance, float radius, bool maximumDetail);
 	/// A villager's shadow's opacity, 0 to 255: the fade, rounded down
 	[[nodiscard]] static uint8_t Alpha(float cameraDistance, float radius);
 	/// A creature's or the hand's shadow's opacity, 0 to 255: its own full opacity, 255, scaled by the fade in 255ths

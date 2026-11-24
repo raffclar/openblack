@@ -87,8 +87,9 @@ struct Tile
 	bool operator==(const Tile&) const = default;
 };
 /// The rain over a block with its centre at `centre`, the most rain over its middle being `wettest` percent: none for
-/// a little rain or a block too far from the camera, and less of it from 100 units away
-[[nodiscard]] std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera);
+/// a little rain or a block too far from the camera, and less of it from 100 units away. With the player's "maximum
+/// detail" option, a block further than 100 units has the rain of a block at 100 units.
+[[nodiscard]] std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera, bool maximumDetail = false);
 
 /// How the camera sees the land this frame
 struct View
@@ -100,6 +101,8 @@ struct View
 
 /// The game only looks at the rain over the land blocks in view that are nearer than this to the eye
 inline constexpr float k_BlockReach = 400.0f + 160.0f;
+/// The reach of the blocks with the player's "maximum detail" option: none when the option is on, else k_BlockReach
+[[nodiscard]] float BlockReach(bool maximumDetail) noexcept;
 /// A block's rain shows only when its most rain in percent is more than this
 inline constexpr int32_t k_LeastRain = 5;
 /// The strength of the rain over a block, 0 to 255, from its most rain in percent

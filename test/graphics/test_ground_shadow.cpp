@@ -54,6 +54,17 @@ TEST(GroundShadow, FadesBetween50And80Radii)
 	EXPECT_EQ(GroundShadow::Alpha(650.0f, 10.0f), 127);
 }
 
+// With the "maximum detail" option, a creature's or the hand's shadow does not fade with the distance
+TEST(GroundShadow, MaximumDetailKeepsTheCreaturesShadowAtAllDistances)
+{
+	EXPECT_EQ(GroundShadow::CreatureFade(65.0f, 1.0f, false), GroundShadow::Fade(65.0f, 1.0f));
+	EXPECT_EQ(GroundShadow::CreatureFade(65.0f, 1.0f, true), 255.0f);
+	EXPECT_EQ(GroundShadow::CreatureFade(5000.0f, 1.0f, true), 255.0f);
+	EXPECT_EQ(GroundShadow::CreatureFade(10.0f, 0.0f, true), 0.0f);
+	EXPECT_EQ(GroundShadow::CreatureBlockRange(false), GroundShadow::k_BlockRange);
+	EXPECT_TRUE(std::isinf(GroundShadow::CreatureBlockRange(true)));
+}
+
 TEST(GroundShadow, ACreaturesOpacityIsTheFadeIn255ths)
 {
 	EXPECT_EQ(GroundShadow::ScaledAlpha(255.0f), 255);
@@ -445,6 +456,15 @@ TEST(GroundShadow, AShadowOverAFarBlockDoesNotShowWhateverTheBlocksRoundIt)
 	EXPECT_FALSE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights));
 	SightOf(sights, 5, 5).distance = std::nextafter(GroundShadow::k_BlockRange, 0.0f);
 	EXPECT_TRUE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights));
+}
+
+// With the "maximum detail" option, a creature's shadow shows over a block in view at any distance
+TEST(GroundShadow, MaximumDetailLetsAFarBlockInViewShowTheShadow)
+{
+	auto sights = AllShown();
+	SightOf(sights, 5, 5).distance = 5000.0f;
+	EXPECT_FALSE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights, GroundShadow::CreatureBlockRange(false)));
+	EXPECT_TRUE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights, GroundShadow::CreatureBlockRange(true)));
 }
 
 TEST(GroundShadow, ANearBlockOutOfViewNeedsABlockInViewWithin60Units)

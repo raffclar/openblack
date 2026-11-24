@@ -52,9 +52,11 @@ std::optional<glm::ivec2> BlockUnder(glm::vec3 position) noexcept
 
 bool Shown(const Situation& situation) noexcept
 {
-	// The block must be drawn this frame and near, then the body low and not yet fizzed far out of sight
-	return situation.primaryCreature && situation.onBlock && situation.blockInView && situation.blockDistance <= k_Range &&
-	       situation.height < k_HighestStand && creature_fizz_look::ReflectionShown(situation.fizz);
+	// The block must be drawn this frame and near, then the body low and not yet fizzed far out of sight. With the
+	// player's "maximum detail" option, the block can be at any distance.
+	return situation.primaryCreature && situation.onBlock && situation.blockInView &&
+	       (situation.maximumDetail || situation.blockDistance <= k_Range) && situation.height < k_HighestStand &&
+	       creature_fizz_look::ReflectionShown(situation.fizz);
 }
 
 } // namespace openblack::graphics::creature_reflection

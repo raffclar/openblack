@@ -339,6 +339,7 @@ void FireflySystem::Update(float milliseconds, float turnFraction)
 	auto& registry = _world->Entities();
 	const auto look = _world->Look();
 	const auto camera = _world->CameraPosition();
+	const bool maximumDetail = _world->MaximumDetail();
 	_lastFrame = {.pictureReady = look.has_value()};
 	for (const auto entity : _order)
 	{
@@ -352,7 +353,7 @@ void FireflySystem::Update(float milliseconds, float turnFraction)
 			{
 				++_lastFrame.inView;
 				const auto away = camera - firefly.drawn;
-				opacity = fireflies::OpacityAt(glm::dot(away, away));
+				opacity = fireflies::OpacityAt(glm::dot(away, away), maximumDetail);
 				_lastFrame.inReach += opacity.has_value() ? 1 : 0;
 			}
 		}

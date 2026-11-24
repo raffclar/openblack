@@ -116,7 +116,9 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 		float key;
 	};
 	std::vector<Rained> rained;
-	for (const auto& corner : weather_blocks::InView(island, view, settings.landReflection))
+	// The player's "maximum detail" option shows the rain over every block in view, with no thinning by the distance
+	const bool maximumDetail = Locator::config::value().maximumDetail;
+	for (const auto& corner : weather_blocks::InView(island, view, settings.landReflection, rain::BlockReach(maximumDetail)))
 	{
 		const auto centre = corner + glm::vec2(k_BlockSize * 0.5f);
 		// The most rain over the block's four middle cells
@@ -145,7 +147,7 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 	const rain::HeightAt heightAt = [&island](glm::vec2 point) { return island.GetHeightAt(point); };
 	for (const auto& block : rained)
 	{
-		if (auto tile = rain::TileOf(block.centre, block.wettest, eye))
+		if (auto tile = rain::TileOf(block.centre, block.wettest, eye, maximumDetail))
 		{
 			tile->ground = block.ground;
 			tile->sortKey = block.key;

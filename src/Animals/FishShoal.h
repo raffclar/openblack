@@ -95,8 +95,9 @@ using Random = std::function<float(float, float)>;
 /// How many of the shoal's fish show at its fullness
 [[nodiscard]] uint32_t ShownCount(float fullness);
 /// How opaque the shoal is drawn at its distance from the camera (squared), none beyond where it shows. It fades out
-/// long before that, and further off its opacity wraps round to show it again, as the game's does
-[[nodiscard]] std::optional<uint8_t> AlphaAt(float distanceSquared);
+/// long before that, and further off its opacity wraps round to show it again, as the game's does. With the player's
+/// "maximum detail" option, the shoal shows fully opaque at all distances.
+[[nodiscard]] std::optional<uint8_t> AlphaAt(float distanceSquared, bool maximumDetail = false);
 
 /// A fish swims for a while towards a point, darting while it panics
 void StepFish(Fish& fish, glm::vec3 target, float seconds);

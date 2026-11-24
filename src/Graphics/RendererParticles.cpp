@@ -58,6 +58,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/InterfaceCreatures.h"
@@ -431,10 +432,11 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	const auto& creator = static_cast<const particles::MeshCreator&>(*draw.creator);
 	// The game draws a model that the plane does not cut through the draw at once, whose far cull stops the draw of a
 	// model further than 300 of its radii from the camera. A model that never clips has no far cull. The warm-up draws
-	// every model.
+	// every model. The player's "maximum detail" option removes the far cull.
 	const auto& box = meshes.Handle(draw.mesh)->GetBoundingBox();
 	if (!_warmingUp && !creator.neverClip && !draw.cutBelow.has_value() &&
-	    object_draw::FarCulled(mesh_detail::HalfDiagonal(box.Size()), draw.scale, draw.position, desc.camera->GetOrigin()))
+	    object_draw::FarCulled(mesh_detail::HalfDiagonal(box.Size()), draw.scale, draw.position, desc.camera->GetOrigin(),
+	                           Locator::config::value().maximumDetail))
 	{
 		return;
 	}
