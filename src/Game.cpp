@@ -282,6 +282,7 @@ bool InNetworkGame()
 
 const std::string k_WindowTitle = "openblack";
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the old callers find the game through this pointer
 Game* Game::s_Instance = nullptr;
 
 Game::Game(Arguments&& args) noexcept

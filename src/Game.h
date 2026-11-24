@@ -131,6 +131,7 @@ struct ScenarioRequest
 	bool checks {false};
 };
 
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the fields stay in the order of their meaning
 struct Arguments
 {
 	std::string executablePath;
@@ -560,6 +561,7 @@ public:
 
 private:
 	static Game* s_Instance;
+	// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): the old callers find the game through this pointer
 
 	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
 	/// choices of the command line.

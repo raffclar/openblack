@@ -479,6 +479,7 @@ void Game::HandleInterfaceAction()
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
 		}
 		break;
+	// NOLINTNEXTLINE(bugprone-branch-clone): the branches stay apart to show each case
 	case Action::StartSkirmish:
 		// The game ends at once, without a question. The story keeps its save on exit, then the skirmish box shows. The
 		// land changes between frames, not while the game reads the input.
