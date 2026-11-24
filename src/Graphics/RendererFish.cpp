@@ -27,6 +27,7 @@
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/FishPuzzleRules.h"
 #include "ECS/Registry.h"
+#include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
@@ -97,7 +98,8 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 	// The shoals of the fish puzzle swim in the turns wherever the camera is, but show only as near as a farm's shoal.
 	// After the fish are caught, they do not show.
 	const auto eye = desc.camera->GetOrigin();
-	registry.Each<const ecs::components::PuzzleGame>([&addShoal, eye](const ecs::components::PuzzleGame& game) {
+	const bool maximumDetail = Locator::config::value().maximumDetail;
+	registry.Each<const ecs::components::PuzzleGame>([&addShoal, eye, maximumDetail](const ecs::components::PuzzleGame& game) {
 		if (!game.fish.has_value() || game.fish->net.caught)
 		{
 			return;
@@ -105,7 +107,7 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 		for (const auto& shoal : game.fish->shoals)
 		{
 			const auto offset = eye - shoal.centre;
-			if (const auto alpha = fish_shoal::AlphaAt(glm::dot(offset, offset)))
+			if (const auto alpha = fish_shoal::AlphaAt(glm::dot(offset, offset), maximumDetail))
 			{
 				addShoal(shoal, *alpha);
 			}

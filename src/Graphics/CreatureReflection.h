@@ -62,6 +62,8 @@ struct Situation
 	float height {0.0f};
 	/// How far the creature has fizzed out of sight, 0 to 1
 	float fizz {0.0f};
+	/// The player's "maximum detail" option is on. Then the block can be at any distance.
+	bool maximumDetail {false};
 };
 
 /// Whether the game mirrors the creature's body in the sea

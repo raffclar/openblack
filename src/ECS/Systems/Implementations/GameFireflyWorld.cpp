@@ -38,6 +38,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
+#include "EngineConfig.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -200,6 +201,11 @@ void GameFireflyWorld::MakeReward(size_t kind, const map_coords::MapCoords& spot
 glm::vec3 GameFireflyWorld::CameraPosition() const
 {
 	return Locator::camera::value().GetOrigin();
+}
+
+bool GameFireflyWorld::MaximumDetail() const
+{
+	return Locator::config::has_value() && Locator::config::value().maximumDetail;
 }
 
 bool GameFireflyWorld::InView(glm::vec3 point) const

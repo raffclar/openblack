@@ -82,6 +82,14 @@ struct Choice
 	return choice;
 }
 
+/// Whether a model that fades out and leaves the view (`disappears`) does so with the player's "maximum detail" option.
+/// When the option is on, only a model that keeps its far end (`keepsFarEnd`) fades out. Villagers keep it, because
+/// their small shadows replace them at the end. All other models stay in the view at all depths.
+[[nodiscard]] constexpr bool FadesOut(bool disappears, bool maximumDetail, bool keepsFarEnd) noexcept
+{
+	return disappears && (!maximumDetail || keepsFarEnd);
+}
+
 /// The bit a mesh choice stands for among a model's parts: each part names the choices it is drawn at, so a model with
 /// one mesh can still draw fewer or other parts further off (a tree's far card)
 [[nodiscard]] constexpr uint8_t LevelBit(Mesh mesh) noexcept

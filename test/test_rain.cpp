@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -105,6 +106,13 @@ TEST(Rain, TilesThinOutWithDistance)
 	EXPECT_EQ(far->streaks, 64);
 	EXPECT_EQ(far->alpha, 44);
 	EXPECT_EQ(far->alphaTop, 3);
+}
+
+// The snow's blocks have no reach with the "maximum detail" option. The rain keeps the game's reach.
+TEST(Rain, MaximumDetailReachIsForTheSnowOnly)
+{
+	EXPECT_EQ(rain::BlockReach(false), rain::k_BlockReach);
+	EXPECT_TRUE(std::isinf(rain::BlockReach(true)));
 }
 
 TEST(Rain, StreaksFadeInAndOut)

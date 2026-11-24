@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <limits>
 
 namespace openblack::rain
 {
@@ -105,6 +106,11 @@ Fall Follow(Fall current, std::optional<Fall> storm)
 	current.speed = !(current.speed > k_SlowestFall) ? k_SlowestFall : std::min(current.speed, k_FastestFall);
 	current.height = !(current.height > k_LowestHeight) ? k_LowestHeight : std::min(current.height, k_HighestHeight);
 	return current;
+}
+
+float BlockReach(bool maximumDetail) noexcept
+{
+	return maximumDetail ? std::numeric_limits<float>::infinity() : k_BlockReach;
 }
 
 std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera)

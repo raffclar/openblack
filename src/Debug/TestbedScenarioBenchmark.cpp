@@ -103,6 +103,42 @@ void AddMaximumDetailView(std::vector<Scenario>& all)
 		    .vortices = {{.type = VortexType::In, .offset = {0.0f, -350.0f}, .delaySeconds = 0.5f}},
 		});
 	}
+	// The rain, a fish shoal and the creature far from the camera. The fish farm is on the lake's southern shore. The
+	// creature stands in the far shallows of the lake.
+	for (const bool on : {false, true})
+	{
+		all.push_back({
+		    .id = on ? "objects.maximum_detail_far_rain_on" : "objects.maximum_detail_far_rain_off",
+		    .name = on ? "Far rain, fish and creature with the maximum detail option on"
+		               : "Far rain, fish and creature with the maximum detail option off",
+		    .facet = Facet::Objects,
+		    .description = "A heavy rain falls over the whole island at noon. The camera looks north from far south of the "
+		                   "lake, past two lines of trees, to a fish farm on the lake's southern shore and a tiger in the "
+		                   "far shallows. The two scenarios show the same view, with the \"maximum detail\" option off and "
+		                   "on.",
+		    .expected =
+		        on ? "The rain is as in the game: it thins out from 100 units and stops at 400 units, so no far rain "
+		             "shows. The fish of the farm swim and show. The tiger keeps its ground shadow and its reflection in the "
+		             "water. All the trees stay in the view."
+		           : "As in the game: the rain thins out from 100 units and stops at 400 units. The far fish do "
+		             "not show. The far tiger has no ground shadow and no reflection. The far trees fade out.",
+		    .environment =
+		        {.hour = 12.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false, .maximumDetail = on},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -500.0f}, .look = {0.0f, 0.0f, 300.0f}},
+		    .creatures = {Posed(CreatureType::Tiger, {k_Lake.x + 30.0f, k_FarShallows})},
+		    .objects =
+		        [] {
+			        std::vector<ObjectSetup> trees {{.type = FishFarmInfo::Normal, .offset = {5.0f, 145.0f}}};
+			        for (int step = 0; step < 6; ++step)
+			        {
+				        const float north = -350.0f + 80.0f * static_cast<float>(step);
+				        trees.push_back({.type = TreeInfo::Oak, .offset = {-70.0f, north}});
+				        trees.push_back({.type = TreeInfo::Conifer, .offset = {70.0f, north}});
+			        }
+			        return trees;
+		        }(),
+		});
+	}
 }
 } // namespace
 

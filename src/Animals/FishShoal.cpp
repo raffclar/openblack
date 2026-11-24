@@ -102,8 +102,12 @@ uint32_t ShownCount(float fullness)
 	    std::clamp(Truncate(fullness * static_cast<float>(k_FishCount)), 0, static_cast<int32_t>(k_FishCount)));
 }
 
-std::optional<uint8_t> AlphaAt(float distanceSquared)
+std::optional<uint8_t> AlphaAt(float distanceSquared, bool maximumDetail)
 {
+	if (maximumDetail)
+	{
+		return static_cast<uint8_t>(255);
+	}
 	if (distanceSquared > k_ShownDistanceSquared)
 	{
 		return std::nullopt;

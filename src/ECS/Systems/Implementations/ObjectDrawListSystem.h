@@ -112,6 +112,8 @@ private:
 	object_draw_list::BlockViewMemo _blockViews;
 	object_draw_list::RebuildRequests _requests;
 	std::optional<uint32_t> _madeAt;
+	/// The range and the most objects of the list, which the player's "maximum detail" option changes
+	object_draw_list::Limits _limits;
 	uint32_t _blocksWalked {0};
 	float _farthestWalked {0.0f};
 

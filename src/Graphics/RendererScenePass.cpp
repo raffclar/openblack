@@ -135,6 +135,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
 #include "Visual/DetailLevel.h"
+#include "Visual/LandDetail.h"
 #include "entt/locator/locator.hpp"
 
 using namespace openblack;
@@ -202,6 +203,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz, float
 	                                                                     : PlayerNames::PLAYER_ONE)) == entity,
 	    .height = position.y - waterLevel,
 	    .fizz = fizz,
+	    .maximumDetail = Locator::config::has_value() && Locator::config::value().maximumDetail,
 	};
 	const auto under = creature_reflection::BlockUnder(position);
 	if (situation.primaryCreature && under.has_value())
@@ -510,14 +512,18 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		const glm::vec4 u_landClip {clipped ? 1.0f : 0.0f, MirrorLevelOf(desc.viewId), 0.0f, 0.0f};
 
 		// The small bump detail fades out about a line across the ground: where the plane square to the camera's
-		// view, 50 units ahead of it, meets the ground at the camera's height, or at 110.55 if the camera is higher
+		// view, 50 units ahead of it, meets the ground at the camera's height, or at 110.55 if the camera is higher.
+		// With the player's "maximum detail" option, the line moves past the map, thus the detail shows on all the land.
 		const auto cameraForward = desc.camera->GetForward();
 		const glm::vec2 forwardAlongGround {cameraForward.x, cameraForward.z};
 		const float forwardLength = std::max(glm::length(forwardAlongGround), 1e-4f);
 		constexpr float k_SmallBumpDistance = 50.0f;
 		constexpr float k_SmallBumpHighestGround = 0.67f * 165.0f;
 		const float lineDistance =
-		    (k_SmallBumpDistance + cameraForward.y * std::max(0.0f, cameraOrigin.y - k_SmallBumpHighestGround)) / forwardLength;
+		    Locator::config::value().maximumDetail
+		        ? land_detail::k_MaximumDetailDepth
+		        : (k_SmallBumpDistance + cameraForward.y * std::max(0.0f, cameraOrigin.y - k_SmallBumpHighestGround)) /
+		              forwardLength;
 		const glm::vec4 u_smallBumpLine {cameraOrigin.x, cameraOrigin.z, forwardAlongGround / forwardLength};
 		const glm::vec4 u_smallBump {lineDistance, 0.0f, 0.0f, 0.0f};
 

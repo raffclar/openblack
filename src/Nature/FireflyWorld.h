@@ -79,6 +79,8 @@ public:
 	/// Where the camera is, and whether a point is in its view
 	[[nodiscard]] virtual glm::vec3 CameraPosition() const = 0;
 	[[nodiscard]] virtual bool InView(glm::vec3 point) const = 0;
+	/// The player's "maximum detail" option is on: the fireflies show at all distances
+	[[nodiscard]] virtual bool MaximumDetail() const { return false; }
 	/// The sprite a firefly is drawn with, none when it can't be drawn
 	[[nodiscard]] virtual std::optional<ecs::components::Sprite> Look() const = 0;
 };

@@ -168,8 +168,12 @@ glm::vec3 fireflies::DriftOffset(const Drift& drift, float clock, float amplitud
 	return loop(slowAround, slowUp, k_SlowLoopRadius) + loop(quickAround, quickUp, k_QuickLoopRadius);
 }
 
-std::optional<uint8_t> fireflies::OpacityAt(float distanceSquared)
+std::optional<uint8_t> fireflies::OpacityAt(float distanceSquared, bool maximumDetail)
 {
+	if (maximumDetail)
+	{
+		return static_cast<uint8_t>(k_Opacity);
+	}
 	if (distanceSquared > k_FarSquared)
 	{
 		return std::nullopt;

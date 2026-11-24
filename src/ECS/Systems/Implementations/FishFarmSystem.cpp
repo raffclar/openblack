@@ -32,6 +32,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
+#include "EngineConfig.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -56,6 +57,8 @@ void FishFarmSystem::Update(float seconds, glm::vec3 camera)
 {
 	auto& random = Locator::gameRandom::value();
 	const fish_shoal::Random draw = [&random](float a, float b) { return random.CrtRandom(a, b); };
+	// The player's "maximum detail" option shows the shoals at all distances
+	const bool maximumDetail = Locator::config::has_value() && Locator::config::value().maximumDetail;
 	Locator::entitiesRegistry::value().Each<FishFarm>([&](FishFarm& farm) {
 		farm.shownAlpha.reset();
 		if (!farm.shoal.has_value())
@@ -63,7 +66,7 @@ void FishFarmSystem::Update(float seconds, glm::vec3 camera)
 			return;
 		}
 		const auto offset = camera - farm.shoal->centre;
-		farm.shownAlpha = fish_shoal::AlphaAt(glm::dot(offset, offset));
+		farm.shownAlpha = fish_shoal::AlphaAt(glm::dot(offset, offset), maximumDetail);
 		// Too far off to be drawn, it doesn't swim either
 		if (farm.shownAlpha.has_value())
 		{

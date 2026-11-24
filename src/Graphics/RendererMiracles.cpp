@@ -185,7 +185,8 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			uint8_t alpha = draw.alpha;
 			auto detailLevel = mesh_detail::LevelBit(mesh_detail::Mesh::High);
 			// The warm-up draws each model at no size, which no cull may cut
-			if (!_warmingUp && way == object_draw::Way::AtOnce && object_draw::FarCulled(halfDiagonal, objectScale, at, eye))
+			if (!_warmingUp && way == object_draw::Way::AtOnce &&
+			    object_draw::FarCulled(halfDiagonal, objectScale, at, eye, maximumDetail))
 			{
 				continue;
 			}
@@ -196,7 +197,8 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 				const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 				const float reach = mesh_detail::Reach(0.0f, mesh_detail::ScaledRadius(box.Size(), objectScale), modelDetail);
 				const auto banded = object_draw::DrawBanded(
-				    mesh_detail::Finest(mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, forward), reach, true),
+				    mesh_detail::Finest(mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, forward), reach,
+				                                            mesh_detail::FadesOut(true, maximumDetail, false)),
 				                        maximumDetail),
 				    draw.alpha, phial || draw.alpha != std::numeric_limits<uint8_t>::max());
 				if (!banded.has_value())
@@ -567,7 +569,9 @@ void Renderer::DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDra
 	const bool sortedWhole = object_draw::SortedWhole(shown.mesh->GetFlags());
 	// Each ring stands at the seed's point, at its share of the seed's size
 	const float ringScale = visuals::k_RingScale * shown.scale;
-	const bool farCulled = object_draw::FarCulled(mesh_detail::HalfDiagonal(box.Size()), ringScale, shown.middle, eye);
+	const bool maximumDetail = Locator::config::value().maximumDetail;
+	const bool farCulled =
+	    object_draw::FarCulled(mesh_detail::HalfDiagonal(box.Size()), ringScale, shown.middle, eye, maximumDetail);
 	const auto* objectProgram = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentView(desc.viewId);
 	for (int i = 0; i < shown.rings; ++i)
@@ -608,9 +612,9 @@ void Renderer::DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDra
 		const float reach = mesh_detail::Reach(0.0f, mesh_detail::ScaledRadius(box.Size(), ringScale),
 		                                       Locator::config::value().detail.modelDetail);
 		const auto banded = object_draw::DrawBanded(
-		    mesh_detail::Finest(
-		        mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, desc.camera->GetForward()), reach, true),
-		        Locator::config::value().maximumDetail),
+		    mesh_detail::Finest(mesh_detail::Choose(mesh_detail::ViewDepth(centre, eye, desc.camera->GetForward()), reach,
+		                                            mesh_detail::FadesOut(true, maximumDetail, false)),
+		                        maximumDetail),
 		    shown.alpha, false);
 		if (!banded.has_value())
 		{

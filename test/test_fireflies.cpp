@@ -302,6 +302,14 @@ TEST(FireflyRules, TheyFadeBySquaredDistanceToNothingAt300Metres)
 	EXPECT_FALSE(OpacityAt(90001.0f).has_value());
 }
 
+// With the "maximum detail" option, a firefly shows at the near opacity at all distances
+TEST(FireflyRules, MaximumDetailShowsThemAtAllDistances)
+{
+	EXPECT_EQ(OpacityAt(40000.0f, true), 190);
+	EXPECT_EQ(OpacityAt(90001.0f, true), 190);
+	EXPECT_EQ(OpacityAt(5000.0f * 5000.0f, true), 190);
+}
+
 TEST(FireflyRules, TheSearchCoversA600MetreSquare)
 {
 	EXPECT_EQ(SearchCells(k_SearchReach), 3600);
