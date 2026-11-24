@@ -423,6 +423,11 @@ bool Game::PlayTurns()
 {
 	// The game is the view of the turns
 	Locator::landSystem::value().PlayTurns(*this);
+	// A turn that stops in the turns step continues in the turns step of the next frame
+	if (_frameLoop != nullptr)
+	{
+		_frameLoop->turnStoppedBeside = false;
+	}
 	return true;
 }
 
@@ -451,13 +456,15 @@ bool Game::StartTurnsBesideDraw()
 	// frame. The next turns play in the world that
 	// it loads.
 	const bool loadAsked = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAsked();
-	// A turn that waits between two players to continue ends in the next frame, in its turns step (deviation row 288)
+	auto& loop = *_frameLoop;
+	// A turn that waits between two players to continue (deviation row 288) continues beside the draw when it stopped
+	// beside the draw. A turn that stopped in the turns step of a frame continues in the turns step of the next frame.
 	const bool turnWaits = Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit();
-	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked || turnWaits)
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked ||
+	    !turn_beside_draw::PlaysBesideWhileTurnWaits(turnWaits, loop.turnStoppedBeside))
 	{
 		return false;
 	}
-	auto& loop = *_frameLoop;
 	if (!loop.turnThread)
 	{
 		loop.turnThread = std::make_unique<SideThread>();
@@ -470,7 +477,10 @@ bool Game::StartTurnsBesideDraw()
 	// of this frame keep the clock of this frame.
 	loop.statisticsTicks = machine_clock::Ticks();
 	auto& time = Locator::time::value();
-	time.Update();
+	if (turn_beside_draw::ClockMovesBeside(turnWaits, time.GetFixedFrameTime().has_value()))
+	{
+		time.Update();
+	}
 	loop.turnsPlayedBeside = true;
 	loop.turnBefore = simulation::WholeTurns();
 	loop.turnsStart = std::chrono::steady_clock::now();
@@ -504,6 +514,7 @@ void Game::FinishTurnsBesideDraw()
 		std::abort();
 	}
 	Locator::landSystem::value().FinishTurns(loop.turnBefore, loop.turnsStart, loop.turnsEnd, loop.turnsCpuMs);
+	loop.turnStoppedBeside = Locator::landSystem::value().IsTurnSplit();
 	// The scopes of the turns go into this frame's entry of the profiler
 	Locator::profiler::value().MergeThreads();
 }

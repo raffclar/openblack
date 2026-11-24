@@ -83,26 +83,19 @@ python -I .claude/skills/openblack-deploy-check/scripts/post_deploy_check.py \
     --deploy-log E:/openblack/scratch/bwgame-live-deploy/act-game-live<TAG>.log --since <deploy start, UTC ISO>
 ```
 
-One pass only: each item is one request or one browser visit. Never repeat it in a loop, and never use it as a load
-test. A STOP line is an item that cannot run; it says what the user must give. A STOP item is not a fault: when no item
-fails, the summary line says PASS with the number of STOP items (such as "PASS: 4 of 7 items pass, 3 STOP") and the
-exit code is 0. When an item fails, the summary says FAIL and the exit code is 1.
+One pass only: each item is one request. Never repeat it in a loop, and never use it as a load test. Every item runs
+signed out: there is no test account and no sign-in. A STOP line is an item that cannot run (for example, no deploy
+log was given). A STOP item is not a fault: when no item fails, the summary line says PASS and the exit code is 0. When an item fails, the summary says FAIL and the exit code is 1.
 
 | Item | What it does |
 |---|---|
 | deploy log | The installed web and server labels and the game build id in the act log are the commit of the tars, and the workflow says "every check passed". No SSH. |
 | service answers | One GET of `/`: 302 to `/account/login/`. The site has no public health address: the panel health (`/admin/panel/api/health`) needs a staff account with 2FA, and the push `/healthz` is inside the container only. |
 | play gate answers | One GET of `/play/openblack.wasm` signed out: 401. |
-| API sign-in and game server list | With the test account: `POST /api/v1/sessions`, then `GET /api/v1/servers` lists at least one game server. |
-| play version | `/play/version.txt` (the version that the loading screen shows) is the commit of the tars. |
-| live web client | One headless Chrome visit of `/play/` as the test account: single player starts, the land drew, the console is clean. Then the visit ends. The script deletes the cookie file, `console.log`, `actions.json` and the Chrome profile. |
 | Sentry | `sentry.exe issue list zanidrak/openblack --json`: no issue first seen after `--since`. Older issues with new events are listed for the lead. |
 | rollback note | The `out-prev-*` folders with a matched web and server pair, and the `run.sh` line to put the newest one back. A rollback needs the user's word. |
 
-The test account: the script reads `E:/openblack/deploy/bwgame/test-accounts.json` at run time (made by
-`scripts/test-accounts.sh create` of bwgame-service, plus the beta tester and stream marks). It never prints, logs or
-copies the name or the password. With no file, the three account items print STOP and the script adds the question to
-`E:/openblack/handovers/questions_for_user.md`.
+The web client and the game server list are not part of this check: they need a signed-in account, and the project has no test account. The pre-deploy gate (part 1) tests the web client before the deploy.
 
 ## How a deploy lane uses this skill
 

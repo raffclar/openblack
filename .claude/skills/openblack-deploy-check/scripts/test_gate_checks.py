@@ -12,6 +12,7 @@
 """
 import os
 import sys
+import types
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -125,6 +126,41 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(gate_checks.checklist_summary(["PASS", "FAIL", "STOP"]),
                          ("FAIL: 1 of 3 items pass, 1 FAIL, 1 STOP", 1))
         self.assertEqual(gate_checks.checklist_summary(["FAIL"]), ("FAIL: 0 of 1 items pass, 1 FAIL", 1))
+
+
+class PostDeployCheckTest(unittest.TestCase):
+    """The post-deploy check runs signed out: no account file, no sign-in, no STOP for a missing account."""
+
+    def test_no_account_items(self):
+        import post_deploy_check
+        source = open(post_deploy_check.__file__, encoding="utf-8").read()
+        self.assertNotIn("test-accounts", source)
+        self.assertNotIn("api/v1/sessions", source)
+        self.assertFalse(hasattr(post_deploy_check, "signed_in_items"))
+
+    def test_main_passes_with_fakes(self):
+        import contextlib
+        import io
+        import tempfile
+        import post_deploy_check as check
+        check.results.clear()
+        fake = types.SimpleNamespace(
+            one_request=check.one_request, sentry_item=check.sentry_item, tar_version=check.tar_version)
+        answers = {"/": (302, {"Location": "/account/login/"}, b""), "/play/openblack.wasm": (401, {}, b"")}
+        check.one_request = lambda url, **_: answers[url.replace("https://site", "")]
+        check.tar_version = lambda _path: "0123456789abcdef"
+        check.sentry_item = lambda _since: check.item("Sentry: no new issue since the deploy", True, "none")
+        out = io.StringIO()
+        try:
+            with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(out):
+                sys.argv = ["x", "--since", "2026-11-23T00:00:00Z", "--site", "https://site", "--tars", folder]
+                code = check.main()
+        finally:
+            check.one_request, check.sentry_item, check.tar_version = fake.one_request, fake.sentry_item, fake.tar_version
+        text = out.getvalue()
+        self.assertEqual(code, 0, text)
+        self.assertNotIn("account", text.split("rollback note")[0].replace("/account/login/", ""))
+        self.assertIn("PASS: 3 of 4 items pass, 1 STOP", text)  # the deploy log item has no log file
 
 
 if __name__ == "__main__":

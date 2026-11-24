@@ -652,6 +652,37 @@ TEST_F(MapProductionFiling, AThingThatChangesItsSizeLeavesTheMapAtItsOldSizeAndC
 	Locator::footpathSystem::reset();
 }
 
+TEST_F(MapProductionFiling, AThingThatResizesLeavesTheMapAtItsOldSizeOnlyWhenItsSizeChanges)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([](const Registry& from, entt::entity entity) {
+		const auto& transform = from.Get<const Transform>(entity);
+		return std::optional(map_cells::OutlineOfBox(transform.position, glm::mat3(1.0f), transform.scale.x, glm::vec3(0.0f),
+		                                             {2.0f, 1.0f, 2.0f}));
+	});
+	Locator::footpathSystem::emplace<SizeRecordingFootpaths>();
+	auto& footpaths = static_cast<SizeRecordingFootpaths&>(Locator::footpathSystem::value());
+	const auto rock = registry.Create();
+	registry.Assign<Transform>(rock, place, glm::mat3(1.0f), glm::vec3(2.0f));
+	registry.Assign<BigForest>(rock);
+	Locator::entitiesMap::value().FileNew();
+	ASSERT_EQ(footpaths.put, std::vector {2.0f});
+
+	// The same size changes nothing
+	EXPECT_FALSE(ecs::thing_map_place::Resize(registry, rock, 2.0f));
+	EXPECT_TRUE(footpaths.removed.empty());
+	EXPECT_EQ(footpaths.put, std::vector {2.0f});
+
+	// A new size: the footpaths stop to go round the old size, then go round the new size
+	EXPECT_TRUE(ecs::thing_map_place::Resize(registry, rock, 0.5f));
+	EXPECT_EQ(registry.Get<const Transform>(rock).scale, glm::vec3(0.5f));
+	EXPECT_EQ(footpaths.removed, std::vector {2.0f});
+	EXPECT_EQ(footpaths.put, (std::vector {2.0f, 0.5f}));
+	Locator::footpathSystem::reset();
+}
+
 TEST_F(MapProductionFiling, AWalkerGoesToTheFrontOfItsCellOnlyWhenItsAngleChanges)
 {
 	auto& registry = Locator::entitiesRegistry::value();

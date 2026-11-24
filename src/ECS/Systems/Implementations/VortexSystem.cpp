@@ -550,13 +550,12 @@ void VortexSystem::TakeFromPile(entt::entity vortexEntity, const Vortex& vortex,
 	const float random = Locator::gameRandom::has_value()
 	                         ? Locator::gameRandom::value().GameFloatRand(vortex::crossing::k_PileShareRandom)
 	                         : 0.0f;
-	auto& scale = registry.Get<Transform>(taken).scale;
-	const auto before = scale.x;
-	scale *= vortex::crossing::PileShare(random);
-	// A pot that changes its size goes out of the map's cells and into them again at once
-	if (scale.x != before)
+	// A pot that changes its size goes out of the map's cells at its old size and into them again at its new size
+	const auto share = vortex::crossing::PileShare(random);
+	if (const auto before = registry.Get<const Transform>(taken).scale.x; before * share != before)
 	{
-		ecs::thing_map_place::Reinsert(taken);
+		ecs::thing_map_place::ReinsertWith(taken,
+		                                   [&registry, taken, share]() { registry.Get<Transform>(taken).scale *= share; });
 	}
 	HandOver(vortexEntity, vortex, taken);
 }

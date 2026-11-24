@@ -416,12 +416,11 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 		}
 		return false;
 	}
-	// The solid shape follows the drawn dome only in steps. At each step the shield goes out of the map's cells and into
-	// them again at once.
+	// The solid shape follows the drawn dome only in steps. At each step the shield goes out of the map's cells at its
+	// old size and into them again at its new size.
 	if (shield::NeedsRescale(dome.pose.scale, dome.solidScale))
 	{
-		dome.solidScale = dome.pose.scale;
-		ecs::thing_map_place::Reinsert(object);
+		ecs::thing_map_place::ReinsertWith(object, [&dome]() { dome.solidScale = dome.pose.scale; });
 	}
 	const float strength = shieldObject.spell != entt::null && Locator::magicSystem::has_value()
 	                           ? Locator::magicSystem::value().SpellStrength(shieldObject.spell)

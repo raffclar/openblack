@@ -120,6 +120,10 @@ std::string_view Name(Quantity quantity)
 		return "football players that wait for the kick-off";
 	case Quantity::FootballBallFromCentre:
 		return "the distance from the football to the middle of the pitch";
+	case Quantity::VillagerPregnant:
+		return "the villager is a pregnant woman";
+	case Quantity::VillagerAsleepAtHome:
+		return "the villager sleeps in its home";
 	}
 	return "";
 }
@@ -137,6 +141,17 @@ int ExitCodeOf(Verdict verdict)
 		break;
 	}
 	return 2;
+}
+
+std::optional<std::string> EndNote(Verdict verdict, uint32_t worldTurn)
+{
+	if (verdict != Verdict::Waiting)
+	{
+		return std::nullopt;
+	}
+	return fmt::format("the game ended at turn {} before the checks had a verdict: -n counts frames, not turns; "
+	                   "give --sim-frame-ms 20 or --sim-until-turn for the same turns on each build",
+	                   worldTurn);
 }
 
 bool Holds(const Check& check, double value)

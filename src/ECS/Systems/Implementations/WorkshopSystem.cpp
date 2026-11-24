@@ -1090,14 +1090,9 @@ void WorkshopSystem::Join(entt::entity held, entt::entity target, std::optional<
 	// The scaffold under the hand leaves its building site. It is not in the physics, because CanJoin refuses that.
 	LeaveSite(target);
 	// It becomes worth the two, and takes the offer of the held scaffold with the turn and the size of its phantom
-	auto& targetScale = registry.Get<Transform>(target).scale;
-	const auto targetBefore = targetScale.x;
-	targetScale = glm::vec3(workshop::ScaleOfValue(heldValue + targetValue));
-	// A scaffold on the land that changes its size goes out of the map's cells and into them again at once
-	if (targetScale.x != targetBefore)
-	{
-		ecs::thing_map_place::Reinsert(target);
-	}
+	// A scaffold on the land that changes its size goes out of the map's cells at its old size and into them again at its
+	// new size
+	ecs::thing_map_place::Resize(registry, target, workshop::ScaleOfValue(heldValue + targetValue));
 	{
 		auto& phantom = registry.Get<Scaffold>(target).phantom;
 		phantom.shown = heldData.phantom.shown;
@@ -1186,14 +1181,9 @@ entt::entity WorkshopSystem::SplitOffRest(entt::entity scaffold)
 	{
 		return entt::null;
 	}
-	auto& scale = registry.Get<Transform>(scaffold).scale;
-	const auto before = scale.x;
-	scale = glm::vec3(workshop::ScaleOfValue(value - *rest));
-	// A scaffold in the map's cells that changes its size goes out of them and into them again at once
-	if (scale.x != before)
-	{
-		ecs::thing_map_place::Reinsert(scaffold);
-	}
+	// A scaffold in the map's cells that changes its size goes out of them at its old size and into them again at its new
+	// size
+	ecs::thing_map_place::Resize(registry, scaffold, workshop::ScaleOfValue(value - *rest));
 	registry.SetDirty();
 	if (const auto logger = spdlog::get("game"))
 	{

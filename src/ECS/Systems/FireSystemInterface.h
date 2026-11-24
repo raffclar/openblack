@@ -118,7 +118,9 @@ public:
 		/// Where its object stands, and where it burns from
 		glm::vec3 position;
 		glm::vec3 centre;
-		/// The radius a fire on its object reaches by default, its object's across the ground
+		/// The radius of its object across the ground
+		float objectRadius;
+		/// The radius a fire on its object reaches by default. A dead or felled tree and a worship site have their own.
 		float defaultRadius;
 		float radius;
 		float maxRadius;
@@ -129,8 +131,8 @@ public:
 	[[nodiscard]] virtual std::optional<Reach> GetReach(entt::entity object) const = 0;
 	/// The fires of an object's blaze, its first fire first, none when it doesn't burn
 	[[nodiscard]] virtual std::vector<entt::entity> GetBlazeMembers(entt::entity object) const = 0;
-	/// The fire of an object's blaze nearest a map position by the distance to the edge of its safe radius, or its object's
-	/// own radius when that is wider, of those hot enough to react to; none when none is. The distance is from the map
+	/// The fire of an object's blaze nearest a map position by the distance to the edge of its safe radius, or its default
+	/// radius when that is wider, of those hot enough to react to; none when none is. The distance is from the map
 	/// position to the fire middle of each object.
 	[[nodiscard]] virtual std::optional<entt::entity> NearestSafeFire(entt::entity object,
 	                                                                  const map_coords::MapCoords& point) const = 0;

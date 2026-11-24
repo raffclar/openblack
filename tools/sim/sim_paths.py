@@ -24,6 +24,18 @@ else:
     DEFAULT_RUNS = "E:/openblack/sim-runs"
 
 
+# The address of the error reports for test runs: a closed port of the loopback, so that no report of a test run of a
+# shipping build reaches the live Sentry project (the SENTRY_DSN of the environment comes first in the game)
+NO_REPORTS_DSN = "http://test@127.0.0.1:9/0"
+
+
+def close_error_reports():
+    """Gives the programs that this script starts a closed error report address, unless the caller set SENTRY_DSN
+    on purpose. A shipping build has the address of the live reports in it."""
+    if not os.environ.get("SENTRY_DSN"):
+        os.environ["SENTRY_DSN"] = NO_REPORTS_DSN
+
+
 def worktree_name():
     """The name of the tree of these tools (the folder above tools/sim)"""
     return os.path.basename(os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
