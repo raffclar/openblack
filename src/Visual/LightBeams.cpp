@@ -30,7 +30,7 @@ constexpr uint32_t k_ConeSides = 8;
 
 glm::u8vec4 ToBytes(const glm::vec4& colour)
 {
-	return glm::u8vec4(glm::round(glm::clamp(colour, 0.0f, 1.0f) * 255.0f));
+	return {glm::round(glm::clamp(colour, 0.0f, 1.0f) * 255.0f)};
 }
 } // namespace
 
