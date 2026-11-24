@@ -28,6 +28,7 @@
 #include "ECS/FishPuzzleRules.h"
 #include "ECS/Registry.h"
 #include "EngineConfig.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
@@ -56,7 +57,7 @@ constexpr uint64_t k_OpaqueState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | B
 void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 {
 	// The fish swim under the sea, so only the sea's reflection has them
-	if (desc.viewId != RenderPass::Reflection || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (desc.viewId != RenderPass::Reflection || desc.frame->templeActive)
 	{
 		return;
 	}
@@ -148,8 +149,7 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 
 void Renderer::DrawFishPuzzleFloats(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !desc.drawWater ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	if (desc.viewId != RenderPass::Main || !desc.drawWater || desc.frame->templeActive)
 	{
 		return;
 	}

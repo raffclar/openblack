@@ -135,3 +135,23 @@ TEST(DrawnFrame, TheSeaMirrorsACreatureOnlyFromTheSituationThatTheFillKept)
 	creature.mirror->primaryCreature = false;
 	EXPECT_FALSE(creature.MirroredAt(0.0f));
 }
+
+TEST(DrawnFrame, TheTempleCopyDrawsOnlyTheRoomsThatTheFillMarked)
+{
+	graphics::DrawnTemple temple;
+	EXPECT_FALSE(temple.IsRoomDrawn(TempleRoom::Main));
+	temple.roomsDrawn.at(static_cast<size_t>(TempleRoom::CreatureCave)) = true;
+	EXPECT_TRUE(temple.IsRoomDrawn(TempleRoom::CreatureCave));
+	EXPECT_FALSE(temple.IsRoomDrawn(TempleRoom::Main));
+	EXPECT_EQ(graphics::DrawnTemple::k_RoomCount, static_cast<size_t>(TempleRoom::Unknown) + 1);
+}
+
+TEST(DrawnFrame, TheDrawnHandIsTheLeftHandOfThePlayerOfThisComputer)
+{
+	graphics::DrawnFrame::Hands hands;
+	EXPECT_EQ(hands.Drawn(), entt::entity {entt::null});
+	EXPECT_EQ(hands.ownPlayer, PlayerNames::PLAYER_ONE);
+	hands.own = {entt::entity {7}, entt::entity {8}};
+	EXPECT_EQ(hands.Drawn(), entt::entity {7});
+	EXPECT_FALSE(hands.waterGlowCentre.has_value());
+}

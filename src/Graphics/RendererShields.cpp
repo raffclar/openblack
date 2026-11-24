@@ -26,6 +26,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ZSort.h"
 #include "Locator.h"
@@ -40,12 +41,11 @@ using namespace openblack::graphics;
 void Renderer::DrawShieldDomes(const DrawSceneDesc& desc) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
-	if ((desc.viewId != RenderPass::Main && !reflection) || !Locator::magicShieldSystem::has_value() ||
-	    !Locator::time::has_value())
+	if ((desc.viewId != RenderPass::Main && !reflection) || !Locator::magicShieldSystem::has_value())
 	{
 		return;
 	}
-	auto domes = Locator::magicShieldSystem::value().GetDomes(Locator::time::value().GetTurnFraction());
+	auto domes = Locator::magicShieldSystem::value().GetDomes(desc.frame->clock.turnFraction);
 	// A warm-up draws a dome at no size, as the first dome draws
 	if (_warmingUp)
 	{
