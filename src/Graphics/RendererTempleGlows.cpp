@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <string>
 
 #include <bgfx/bgfx.h>
@@ -70,30 +71,15 @@ void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	using namespace ecs::components;
-	// The rooms and their cones are things of the temple's rooms
-	const auto& registry = *desc.frame->temple.rooms;
 	// The sheet is in the main room's space. Its texture drifts with the room's spot lights' textures, a step for each
 	// of the room's cones.
-	glm::mat4 model {1.0f};
+	const auto& model = temple.mainRoomModel;
 	uint32_t cones = 0;
-	registry.Each<const TempleInteriorPart, const Transform>(
-	    [&model](const TempleInteriorPart& part, const Transform& transform) {
-		    if (part.room == TempleRoom::Main && part.mesh == TempleInteriorMesh::Room)
-		    {
-			    model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		    }
-	    });
 	// The cones step the drift only where the detail level draws them
 	if (detail_level::TempleLightShafts(Locator::config::value().detail))
 	{
-		registry.Each<const LightBeam, const TempleInteriorPart>(
-		    [&cones](const LightBeam& /*unused*/, const TempleInteriorPart& part) {
-			    if (part.room == TempleRoom::Main)
-			    {
-				    ++cones;
-			    }
-		    });
+		cones = static_cast<uint32_t>(
+		    std::ranges::count_if(temple.cones, [](const DrawnTemple::Cone& cone) { return cone.room == TempleRoom::Main; }));
 	}
 	const float phase = static_cast<float>(desc.time) * 0.001f * static_cast<float>(cones) * 0.1f;
 	BeamMesh mesh;

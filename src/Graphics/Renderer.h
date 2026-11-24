@@ -121,6 +121,8 @@ public:
 	void ConfigureView(RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept final;
 
 	void FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept final;
+	/// Copies what the draws of the weather, of the water's rings and of the magic shields read
+	void CollectWeatherAndWater(DrawnEffects& effects, float turnFraction) const;
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
 	[[nodiscard]] bool WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
@@ -573,7 +575,8 @@ private:
 	void DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the water of the lakes above the sea of a generated land in the view itself, after the land
 	void DrawPassLakes(const DrawSceneDesc& desc) const;
-	/// Makes the mesh of the lakes' water again when the lakes change. False when the land has no lakes.
+	/// Makes the mesh of the lakes' water again when the lakes change. False when the land has no lakes. The fill of the
+	/// frame calls it, because it reads the cells of the land.
 	bool PrepareLakeMesh() const;
 	/// Draws the mirror of each level of the lakes' water in view, as the sea's reflection is drawn at the sea's level
 	void DrawLakeMirrors(const DrawSceneDesc& drawDesc) const;
@@ -897,6 +900,8 @@ private:
 	/// The uniforms that SetSeaUniforms gave to the sea this frame: params, rows, mode, colour, camera and drift
 	mutable std::array<glm::vec4, 6> _seaUniforms {};
 	mutable uint64_t _lakeMeshDigest {0};
+	/// Whether the fill of the frame made the lakes' mesh ready, and the frame draws the lakes
+	mutable bool _lakesReady {false};
 	/// The water of each level of the lakes, in the order of the mesh's triangles
 	mutable std::vector<lake_mirrors::Level> _lakeLevels;
 	/// The mirrors of this frame, and the level and rectangle of each slot's mirror
@@ -1005,6 +1010,10 @@ private:
 		/// The count of changes to the casters of the baked shadows at the last paint (see
 		/// LandShadowBake::GetCastersChanges)
 		uint32_t bakeCastersChanges {0};
+		/// The land's requests for paints that the fill took and no paint took yet: a new land, and the painted blocks
+		/// in the order of their paints (see LandIslandInterface::TakeCoarseRepaints)
+		bool repaintNewLand {false};
+		std::vector<size_t> repaintBlocks;
 	};
 	mutable CoarseEdges _coarseEdges;
 	/// u_haze and u_hazeColour of the frame's distance haze, off until the land's light is built

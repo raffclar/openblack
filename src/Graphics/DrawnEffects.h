@@ -21,7 +21,10 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/WaterRings.h"
 #include "Creature/LeashRope.h"
+#include "ECS/Systems/CloudSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSymbolLayout.h"
@@ -88,6 +91,15 @@ struct DrawnEffects
 	std::vector<leash_rope::Rope> leashes;
 	std::vector<CreedShell> creedShells;
 	std::vector<LeashCollar> leashCollars;
+	/// The rings on the water
+	std::vector<water_rings::Ring> waterRings;
+	/// The clouds of the storms
+	std::vector<ecs::systems::StormCloud> stormClouds;
+	/// The magic shields' domes, between their last two turns, when the game has magic shields
+	std::vector<ecs::systems::MagicShieldSystemInterface::DomeDraw> shieldDomes;
+	bool shieldsShown {false};
+	/// The ambient wind, which moves the sea's texture
+	glm::vec2 ambientWind {0.0f};
 
 	[[nodiscard]] std::span<const TownBelief> TownBeliefs() const
 	{

@@ -153,8 +153,7 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 {
 	const auto before = std::exchange(_lakePasses, {});
 	_lakeSlotOfLevel.clear();
-	if (!drawDesc.drawWater || !drawDesc.drawIsland || _warmingUp || drawDesc.frame->sea.reflection == nullptr ||
-	    !PrepareLakeMesh())
+	if (!drawDesc.drawWater || !drawDesc.drawIsland || _warmingUp || drawDesc.frame->sea.reflection == nullptr || !_lakesReady)
 	{
 		return;
 	}
@@ -347,7 +346,7 @@ void Renderer::DrawPassLakes(const DrawSceneDesc& desc) const
 {
 	// Only the view itself has the lakes' water
 	if (desc.viewId != RenderPass::Main || !desc.drawWater || !desc.drawIsland || _warmingUp ||
-	    desc.frame->sea.reflection == nullptr || !PrepareLakeMesh())
+	    desc.frame->sea.reflection == nullptr || !_lakesReady)
 	{
 		return;
 	}

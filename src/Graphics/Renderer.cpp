@@ -70,12 +70,17 @@
 #include "ECS/Components/VillageLight.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CloudSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/DrawLoadBlock.h"
 #include "Graphics/DrawWindow.h"
 #include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
@@ -720,6 +725,27 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::DrawnEffectsFill);
 	auto& effects = frame.effects;
 	_drawnFrame = &frame;
+	// The draw loads no resource, thus the fill loads each resource that is not loaded yet. After the load of the world,
+	// only the held resources are not loaded, thus this loads nothing.
+	if (!_warmingUp)
+	{
+		auto& resources = Locator::resources::value();
+		if (resources.PendingCount() > resources.HeldCount())
+		{
+			const auto loaded = resources.LoadPending();
+			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The fill loaded {} resources before the draw", loaded);
+		}
+	}
+	// The mesh of the lakes follows the lakes of the land. The fill makes it, thus the draw does not read the cells.
+	_lakesReady =
+	    drawDesc.drawWater && drawDesc.drawIsland && !_warmingUp && frame.sea.reflection != nullptr && PrepareLakeMesh();
+	// The fill takes the land's requests for paints of the coarse textures. The draw paints them.
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto taken = Locator::terrainSystem::value().TakeCoarseRepaints();
+		_coarseEdges.repaintNewLand = _coarseEdges.repaintNewLand || taken.newLand;
+		_coarseEdges.repaintBlocks.insert(_coarseEdges.repaintBlocks.end(), taken.blocks.begin(), taken.blocks.end());
+	}
 	// The light of the models and the glow of the hand, which the passes read
 	frame.modelLight = GetModelLight();
 	CollectHands(frame);
@@ -788,7 +814,32 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	CollectLeashes(effects, drawDesc);
 	CollectTempleLooks(effects, drawDesc);
 	CollectSprites(frame, drawDesc);
+	CollectWeatherAndWater(effects, frame.clock.turnFraction);
 	_effectsFilled = true;
+}
+
+void Renderer::CollectWeatherAndWater(DrawnEffects& effects, float turnFraction) const
+{
+	effects.ambientWind =
+	    Locator::weatherSystem::has_value() ? Locator::weatherSystem::value().GetAmbientWind() : glm::vec2(0.0f);
+	effects.waterRings.clear();
+	if (Locator::waterRingSystem::has_value())
+	{
+		const auto rings = Locator::waterRingSystem::value().GetRings();
+		effects.waterRings.assign(rings.begin(), rings.end());
+	}
+	effects.stormClouds.clear();
+	if (Locator::cloudSystem::has_value())
+	{
+		const auto clouds = Locator::cloudSystem::value().GetStormClouds();
+		effects.stormClouds.assign(clouds.begin(), clouds.end());
+	}
+	effects.shieldsShown = Locator::magicShieldSystem::has_value();
+	effects.shieldDomes.clear();
+	if (effects.shieldsShown)
+	{
+		effects.shieldDomes = Locator::magicShieldSystem::value().GetDomes(turnFraction);
+	}
 }
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
@@ -801,6 +852,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	_effectsFilled = false;
 	_drawnFrame = drawDesc.frame;
+	// The draw loads no resource: the fill loaded them. The warm-up draws while the resources load.
+	const DrawLoadBlock blockLoads(Locator::resources::value(), !_warmingUp);
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
 	UpdateLandLight(*drawDesc.frame);
@@ -958,6 +1011,7 @@ void Renderer::Frame() noexcept
 	_landCaps.clear();
 	// The next frame fills its own drawn copy. The draws before that fill read the world itself.
 	_drawnFrame = nullptr;
+	_lakesReady = false;
 	if (warmUp)
 	{
 		const auto cover = static_cast<bgfx::ViewId>(warm_up::k_CoverView);

@@ -38,6 +38,7 @@
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/DrawLoadBlock.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/InstanceDesc.h"
@@ -161,6 +162,8 @@ void Renderer::CollectInterfaceCreatures(DrawnCreatures& creatures, const DrawSc
 
 void Renderer::DrawInterfaceCreatures(const DrawnCreatures::Interface& shown, const InterfaceCreatureBody& drawBody) const
 {
+	// The draw loads no resource
+	const DrawLoadBlock blockLoads(Locator::resources::value(), !_warmingUp);
 	if (!_interfaceCreatureInstances.has_value())
 	{
 		bgfx::VertexLayout layout;
@@ -304,6 +307,8 @@ void Renderer::CollectMenuCreature(DrawnCreatures& creatures) const
 void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const DrawnCreatures::Menu& shown,
                                 const InterfaceCreatureBody& drawBody) const
 {
+	// The draw loads no resource
+	const DrawLoadBlock blockLoads(Locator::resources::value(), !_warmingUp);
 	// The editor's camera over the dialogs' space, with the depth cleared: the creature is drawn over the dialog and
 	// in front of nothing else
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::MenuCreature);
@@ -370,6 +375,8 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	}
 	// The film hides the world, thus the frame has no fill of its effects. The film's draws read the rest of the copy.
 	_drawnFrame = desc.frame;
+	// The draw loads no resource
+	const DrawLoadBlock blockLoads(Locator::resources::value(), !_warmingUp);
 	// The film's camera over the film's picture, with the depth cleared: the renderer draws the creature over the
 	// picture and in front of nothing else
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);

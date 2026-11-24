@@ -288,8 +288,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	// The texture drifts with the ambient wind by the frame's game time. A warm-up does not move it.
 	if (!_warmingUp)
 	{
-		const auto wind =
-		    Locator::weatherSystem::has_value() ? Locator::weatherSystem::value().GetAmbientWind() : glm::vec2(0.0f);
+		const auto wind = _drawnFrame->effects.ambientWind;
 		_seaDrift =
 		    sea_rows::AdvanceDrift(_seaDrift, wind, _drawnFrame->clock.frameGameTime, sea_rows::Period(waterTiling), driftDraw);
 	}
@@ -1020,12 +1019,12 @@ bool Renderer::CoarseEdgesPainted(glm::ivec2 block) const
 
 void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn, const Texture2D* paintedSnow) const
 {
-	// The paint takes the land's repaints, thus it uses the land itself and not the drawn copy's view of it
-	if (!Locator::terrainSystem::has_value())
+	// The fill took the land's requests for paints. The draw reads only the land's blocks.
+	if (_drawnFrame == nullptr || _drawnFrame->land.island == nullptr)
 	{
 		return;
 	}
-	auto& island = Locator::terrainSystem::value();
+	const auto& island = *_drawnFrame->land.island;
 	const auto& blocks = island.GetBlocks();
 	auto& edges = _coarseEdges;
 	// Each pass of a frame needs views of its own. When the views of the frame are taken, the paints wait for the next
@@ -1111,14 +1110,15 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn,
 		               BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		return;
 	}
-	auto repaints = island.TakeCoarseRepaints();
+	const bool newLand = std::exchange(edges.repaintNewLand, false);
+	const auto repaintBlocks = std::exchange(edges.repaintBlocks, {});
 	const auto samples = static_cast<int32_t>(land_detail::CoarseSamplingFor(blockTexels).samples);
 	// A new land, a new size of the textures or a restore of the device starts the edges again: every block gets its
 	// first paint now. A change of the casters from the debug menu also paints every block again, because the coarse
 	// textures must not keep the shadows of the trees after their moving shadows start.
 	const auto castersChanges = _landShadowBake ? _landShadowBake->GetCastersChanges() : edges.bakeCastersChanges;
 	const bool castersChanged = castersChanges != std::exchange(edges.bakeCastersChanges, castersChanges);
-	const bool fresh = repaints.newLand || edges.lost || edges.samples != samples || castersChanged;
+	const bool fresh = newLand || edges.lost || edges.samples != samples || castersChanged;
 	if (fresh)
 	{
 		edges.painted.reset();
@@ -1146,7 +1146,7 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn,
 
 	// The requests for a paint from the block textures, the snow and the shadows. The game paints all three into a block
 	// at one time, thus a block that more than one of them asked for gets one paint.
-	for (const auto index : repaints.blocks)
+	for (const auto index : repaintBlocks)
 	{
 		if (index < edges.waiting.size())
 		{

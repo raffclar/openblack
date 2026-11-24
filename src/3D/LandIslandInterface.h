@@ -233,8 +233,12 @@ public:
 	[[nodiscard]] float HighestHeight() const;
 	/// The height in units of a map corner when the land was built, as FindBuiltAltitude gives the altitude
 	[[nodiscard]] std::optional<uint16_t> FindBuiltHeightUnits(const glm::u16vec2& coordinates) const;
+	/// How many times the heights of the land changed. A copy of the heights compares it to know when to copy again.
+	[[nodiscard]] uint64_t HeightChanges() const { return _heightChanges; }
 
 protected:
+	/// Counts a change of the heights of the land
+	void NoteHeightChange() { ++_heightChanges; }
 	/// Gives the land a height field: the height units of each corner, [x * 513 + z], and the curve of its altitudes.
 	/// No units give a land of the story.
 	void SetHeightField(const landgen::HeightCurve& curve, std::vector<uint16_t> units);
@@ -250,5 +254,6 @@ private:
 	/// The height field when the land was built
 	std::vector<uint16_t> _builtHeightUnits;
 	uint16_t _highestUnits {255};
+	uint64_t _heightChanges {0};
 };
 } // namespace openblack
