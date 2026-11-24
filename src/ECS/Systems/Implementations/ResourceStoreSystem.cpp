@@ -92,6 +92,7 @@
 #include "ECS/TownCensus.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "ECS/WorshipSites.h"
@@ -1184,6 +1185,25 @@ BuildingSite* StandardSite(entt::entity object)
 	return fixed && !ownWay ? ecs::construction::BroughtWoodSite(object) : nullptr;
 }
 
+/// The site that gives or takes a resource for a thing, if the site does it and not the thing:
+/// - An abode with a site uses the site only for wood or for any resource. It keeps food itself.
+/// - A storage pit never gives through its site. It gives from its own piles.
+/// - Any other thing with a site uses the site for all resources.
+BuildingSite* UsesSiteFor(entt::entity object, ResourceType type, bool take)
+{
+	auto* site = StandardSite(object);
+	const auto& registry = Entities();
+	if (site == nullptr || !registry.AllOf<Abode>(object))
+	{
+		return site;
+	}
+	if (take && registry.AllOf<StoragePit>(object))
+	{
+		return nullptr;
+	}
+	return type == ResourceType::Wood || type == ResourceType::Any ? site : nullptr;
+}
+
 TownResourceTally* TallyOf(entt::entity town)
 {
 	auto& registry = Entities();
@@ -1252,6 +1272,14 @@ uint32_t ResourceStoreSystem::GetResource(entt::entity object, ResourceType type
 	{
 		return 0;
 	}
+	// A scaffold holds wood by its value, as much as a store gets for it
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return type == ResourceType::Wood && Locator::infoConstants::has_value()
+		           ? ecs::workshop::WoodOfScaffold(ecs::workshop::ValueOfScale(ScaleOf(object)),
+		                                           Locator::infoConstants::value().scaffold.woodValue)
+		           : 0u;
+	}
 	// A rock holds wood by its size. No store takes a rock as wood.
 	if (const auto* row = RockRow(object))
 	{
@@ -1294,8 +1322,16 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 	{
 		return 0;
 	}
-	// A building with a site takes wood, and only wood, into the site's one pile, made for the first wood
-	if (auto* site = StandardSite(object))
+	// A scaffold gives wood to its site. The site takes only wood. A scaffold with no site takes nothing.
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(object))
+	{
+		return ecs::store_rules::ScaffoldStores(type, registry.Valid(scaffold->site))
+		           ? AddResource(scaffold->site, ResourceType::Wood, amount, at)
+		           : 0u;
+	}
+	// A building with a site takes wood, and only wood, into the site's one pile, made for the first wood. An abode
+	// with a site keeps the food that it gets, as it does with no site.
+	if (auto* site = UsesSiteFor(object, type, false))
 	{
 		return AddToSite(object, *site, type, amount, MapPlaceOf(at));
 	}
@@ -1366,8 +1402,9 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	{
 		return 0;
 	}
-	// A building with a site gives wood from the site's one pile
-	if (auto* site = StandardSite(object))
+	// A building with a site gives wood from the site's one pile. An abode with a site gives food from its own count. A
+	// storage pit gives food and wood from its own piles, also when it has a site.
+	if (auto* site = UsesSiteFor(object, type, true))
 	{
 		return TakeFromSite(object, *site, type, amount, std::nullopt);
 	}

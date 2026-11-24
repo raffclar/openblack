@@ -11,6 +11,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
@@ -21,6 +22,8 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -180,4 +183,77 @@ TEST_F(SitePileTakeTest, ALonePileGoesWhenTheHandEmptiesIt)
 	const auto pile = Pile(glm::vec3(200.0f, 0.0f, 0.0f), 30);
 	EXPECT_EQ(_stores.TakeFromPile(pile, ResourceType::Wood, 50, PlayerNames::PLAYER_ONE, glm::vec3(200.0f, 0.0f, 0.0f)), 30u);
 	EXPECT_FALSE(Exists(pile));
+}
+
+// An abode with a site keeps the food that it gets. Only the wood goes to the pile of its site.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, AnAbodeWithASiteKeepsItsFoodAndGivesItsWoodToTheSite)
+{
+	EXPECT_EQ(_stores.AddResource(_abode, ResourceType::Food, 30, std::nullopt), 30u);
+	EXPECT_EQ(_stores.AddResource(_abode, ResourceType::Wood, 20, std::nullopt), 20u);
+	const auto& abode = Locator::entitiesRegistry::value().Get<const Abode>(_abode);
+	EXPECT_EQ(abode.foodAmount, 30u);
+	EXPECT_EQ(abode.woodAmount, 0u);
+	EXPECT_EQ(Holds(_abodePile), 120u);
+	EXPECT_EQ(_stores.GetResource(_abode, ResourceType::Food), 30u);
+}
+
+// An abode with a site gives food from its own count. It gives wood from the pile of its site.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, AnAbodeWithASiteGivesItsOwnFoodAndTheWoodOfItsSite)
+{
+	Locator::entitiesRegistry::value().Get<Abode>(_abode).foodAmount = 50;
+	EXPECT_EQ(_stores.RemoveResource(_abode, ResourceType::Food, 20), 20u);
+	EXPECT_EQ(_stores.RemoveResource(_abode, ResourceType::Wood, 40), 40u);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const Abode>(_abode).foodAmount, 30u);
+	EXPECT_EQ(Holds(_abodePile), 60u);
+}
+
+// A storage pit with a site gives food and wood from its own piles, not from the pile of its site
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, AStoragePitWithASiteGivesFromItsOwnPiles)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto pit = registry.Create();
+	registry.Assign<Abode>(pit, Abode {.type = AbodeNumber {}, .townId = k_TownId, .foodAmount = 70, .woodAmount = 90});
+	auto& sites = registry.Assign<BuildingSites>(pit);
+	sites.sites.push_back(BuildingSite {.town = _town, .takesBroughtWood = true});
+	const auto sitePile = Pile(glm::vec3(120.0f, 0.0f, 0.0f), 100);
+	sites.sites.front().piles.at(0) = sitePile;
+	auto& store = registry.Assign<StoragePit>(pit);
+	store.woodPiles.fill(entt::null);
+	store.woodPiles.at(0) = Pile(glm::vec3(130.0f, 0.0f, 0.0f), 90);
+	store.foodPile = Pile(glm::vec3(140.0f, 0.0f, 0.0f), 70);
+
+	EXPECT_EQ(_stores.RemoveResource(pit, ResourceType::Wood, 40), 40u);
+	EXPECT_EQ(_stores.RemoveResource(pit, ResourceType::Food, 30), 30u);
+	EXPECT_EQ(Holds(sitePile), 100u);
+	EXPECT_EQ(Holds(store.woodPiles.at(0)), 50u);
+	EXPECT_EQ(Holds(store.foodPile), 40u);
+	EXPECT_EQ(registry.Get<const Abode>(pit).woodAmount, 50u);
+	EXPECT_EQ(registry.Get<const Abode>(pit).foodAmount, 40u);
+}
+
+// A scaffold holds wood by its value. It gives wood to its site and takes nothing with no site.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SitePileTakeTest, AScaffoldHoldsWoodByItsValueAndGivesWoodToItsSite)
+{
+	_info->scaffold.woodValue = 100;
+	Locator::infoConstants::reset();
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto scaffold = registry.Create();
+	registry.Assign<Transform>(scaffold,
+	                           Transform {.position = glm::vec3(0.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
+	registry.Assign<Scaffold>(scaffold);
+	// A scaffold of scale 1 has the value 3
+	EXPECT_EQ(_stores.GetResource(scaffold, ResourceType::Wood), 300u);
+	EXPECT_EQ(_stores.GetResource(scaffold, ResourceType::Food), 0u);
+	EXPECT_EQ(_stores.AddResource(scaffold, ResourceType::Wood, 10, std::nullopt), 0u);
+
+	registry.Get<Scaffold>(scaffold).site = _abode;
+	EXPECT_EQ(_stores.AddResource(scaffold, ResourceType::Food, 10, std::nullopt), 0u);
+	EXPECT_EQ(_stores.AddResource(scaffold, ResourceType::Wood, 10, std::nullopt), 10u);
+	EXPECT_EQ(Holds(_abodePile), 110u);
+	EXPECT_EQ(registry.Get<const Abode>(_abode).foodAmount, 0u);
 }
