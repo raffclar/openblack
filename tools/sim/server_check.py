@@ -244,6 +244,7 @@ def input_closing_info_box(value):
 
 
 def main():
+    sim_paths.close_error_reports()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--turns", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)

@@ -78,5 +78,23 @@ class SwitchSafeCommandTest(unittest.TestCase):
             self.assertNotIn(os.path.dirname(sys.executable), line)
 
 
+class CloseErrorReportsTest(unittest.TestCase):
+    def test_a_run_without_an_address_gets_the_closed_address(self):
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SENTRY_DSN", None)
+            sim_paths.close_error_reports()
+            self.assertEqual(os.environ["SENTRY_DSN"], sim_paths.NO_REPORTS_DSN)
+
+    def test_an_empty_address_is_closed_too(self):
+        with unittest.mock.patch.dict(os.environ, {"SENTRY_DSN": ""}):
+            sim_paths.close_error_reports()
+            self.assertEqual(os.environ["SENTRY_DSN"], sim_paths.NO_REPORTS_DSN)
+
+    def test_an_address_that_the_caller_set_stays(self):
+        with unittest.mock.patch.dict(os.environ, {"SENTRY_DSN": "http://k@127.0.0.1:5/1"}):
+            sim_paths.close_error_reports()
+            self.assertEqual(os.environ["SENTRY_DSN"], "http://k@127.0.0.1:5/1")
+
+
 if __name__ == "__main__":
     unittest.main()

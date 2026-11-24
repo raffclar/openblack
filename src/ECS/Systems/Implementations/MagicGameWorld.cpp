@@ -774,16 +774,19 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 		                                    drop.extreme);
 		if (grown.scale != transform.scale.y)
 		{
-			const float ratio = grown.scale / std::max(transform.scale.y, 1e-4f);
-			transform.scale = glm::vec3(grown.scale);
-			if (auto* fixed = registry.TryGet<Fixed>(object))
-			{
-				fixed->boundingRadius *= ratio;
-			}
+			// A tree in the map's cells that the water grows comes out of them at its old size and goes in again at its
+			// new size
+			ecs::thing_map_place::ReinsertWith(object, [&registry, object, size = grown.scale]() {
+				auto& resized = registry.Get<Transform>(object);
+				const float ratio = size / std::max(resized.scale.y, 1e-4f);
+				resized.scale = glm::vec3(size);
+				if (auto* fixed = registry.TryGet<Fixed>(object))
+				{
+					fixed->boundingRadius *= ratio;
+				}
+			});
 			tree->maxSize = grown.target;
 			registry.SetDirty();
-			// A tree in the map's cells that the water grows comes out of them and goes in again
-			ecs::thing_map_place::Reinsert(object);
 			// It rustles as it grows
 			if (Locator::sounds::has_value() && Locator::gameRandom::has_value())
 			{

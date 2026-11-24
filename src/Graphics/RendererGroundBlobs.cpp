@@ -31,6 +31,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/WaterRings.h"
 #include "Camera/Camera.h"
+#include "Common/WorkerPool.h"
 #include "Creature/CreatureFizzLook.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
@@ -152,6 +153,16 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 	program->Submit(static_cast<uint16_t>(TranslucentView(desc.viewId)), std::numeric_limits<uint32_t>::max());
 }
 
+namespace
+{
+
+/// The fewest villagers for which the worker threads make the ground blobs
+constexpr size_t k_LeastCastersOnThreads = 64;
+/// How many runs of villagers each lane of the worker threads gets, so that one slow run does not hold the others
+constexpr size_t k_CasterRunsPerLane = 4;
+
+} // namespace
+
 void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 {
 	if (desc.viewId != RenderPass::Main || !Locator::terrainSystem::has_value() ||
@@ -174,13 +185,14 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		uint32_t colour;
 	};
 	std::vector<Vertex> vertices;
-	const auto addQuad = [&vertices](const ground_blobs::Quad& quad) {
+	const auto addQuadTo = [](std::vector<Vertex>& to, const ground_blobs::Quad& quad) {
 		for (const auto corner : ground_blobs::k_Indices)
 		{
 			const auto opacity = static_cast<uint32_t>(ground_blobs::k_Opacity.at(corner) * 255.0f);
-			vertices.push_back({quad.corners.at(corner), ground_blobs::k_Uvs.at(corner), (opacity << 24u) | 0xFFFFFFu});
+			to.push_back({quad.corners.at(corner), ground_blobs::k_Uvs.at(corner), (opacity << 24u) | 0xFFFFFFu});
 		}
 	};
+	const auto addQuad = [&vertices, &addQuadTo](const ground_blobs::Quad& quad) { addQuadTo(vertices, quad); };
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
 	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
 	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
@@ -205,6 +217,16 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		return view_frustum::SeesWorldBox(seenBy, glm::vec3(centre.x - reach, -reach, centre.z - reach),
 		                                  glm::vec3(centre.x + reach, highestLand + lift + reach, centre.z + reach));
 	};
+	// The villagers that can cast blobs, in the order of the walk. This thread does the walk and the lookups of the
+	// meshes, because a lookup can load a mesh.
+	struct Caster
+	{
+		entt::entity entity;
+		ecs::components::Transform transform;
+		std::span<const glm::mat4> rest;
+	};
+	std::vector<Caster> casters;
+	casters.reserve(desc.entities.Size<ecs::components::Villager>());
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
@@ -214,42 +236,73 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    {
 			    return;
 		    }
-		    // From the feet as they are drawn this frame, in the pose of its clip
-		    const auto& rest = meshes.Handle(mesh.id)->GetBoneMatrices();
-		    const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
-		    const auto bones = ground_blobs::FootBones(
-		        pose != nullptr ? std::span<const glm::mat4>(pose->bones) : std::span<const glm::mat4> {}, rest);
-		    if (std::ranges::any_of(ground_blobs::k_FootBones, [&bones](size_t bone) { return bone >= bones.size(); }))
-		    {
-			    return;
-		    }
-		    // The feet are no farther from where the body is drawn than the origins of their bones, at the largest scale
-		    const auto firstReach = ground_blobs::BoneReach(bones[ground_blobs::k_FootBones[0]], transform.scale);
-		    const auto secondReach = ground_blobs::BoneReach(bones[ground_blobs::k_FootBones[1]], transform.scale);
-		    if (firstReach.has_value() && secondReach.has_value() &&
-		        !seesColumn(ecs::components::DrawnPosition(transform.position, pose),
-		                    ground_blobs::FeetReach(*firstReach, *secondReach, transform.scale.x), ground_blobs::k_Lift))
-		    {
-			    return;
-		    }
-		    // Where its body is drawn this frame, gliding between its turns
-		    const auto model = glm::translate(ecs::components::DrawnPosition(transform.position, pose)) *
-		                       glm::mat4(ecs::components::DrawnRotation(transform.rotation, pose)) *
-		                       glm::scale(transform.scale);
-		    const auto foot = [&](size_t bone) {
-			    auto position = glm::vec3(model * bones[bone] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-			    position.y = island.GetHeightAt(glm::vec2(position.x, position.z)) + ground_blobs::k_Lift;
-			    return position;
-		    };
-		    const auto normal = island.GetNormalAt(glm::vec2(transform.position.x, transform.position.z));
-		    const auto fall = ground_blobs::Fall(normal, transform.scale.x);
-		    for (const auto& quad :
-		         ground_blobs::Feet(foot(ground_blobs::k_FootBones[0]), foot(ground_blobs::k_FootBones[1]), fall))
-		    {
-			    addQuad(quad);
-		    }
+		    casters.push_back({.entity = entity, .transform = transform, .rest = meshes.Handle(mesh.id)->GetBoneMatrices()});
 	    },
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
+	// The blobs of one villager. This reads the world and writes only into `to`, so the worker threads can do it.
+	const auto castBlobs = [&](const Caster& caster, std::vector<Vertex>& to) {
+		const auto& transform = caster.transform;
+		// From the feet as they are drawn this frame, in the pose of its clip
+		const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(caster.entity);
+		const auto bones = ground_blobs::FootBones(
+		    pose != nullptr ? std::span<const glm::mat4>(pose->bones) : std::span<const glm::mat4> {}, caster.rest);
+		if (std::ranges::any_of(ground_blobs::k_FootBones, [&bones](size_t bone) { return bone >= bones.size(); }))
+		{
+			return;
+		}
+		// The feet are no farther from where the body is drawn than the origins of their bones, at the largest scale
+		const auto firstReach = ground_blobs::BoneReach(bones[ground_blobs::k_FootBones[0]], transform.scale);
+		const auto secondReach = ground_blobs::BoneReach(bones[ground_blobs::k_FootBones[1]], transform.scale);
+		if (firstReach.has_value() && secondReach.has_value() &&
+		    !seesColumn(ecs::components::DrawnPosition(transform.position, pose),
+		                ground_blobs::FeetReach(*firstReach, *secondReach, transform.scale.x), ground_blobs::k_Lift))
+		{
+			return;
+		}
+		// Where its body is drawn this frame, gliding between its turns
+		const auto model = glm::translate(ecs::components::DrawnPosition(transform.position, pose)) *
+		                   glm::mat4(ecs::components::DrawnRotation(transform.rotation, pose)) * glm::scale(transform.scale);
+		const auto foot = [&](size_t bone) {
+			auto position = glm::vec3(model * bones[bone] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			position.y = island.GetHeightAt(glm::vec2(position.x, position.z)) + ground_blobs::k_Lift;
+			return position;
+		};
+		const auto normal = island.GetNormalAt(glm::vec2(transform.position.x, transform.position.z));
+		const auto fall = ground_blobs::Fall(normal, transform.scale.x);
+		for (const auto& quad :
+		     ground_blobs::Feet(foot(ground_blobs::k_FootBones[0]), foot(ground_blobs::k_FootBones[1]), fall))
+		{
+			addQuadTo(to, quad);
+		}
+	};
+	// The worker threads make the blobs of runs of the villagers. The runs join in the order of the walk, so the blobs
+	// blend in the same order as when one thread makes all of them.
+	const size_t runs = casters.size() >= k_LeastCastersOnThreads
+	                        ? std::min(casters.size(), _workers->GetLaneCount() * k_CasterRunsPerLane)
+	                        : 1;
+	std::vector<std::vector<Vertex>> runVertices(runs);
+	const auto castRun = [&](size_t run, size_t /*lane*/) {
+		const auto first = casters.size() * run / runs;
+		const auto last = casters.size() * (run + 1) / runs;
+		auto& to = runVertices.at(run);
+		to.reserve(ground_blobs::k_Indices.size() * 2 * (last - first));
+		for (size_t index = first; index < last; ++index)
+		{
+			castBlobs(casters[index], to);
+		}
+	};
+	if (runs > 1)
+	{
+		_workers->ForEach(runs, castRun);
+	}
+	else
+	{
+		castRun(0, 0);
+	}
+	for (const auto& run : runVertices)
+	{
+		vertices.insert(vertices.end(), run.begin(), run.end());
+	}
 	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
 	// The model gives each foot as a point on a bone, in the space of that bone.
 	for (const auto& [entity, meshId, model] : animalDraws)

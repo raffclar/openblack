@@ -121,6 +121,10 @@ enum class Quantity : uint8_t
 	/// The distance in metres on the ground from the ball of a football pitch to the middle of the pitch. The pitch is
 	/// the scenario's object at the index.
 	FootballBallFromCentre,
+	/// 1 when the scenario's villager at the index is a pregnant woman, else 0
+	VillagerPregnant,
+	/// 1 when the scenario's villager at the index is asleep in its home, else 0
+	VillagerAsleepAtHome,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -178,6 +182,10 @@ enum class Verdict : uint8_t
 /// The exit code of a run of a scenario's checks: 0 passed, 1 failed, 2 the scenario states no checks or the verdict is
 /// not decided
 [[nodiscard]] int ExitCodeOf(Verdict verdict);
+
+/// The last line of the report when the game ends before the checks have a verdict. The frame limit counts frames, and
+/// a fast build plays more frames in one turn, so the line gives the turn that the game got to. None for other verdicts.
+[[nodiscard]] std::optional<std::string> EndNote(Verdict verdict, uint32_t worldTurn);
 
 /// Whether a value holds for the check's limits
 [[nodiscard]] bool Holds(const Check& check, double value);

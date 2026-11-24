@@ -76,4 +76,20 @@ enum class Mode : uint8_t
 	return false;
 }
 
+/// The end of a frame continues a turn that waits between two players beside the draw, only when that turn stopped beside
+/// the draw (deviation row 288). Then each frame of the stopped turn has the place of the frame that has its turns beside
+/// the draw. A turn that stopped in the turns step of a frame continues in the turns step of the next frame.
+[[nodiscard]] constexpr bool PlaysBesideWhileTurnWaits(bool turnWaits, bool stoppedBeside) noexcept
+{
+	return !turnWaits || stoppedBeside;
+}
+
+/// The clock of the next frame moves on before the turns beside the draw. A game that steps deterministically gives no
+/// time to a frame in which a turn waits to continue. The frame after the end of the turn then uses the time that the
+/// clock got when the turn started, as the frame after a turn that did not stop does.
+[[nodiscard]] constexpr bool ClockMovesBeside(bool turnWaits, bool fixedFrameTime) noexcept
+{
+	return !(turnWaits && fixedFrameTime);
+}
+
 } // namespace openblack::turn_beside_draw

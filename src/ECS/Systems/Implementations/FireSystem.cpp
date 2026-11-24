@@ -850,6 +850,7 @@ std::optional<FireSystemInterface::Reach> FireSystem::GetReach(entt::entity obje
 	return Reach {
 	    .position = transform->position,
 	    .centre = transform->position,
+	    .objectRadius = material->radius,
 	    .defaultRadius = material->fireRadius,
 	    .radius = radius,
 	    .maxRadius = maxRadius,
@@ -892,7 +893,7 @@ std::optional<entt::entity> FireSystem::NearestSafeFire(entt::entity object, con
 		{
 			continue;
 		}
-		const float radius = reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius;
+		const float radius = fire::StandBackRadius(reach->defaultRadius, reach->safeRadius);
 		const auto middle = object_measures::FireMiddlePlace(Entities(), member);
 		const float distance = gutils::GetDistanceInMetres(map_coords::WholeXZ(point), middle) - radius;
 		if (distance < best && reach->aboveReactionTemperature)

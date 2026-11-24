@@ -50,3 +50,24 @@ TEST(TurnBesideDraw, TheGameDefaultIsByLand)
 	static_assert(turn_beside_draw::ModeOf("auto") == Mode::ByLand);
 	static_assert(!turn_beside_draw::PlaysBeside(Mode::ByLand, false));
 }
+
+TEST(TurnBesideDraw, AStoppedTurnContinuesWhereItStopped)
+{
+	// No turn waits: the turns of the next frame play beside the draw
+	EXPECT_TRUE(turn_beside_draw::PlaysBesideWhileTurnWaits(false, false));
+	EXPECT_TRUE(turn_beside_draw::PlaysBesideWhileTurnWaits(false, true));
+	// A turn that stopped beside the draw continues beside the draw
+	EXPECT_TRUE(turn_beside_draw::PlaysBesideWhileTurnWaits(true, true));
+	// A turn that stopped in the turns step continues in the turns step of the next frame
+	EXPECT_FALSE(turn_beside_draw::PlaysBesideWhileTurnWaits(true, false));
+}
+
+TEST(TurnBesideDraw, ASteppedGameGivesNoTimeWhileATurnWaits)
+{
+	// The clock moves on before each turn beside the draw on the real clock
+	EXPECT_TRUE(turn_beside_draw::ClockMovesBeside(false, false));
+	EXPECT_TRUE(turn_beside_draw::ClockMovesBeside(true, false));
+	// A game that steps deterministically moves its clock only when no turn waits
+	EXPECT_TRUE(turn_beside_draw::ClockMovesBeside(false, true));
+	EXPECT_FALSE(turn_beside_draw::ClockMovesBeside(true, true));
+}

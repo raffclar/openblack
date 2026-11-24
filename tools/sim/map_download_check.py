@@ -37,6 +37,9 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, HERE)
+
+import sim_paths  # noqa: E402
 INSPECTOR = os.path.join(ROOT, "tools", "inspector", "openblack_inspector_mcp.py")
 CDP = os.path.join(ROOT, "web", "scripts", "cdp-run.mjs")
 CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe"
@@ -492,6 +495,7 @@ def scrub_web(out):
 
 
 def main():
+    sim_paths.close_error_reports()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--service", required=True, help="a clone of bwgame-service")
     parser.add_argument("--service-python", required=True, help="the python of the service's environment")

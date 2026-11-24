@@ -84,6 +84,10 @@ scenario shows a thing that you can also measure, such as a creature that gets t
   story land that has a creature are not decided at `-n 4000`. The exit code is 0 when all checks pass, 1 when one
   fails, and 2 when the scenario has no checks or a check is not decided at the frame limit (verdict `waiting`). Exit
   code 2 at the frame limit does not mean that the scenario has no checks: read the report, then use a higher `-n`.
+- Always give `--sim-frame-ms 20` or `--sim-until-turn`. Without them, `-n` counts frames of real time, and a fast
+  build plays more frames in one turn. For example, a Debug build got to turn 873 in 2643 frames, but a
+  RelWithDebInfo build got only to turn 135 in 9000 frames. The report then ends with a line that gives the turn
+  that the game got to.
 - Inspector: `game.scenario_checks` (tool `game_scenario_checks`) gives the verdict of the last scenario while the game
   runs: `passed`, `failed` or `waiting`.
 - The merge train and the lanes can run the scenarios that have checks, and fail the car on exit code 1.

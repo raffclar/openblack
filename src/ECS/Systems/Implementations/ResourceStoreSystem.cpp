@@ -163,7 +163,7 @@ void PileEmptied(entt::entity pile, Pot& pot)
 }
 
 /// A pot takes its size from what it holds each time this changes. A pot on the land that changes its size goes out of the
-/// map's cells and in again. A pile keeps its size: it rises out of the ground instead.
+/// map's cells at its old size and in again at its new size. A pile keeps its size: it rises out of the ground instead.
 void ResizeAfterChange(entt::entity pot, const Pot& data)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -174,11 +174,7 @@ void ResizeAfterChange(entt::entity pot, const Pot& data)
 	{
 		return;
 	}
-	transform->scale = glm::vec3(*size);
-	if (Locator::entitiesMap::has_value())
-	{
-		Locator::entitiesMap::value().Reinsert(pot);
-	}
+	ecs::thing_map_place::Resize(registry, pot, *size);
 }
 
 /// The piles of a storage pit that exist: its food pile, then its wood piles
@@ -1211,19 +1207,13 @@ float ScaleOf(entt::entity object)
 	return transform != nullptr ? transform->scale.x : 1.0f;
 }
 
-/// A rock or a fallen trunk takes a size. One in the map's cells that changes its size comes out of them and goes in
-/// again.
+/// A rock or a fallen trunk takes a size. One in the map's cells that changes its size comes out of them at its old size
+/// and goes in again at its new size.
 void SetScale(entt::entity object, float scale)
 {
 	auto& registry = Entities();
-	auto& transform = registry.Get<Transform>(object);
-	const bool resized = transform.scale.x != scale;
-	transform.scale = glm::vec3(scale);
+	ecs::thing_map_place::Resize(registry, object, scale);
 	registry.SetDirty();
-	if (resized)
-	{
-		ecs::thing_map_place::Reinsert(object);
-	}
 }
 } // namespace
 

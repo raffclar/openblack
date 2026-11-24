@@ -1223,16 +1223,11 @@ void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float v
 			return;
 		}
 		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
-		// comes out of them and goes in again.
-		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
+		// comes out of them at its old size and goes in again at its new size.
+		if (registry.AllOf<Transform>(object))
 		{
-			const bool resized = transform->scale.x != value;
-			transform->scale = glm::vec3(value);
+			ecs::thing_map_place::Resize(registry, object, value);
 			registry.SetDirty();
-			if (resized)
-			{
-				ecs::thing_map_place::Reinsert(object);
-			}
 		}
 		return;
 	case script::ObjectPropertyType::Age:
