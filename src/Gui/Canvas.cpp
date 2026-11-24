@@ -151,6 +151,7 @@ std::optional<Canvas::Clip> Canvas::ClipInPixels() const noexcept
 	const auto bottom = ClipEdge(_clip->at(1).y, _corners, _resolution.y);
 	return Clip {.x = left,
 	             .y = top,
+	             // NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	             .width = static_cast<uint16_t>(std::max(right, left) - left),
 	             .height = static_cast<uint16_t>(std::max(bottom, top) - top)};
 }

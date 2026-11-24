@@ -149,6 +149,7 @@ public:
 		const auto step = GuideStep(range, static_cast<float>(rect.Height()));
 		const auto first = static_cast<float>(static_cast<int64_t>(_scale.lowest / step)) * step;
 		auto index = static_cast<int64_t>(first / step) & 1;
+		// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the lines of the original game
 		for (auto value = first; value < _scale.highest; value += step, ++index)
 		{
 			const auto y = static_cast<float>(
@@ -358,6 +359,7 @@ private:
 		const auto step = GuideStep(range, static_cast<float>(rect.Height()));
 		const auto first = static_cast<float>(static_cast<int64_t>(_scale.lowest / step)) * step;
 		auto index = static_cast<int64_t>(first / step);
+		// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the lines of the original game
 		for (auto value = first; value <= _scale.highest; value += step, ++index)
 		{
 			const auto y = Cut(bottom - ((value - _scale.lowest) / range * height));
@@ -726,6 +728,7 @@ void StatisticsBox::DrawRow(const DialogPainter& painter, const List::ItemPlace&
 		}
 		const auto step = GuideStep(scale, static_cast<float>(bar.Width()));
 		int64_t index = 1;
+		// NOLINTNEXTLINE(clang-analyzer-security.FloatLoopCounter): the float steps keep the lines of the original game
 		for (auto value = step; value < scale; value += step, ++index)
 		{
 			const auto x = static_cast<float>(Cut(left + (width * value / scale)));

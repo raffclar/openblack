@@ -330,6 +330,7 @@ void Dialog::MoveFocus(bool backwards)
 	{
 		return;
 	}
+	// NOLINTNEXTLINE(modernize-avoid-c-arrays): a vector of bool keeps bits, not values of bool
 	const auto canFocus = std::make_unique<bool[]>(order.size());
 	std::optional<size_t> focus;
 	for (size_t i = 0; i < order.size(); ++i)

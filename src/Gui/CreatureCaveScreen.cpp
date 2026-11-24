@@ -10,6 +10,7 @@
 #include "CreatureCaveScreen.h"
 
 #include <algorithm>
+#include <array>
 #include <string>
 #include <string_view>
 
@@ -160,8 +161,8 @@ void DrawTattoos(ecs::systems::CreatureCaveSystemInterface& cave, const TempleSc
 	{
 		screen.design = static_cast<uint8_t>(design);
 	}
-	float colour[3] = {screen.colour.r / 255.0f, screen.colour.g / 255.0f, screen.colour.b / 255.0f};
-	if (ImGui::ColorEdit3("##colour", colour))
+	std::array<float, 3> colour = {screen.colour.r / 255.0f, screen.colour.g / 255.0f, screen.colour.b / 255.0f};
+	if (ImGui::ColorEdit3("##colour", colour.data()))
 	{
 		screen.colour = glm::u8vec3(glm::vec3(colour[0], colour[1], colour[2]) * 255.0f);
 	}
