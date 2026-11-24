@@ -376,9 +376,9 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 	KnowLandBlocks();
 	// The list of the cells uses the memory of the list that the thing had, so that a move gets no memory from the heap
 	std::vector<uint32_t> cells;
-	if (auto* resident = _registry->TryGet<MapCellResident>(entity); resident != nullptr)
+	if (_registry->AllOf<MapCellResident>(entity))
 	{
-		cells = std::move(resident->cells);
+		_registry->Write<MapCellResident>(entity, [&cells](MapCellResident& resident) { cells = std::move(resident.cells); });
 	}
 	CellsFor(entity, kind, cells);
 	for (const auto cell : cells)
@@ -413,7 +413,7 @@ void MapProduction::TakeOut(entt::entity entity) const
 	{
 		return;
 	}
-	auto* resident = _registry->TryGet<MapCellResident>(entity);
+	const auto* resident = _registry->TryGet<const MapCellResident>(entity);
 	if (resident == nullptr)
 	{
 		return;
@@ -423,11 +423,13 @@ void MapProduction::TakeOut(entt::entity entity) const
 	{
 		_lists.Remove(cell, entity);
 	}
-	resident->cells.clear();
+	const auto placement = resident->placement;
+	const auto filedAt = resident->filedAt;
+	_registry->Write<MapCellResident>(entity, [](MapCellResident& written) { written.cells.clear(); });
 	// A thing that stays put, going off the map, may bring the footpaths back from going round it
-	if (resident->placement != Placement::MobileFront && Locator::footpathSystem::has_value())
+	if (placement != Placement::MobileFront && Locator::footpathSystem::has_value())
 	{
-		Locator::footpathSystem::value().ThingRemoved(entity, resident->filedAt, filed);
+		Locator::footpathSystem::value().ThingRemoved(entity, filedAt, filed);
 	}
 }
 

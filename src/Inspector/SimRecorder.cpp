@@ -716,6 +716,7 @@ void SimProvider::TurnEnded(uint32_t turn)
 	synced_state::Hash ownHash;
 	if (checksumHash == nullptr)
 	{
+		Locator::entitiesRegistry::value().GiveRowMarks(_hashMemo.marks);
 		ownHash = synced_state::HashOf(registry->Underlying(), _context, synced_state::PresentationParts(), byField, {},
 		                               nullptr, nullptr, &_hashMemo);
 	}

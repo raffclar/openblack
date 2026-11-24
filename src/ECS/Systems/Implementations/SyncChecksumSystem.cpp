@@ -132,6 +132,7 @@ void SyncChecksumSystem::ProcessTurn()
 	}
 #endif
 	const bool byField = _keepParts && _byField;
+	Locator::entitiesRegistry::value().GiveRowMarks(_memo.marks);
 	auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
 	                                 synced_state::PresentationParts(), byField, visit, &Pool(), rows, &_memo);
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -172,6 +173,8 @@ void SyncChecksumSystem::StartHashBesideDraw()
 	// threads of the pool, as the main thread does when the hash does not wait. The draw can add stores to the registry,
 	// so this thread finds the stores now and the side thread does not look in the registry's list of stores.
 	const auto& registry = std::as_const(Locator::entitiesRegistry::value().Underlying());
+	// The marks of the rows are those of the world that the side thread hashes
+	Locator::entitiesRegistry::value().GiveRowMarks(_memo.marks);
 	_side->Start([this, &pool, &registry, stores = ecs::reflection::StoresOf(registry)] {
 		_besideHash = synced_state::HashOf(registry, stores, *_reflection, synced_state::PresentationParts(), false, {}, &pool,
 		                                   nullptr, &_memo);
@@ -193,6 +196,7 @@ void SyncChecksumSystem::FinishHash()
 	}
 	else
 	{
+		Locator::entitiesRegistry::value().GiveRowMarks(_memo.marks);
 		hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
 		                            synced_state::PresentationParts(), false, {}, &Pool(), nullptr, &_memo);
 	}
