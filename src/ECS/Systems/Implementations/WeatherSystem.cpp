@@ -623,8 +623,8 @@ void WeatherSystem::ProcessClimates(uint32_t turn)
 	}
 }
 
-// A weather thing stands where its storm is, which the wind blows along a turn's worth if it may. Once the storm has
-// ended it has none, and it goes unless a script still holds it.
+// A weather thing stands on the land under its storm, which the wind blows along a turn's worth if it may. Once the
+// storm has ended it has none, and it goes unless a script still holds it.
 void WeatherSystem::ProcessWeatherThings()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -640,7 +640,7 @@ void WeatherSystem::ProcessWeatherThings()
 			{
 				storm->position = script_weather::Drift(storm->position, DriftWindAt(storm->position));
 			}
-			transform.position = storm->position;
+			transform.position = WeatherThingPlace(script_weather::ThingPlace(storm->position));
 			thing.lastStorm = *storm;
 			break;
 		case script_weather::ThingAfterTurn::StaysWithoutStorm:
@@ -656,6 +656,15 @@ void WeatherSystem::ProcessWeatherThings()
 	{
 		registry.Destroy(entity);
 	}
+}
+
+glm::vec3 WeatherSystem::WeatherThingPlace(const map_coords::MapCoords& place)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return {map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z)};
+	}
+	return map_coords::ToWorld(Locator::terrainSystem::value(), place);
 }
 
 script_weather::Wind WeatherSystem::DriftWindAt(const glm::vec3& position)
@@ -1205,8 +1214,9 @@ entt::entity WeatherSystem::CreateWeatherThing(const ScriptStorm& script)
 	storm.climate = entt::null;
 	storm.serial = _nextStormSerial++;
 
+	// Until its first turn, the weather thing has the map position 0, 0. A script finds it at the corner of the map.
 	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, script.centre, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Transform>(entity, WeatherThingPlace({}), glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<WeatherThing>(entity, WeatherThing {.storm = stormEntity, .lastStorm = storm});
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A script made a weather thing at ({}, {}): rain {} snow {} cloud {}",
 	                    script.centre.x, script.centre.z, script.effect.rain, script.effect.snow, script.effect.overcast);
@@ -1248,8 +1258,9 @@ bool WeatherSystem::MoveWeatherThing(entt::entity thing, glm::vec3 destination)
 	{
 		return false;
 	}
+	// A storm that ended in this turn also takes the destination, as it moves on until it goes
 	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
-	    storm != nullptr && !storm->dead)
+	    storm != nullptr)
 	{
 		storm->destination = destination;
 	}
@@ -1264,8 +1275,9 @@ bool WeatherSystem::SetWeatherThingSpeed(entt::entity thing, float speed)
 	{
 		return false;
 	}
+	// A storm that ended in this turn also takes the speed, as it moves on until it goes
 	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
-	    storm != nullptr && !storm->dead)
+	    storm != nullptr)
 	{
 		storm->speed = speed;
 	}

@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Weather.h"
 
 /// How a script's weather commands change the storm a weather thing brought
@@ -156,6 +157,10 @@ enum class ThingAfterTurn : uint8_t
 /// A weather thing follows its storm while the storm lives. When the storm ends at the end of its life, the thing loses
 /// the storm. Then a script that holds the thing keeps it, else the thing goes.
 [[nodiscard]] ThingAfterTurn AfterTurn(bool stormLives, bool heldByScript);
+
+/// The map position of a weather thing while its storm lives: the x and z of the storm as a map position, at no
+/// altitude. A script thus finds the thing on the land under its storm.
+[[nodiscard]] map_coords::MapCoords ThingPlace(glm::vec3 stormPosition);
 
 /// The speed that a script reads of a weather thing: the speed of its storm, also of a storm that ended this turn. A
 /// thing that lost its storm gives 0.

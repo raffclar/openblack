@@ -109,6 +109,8 @@ private:
 	void UpdateStorms();
 	bool StepStorm(components::Storm& storm);
 	void KillStorm(components::Storm& storm);
+	/// The world point of a weather thing at a map position: on the land there, as a script reads it
+	[[nodiscard]] static glm::vec3 WeatherThingPlace(const map_coords::MapCoords& place);
 	/// The wind that blows a weather thing's storm where it is: the air's and the climates'
 	[[nodiscard]] script_weather::Wind DriftWindAt(const glm::vec3& position);
 	/// The climates' parts in the weather at a point: the global climate, then every climate, the newest first
