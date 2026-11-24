@@ -75,6 +75,7 @@ public:
 		GuiLoop,
 		EditorUpdate,
 		GameLogic,
+		DrawnFrameFill,
 		SceneDraw,
 		FootprintPass,
 		ObjectShadowPass,
@@ -149,6 +150,7 @@ public:
 	    "GUI Loop",             //
 	    "Editor",               //
 	    "Game Logic",           //
+	    "Drawn Frame Fill",     //
 	    "Encode Draw Scene",    //
 	    "Footprint Pass",       //
 	    "Object Shadow Pass",   //

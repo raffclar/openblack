@@ -37,6 +37,7 @@
 #include "Graphics/BlueNoise.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -111,26 +112,25 @@ glm::mat4 SunModel(const glm::vec3& position)
 }
 } // namespace
 
-void Renderer::DrawMoon(RenderPass viewId) const
+void Renderer::DrawMoon(RenderPass viewId, const DrawnFrame& frame) const
 {
-	if (!Locator::camera::has_value() || !Locator::skySystem::has_value())
+	if (frame.camera == nullptr || !frame.sky.moon.has_value())
 	{
 		return;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto moonEntity = Locator::skySystem::value().GetMoon();
-	const auto [moon, body, glowLook] =
-	    registry.TryGet<ecs::components::Moon, ecs::components::CelestialBody, ecs::components::CelestialGlow>(moonEntity);
+	const auto* moon = &frame.sky.moon->moon;
+	const auto* body = &frame.sky.moon->body;
+	const auto* glowLook = frame.sky.moon->glow.has_value() ? &*frame.sky.moon->glow : nullptr;
 	// A warm-up draws the moon and its glow even before the moon is placed or when it does not show, then at no size
-	const bool placed = moon != nullptr && moon->placement.has_value();
-	if (moon == nullptr || body == nullptr || (!placed && !_warmingUp))
+	const bool placed = moon->placement.has_value();
+	if (!placed && !_warmingUp)
 	{
 		return;
 	}
 	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
 	// copy of it with its height mirrored through sea level.
 	const bool inTheSea = IsMirrorSky(viewId);
-	const auto& camera = Locator::camera::value();
+	const auto& camera = *frame.camera;
 	const auto centre = camera.GetOrigin() + (placed ? moon->placement->offset : glm::vec3(0.0f));
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
 	const auto inverseView = glm::inverse(view);
@@ -215,23 +215,23 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	drawMoon();
 }
 
-void Renderer::DrawSun(RenderPass viewId) const
+void Renderer::DrawSun(RenderPass viewId, const DrawnFrame& frame) const
 {
-	if (!Locator::skySystem::has_value())
+	if (!frame.sky.sun.has_value())
 	{
 		return;
 	}
-	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
-	    Locator::skySystem::value().GetSun());
+	const auto* sun = &frame.sky.sun->sun;
+	const auto* body = &frame.sky.sun->body;
 	// A warm-up draws the sun even before it is placed, then at no size
-	if (sun == nullptr || body == nullptr || (!sun->placement.has_value() && !_warmingUp))
+	if (!sun->placement.has_value() && !_warmingUp)
 	{
 		return;
 	}
 	// The sky of the temple has no sun, and the sea mirrors no sun: only the moon goes into the sea's sky
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = frame.templeActive;
 	// A script can also hide the sun
-	const bool hidden = inTemple || Locator::skySystem::value().IsSunHidden();
+	const bool hidden = inTemple || frame.sky.sunHidden;
 	if (!_warmingUp && (hidden || IsMirrorSky(viewId)))
 	{
 		return;
@@ -427,8 +427,8 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	{
 		return;
 	}
-	const auto* dome =
-	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
+	const auto& sky = drawDesc.frame->sky;
+	const auto* dome = sky.dome.has_value() ? &*sky.dome : nullptr;
 	const bool lowResolution = Locator::config::value().detail.lowResTextures;
 	const auto& textures = Locator::resources::value().GetTextures();
 	using SkyArchetype = ecs::archetypes::SkyArchetype;

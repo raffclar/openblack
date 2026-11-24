@@ -77,6 +77,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/DrawWindow.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -784,7 +785,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	// Reflection Pass
 	{
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ReflectionPass);
-		const auto& instancedDrawDescs = Locator::rendereringSystem::value().GetContext().instancedDrawDescs;
+		const auto& instancedDrawDescs = drawDesc.frame->models->instancedDrawDescs;
 		const bool showsReflection = drawDesc.drawEntities && std::ranges::any_of(instancedDrawDescs, [](const auto& entry) {
 			                             return entry.second.showsReflection;
 		                             });
@@ -825,6 +826,12 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	// The colours of the last hair for the next frame. A warm-up makes the target that keeps them.
 	KeepCreatureHairLight();
+	// Only the steps of the frame change the models that the drawn copy shows. A change during the draw is a fault.
+	if (Locator::rendereringSystem::has_value() &&
+	    drawDesc.frame->ModelsChanged(Locator::rendereringSystem::value().GetContextWrites()))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "The models of the drawn copy changed while the frame drew them");
+	}
 	// The good sky's glow goes over the frames that draw the land, not over the temple's inside
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	if (!_warmingUp && !inTemple && drawDesc.viewId == RenderPass::Main)
