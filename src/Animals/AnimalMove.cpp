@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 
 #include <glm/geometric.hpp>
 
@@ -225,17 +226,12 @@ bool animals::OutsideTurningCircles(glm::vec2 animal, uint16_t angle, uint16_t s
 	// The radius it turns in: twice its speed over its turn angle in radians, a whole number of map units
 	const float radius = map_coords::ToMetres(
 	    static_cast<int32_t>(static_cast<float>(2 * static_cast<int32_t>(speed)) / gutils::ConvertGameAngleTo3D(turnAngle)));
-	for (const int32_t side : {k_QuarterTurn, -k_QuarterTurn})
-	{
+	return std::ranges::all_of(std::array {k_QuarterTurn, -k_QuarterTurn}, [&](const int32_t side) {
 		const auto sideAngle = static_cast<uint16_t>((angle + side) & gutils::k_GameAngleMask);
 		const glm::vec2 centre =
 		    animal + glm::vec2(gutils::GetXByAngle(sideAngle, radius), gutils::GetZByAngle(sideAngle, radius));
-		if (!(glm::distance(point, centre) > radius))
-		{
-			return false;
-		}
-	}
-	return true;
+		return glm::distance(point, centre) > radius;
+	});
 }
 
 bool animals::OverLandAllTheWay(glm::vec2 bird, glm::vec2 point, const std::function<bool(glm::ivec2 cell)>& hasLand)

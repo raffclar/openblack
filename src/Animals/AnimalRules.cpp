@@ -139,7 +139,7 @@ float animals::BirthScale(uint32_t age, uint32_t grownUpAge, std::span<const flo
 
 glm::mat3 animals::Orientation(float heading, float bank)
 {
-	return glm::mat3(portable_math::EulerAngleY(-(heading + (k_Pi * 0.5f))) * portable_math::EulerAngleZ(bank));
+	return {portable_math::EulerAngleY(-(heading + (k_Pi * 0.5f))) * portable_math::EulerAngleZ(bank)};
 }
 
 animals::DrawnBetweenTurns animals::DrawnAt(const glm::vec3& previousPosition, const glm::vec3& position, float previousHeading,
