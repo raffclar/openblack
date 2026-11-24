@@ -125,6 +125,7 @@ std::string GameInput::Apply(const InputEvent& event)
 		}
 		DebugWindowsFollowDrivenPointer(true);
 		// Written as the window would report it, should the scripted mouse be handed back before it is pumped
+		// NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage): the lines above set the pointer with all its fields
 		pointer = input::QueuedAhead(*actions.GetScriptedPointer(), ScreenSize());
 		std::ignore = input::Pump(pointer, sent, ScreenSize());
 		input::Device().PushEvent(sent);

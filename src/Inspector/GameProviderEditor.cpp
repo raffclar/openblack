@@ -491,7 +491,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		    {"scale", EditorEdit::Kind::Scale},
 		}};
 		const auto kind =
-		    std::ranges::find(k_Kinds, std::string_view(kindName), &std::pair<std::string_view, EditorEdit::Kind>::first);
+		    std::ranges::find(k_Kinds, std::string_view {kindName}, &std::pair<std::string_view, EditorEdit::Kind>::first);
 		if (kind == k_Kinds.end())
 		{
 			return QueryResult::Error("editor.network_edit needs a kind: move, turn, scale, place or remove");
@@ -762,7 +762,8 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto fieldParam = context.params.find("field");
 		const auto fieldName =
 		    fieldParam != context.params.end() && fieldParam->is_string() ? fieldParam->get<std::string>() : std::string();
-		const auto field = std::ranges::find(k_Fields, std::string_view(fieldName), &std::pair<std::string_view, Field>::first);
+		const auto field =
+		    std::ranges::find(k_Fields, std::string_view {fieldName}, &std::pair<std::string_view, Field>::first);
 		const auto entity = EntityParam(context.params);
 		if (!entity.has_value() || field == k_Fields.end())
 		{
@@ -1405,7 +1406,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto modeParam = context.params.find("mode");
 		const auto modeName =
 		    modeParam != context.params.end() && modeParam->is_string() ? modeParam->get<std::string>() : std::string();
-		const auto mode = std::ranges::find(k_Modes, std::string_view(modeName), &decltype(k_Modes)::value_type::first);
+		const auto mode = std::ranges::find(k_Modes, std::string_view {modeName}, &decltype(k_Modes)::value_type::first);
 		const auto position = PositionParam(context.params);
 		if (mode == k_Modes.end() || !position.has_value())
 		{
@@ -1553,7 +1554,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto nameParam = context.params.find("cheat");
 		const auto name =
 		    nameParam != context.params.end() && nameParam->is_string() ? nameParam->get<std::string>() : std::string();
-		const auto found = std::ranges::find(debug_cheats::k_CheatNames, std::string_view(name));
+		const auto found = std::ranges::find(debug_cheats::k_CheatNames, std::string_view {name});
 		if (found == debug_cheats::k_CheatNames.end())
 		{
 			return QueryResult::Error("editor.cheat needs the name of a cheat");
