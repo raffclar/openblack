@@ -280,6 +280,7 @@ std::vector<Step> creature_leash_orders::SleepAtHome(glm::vec2 home, float heigh
 		agenda.push_back(*rest);
 		++rest;
 	}
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	agenda.push_back(Walk(home, std::min(height, k_MaxSleepArrival), false));
 	agenda.insert(agenda.end(), rest, sleep.end());
 	return agenda;

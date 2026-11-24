@@ -177,12 +177,12 @@ glm::vec4 openblack::creature_fight::marks::FrameUv(uint32_t frame)
 
 glm::vec3 openblack::creature_fight::marks::ToLocal(const glm::mat4& frame, const glm::vec3& point)
 {
-	return glm::vec3(glm::inverse(frame) * glm::vec4(point, 1.0f));
+	return {glm::inverse(frame) * glm::vec4(point, 1.0f)};
 }
 
 glm::vec3 openblack::creature_fight::marks::ToWorld(const glm::mat4& frame, const glm::vec3& local)
 {
-	return glm::vec3(frame * glm::vec4(local, 1.0f));
+	return {frame * glm::vec4(local, 1.0f)};
 }
 
 glm::mat4 openblack::creature_fight::marks::GroundFrame(const glm::vec3& position, GameHeading heading)

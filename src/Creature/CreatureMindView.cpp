@@ -210,7 +210,7 @@ void Trace::Clear()
 
 void Trace::Add(PlanStep step)
 {
-	_steps.push_back(std::move(step));
+	_steps.push_back(step);
 	while (_steps.size() > k_PlanSteps)
 	{
 		_steps.pop_front();

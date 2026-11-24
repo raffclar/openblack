@@ -129,6 +129,7 @@ std::vector<Step> creature_mind::TakeToyHome(uint32_t toy, glm::vec2 home, float
 	        {.kind = Step::Kind::Move,
 	         .movement = {.kind = Movement::Kind::ToPoint,
 	                      .point = glm::vec2(x, z),
+	                      // NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	                      .maxDistance = std::min(height, k_ToyHomeNearest)},
 	         .face = Cue::Compassion,
 	         .gaze = GoingLook()},

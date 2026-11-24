@@ -94,6 +94,7 @@ std::vector<Step> creature_mind::RestToGetBetter()
 
 std::vector<Step> creature_mind::GoHomeToRecover(glm::vec2 home, float height)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return {WalkTo(home, std::min(height, k_FurthestFromHomeToRecover)), FaceDownSlope(), RestStep(), GetUpDazed()};
 }
 
@@ -142,6 +143,7 @@ std::vector<Step> creature_mind::PickUpAndCastRestoreHealth(uint32_t magicType, 
 
 std::vector<Step> creature_mind::GoHome(glm::vec2 home, float height)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return {WalkTo(home, std::min(height, k_FurthestFromHomeToStop))};
 }
 

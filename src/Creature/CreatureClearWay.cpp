@@ -70,6 +70,7 @@ std::optional<size_t> creature_clear_way::Choose(size_t count, const std::functi
 
 float creature_clear_way::WalkOnDistance(float height)
 {
+	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	return std::max(height, k_LeastWalkOnDistance);
 }
 

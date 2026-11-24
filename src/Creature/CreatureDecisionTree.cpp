@@ -125,7 +125,7 @@ size_t Grow(Tree& tree, std::vector<Episode> episodes, std::vector<Attribute> re
 		const auto value = *episode.belief.Value(*best);
 		if (value < range)
 		{
-			split[value].push_back(std::move(episode));
+			split[value].push_back(episode);
 		}
 	}
 	tree.nodes[index].test = best;
@@ -337,7 +337,7 @@ void creature_tree::AddEpisode(std::vector<Episode>& episodes, Episode episode)
 	{
 		episodes.resize(k_MaxEpisodes - 1);
 	}
-	episodes.push_back(std::move(episode));
+	episodes.push_back(episode);
 }
 
 std::optional<size_t> creature_tree::StepOf(float feedback)
