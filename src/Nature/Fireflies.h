@@ -138,8 +138,9 @@ struct Step
 /// Where the two loops put a firefly from the middle of its drift, after its loops have turned for `clock` seconds
 [[nodiscard]] glm::vec3 DriftOffset(const Drift& drift, float clock, float amplitude);
 
-/// The opacity, of 255, a firefly is drawn at this far from the camera (squared), or none beyond its reach
-[[nodiscard]] std::optional<uint8_t> OpacityAt(float distanceSquared);
+/// The opacity, of 255, a firefly is drawn at this far from the camera (squared), or none beyond its reach. With the
+/// player's "maximum detail" option, it is drawn at the near opacity at all distances.
+[[nodiscard]] std::optional<uint8_t> OpacityAt(float distanceSquared, bool maximumDetail = false);
 
 /// The cells the searches cover across a reach: a square of so many cells a side
 [[nodiscard]] int32_t SearchCells(float reach);

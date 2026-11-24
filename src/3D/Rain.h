@@ -100,6 +100,9 @@ struct View
 
 /// The game only looks at the rain over the land blocks in view that are nearer than this to the eye
 inline constexpr float k_BlockReach = 400.0f + 160.0f;
+/// The reach of the snow's blocks with the player's "maximum detail" option: none when the option is on, else
+/// k_BlockReach. The rain does not use it: the rain keeps the game's reach.
+[[nodiscard]] float BlockReach(bool maximumDetail) noexcept;
 /// A block's rain shows only when its most rain in percent is more than this
 inline constexpr int32_t k_LeastRain = 5;
 /// The strength of the rain over a block, 0 to 255, from its most rain in percent

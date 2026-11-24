@@ -162,6 +162,18 @@ TEST(Snowfall, FainterFurtherAway)
 	EXPECT_FALSE(snowfall::TileOf(centre, 100, {80.0f + 301.0f, 0.0f}).has_value());
 }
 
+// With the "maximum detail" option, a far quarter has the snow of a quarter 50 units away
+TEST(Snowfall, MaximumDetailDoesNotFadeTheSnow)
+{
+	const glm::vec2 centre {120.0f, 40.0f};
+	const auto tile = snowfall::TileOf(centre, 100, {80.0f + 2000.0f, 0.0f}, true);
+	ASSERT_TRUE(tile.has_value());
+	EXPECT_EQ(tile->alpha, 255);
+	EXPECT_EQ(tile->flakes, 256);
+	EXPECT_EQ(snowfall::TileOf(centre, 100, {80.0f + 175.0f, 0.0f}, true), tile);
+	EXPECT_EQ(snowfall::TileOf(centre, 100, {80.0f + 20.0f, 0.0f}, true), snowfall::TileOf(centre, 100, {80.0f + 20.0f, 0.0f}));
+}
+
 // The game scatters every flake two times when its weather opens, so it draws the numbers of all the flakes two times
 TEST(Snowfall, ScatteredTwoTimesAtOpen)
 {

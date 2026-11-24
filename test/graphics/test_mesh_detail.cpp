@@ -278,3 +278,31 @@ TEST(MeshDetail, MaximumDetailTakesTheHighMeshButKeepsTheFadeAndTheEnd)
 		}
 	}
 }
+
+TEST(MeshDetail, MaximumDetailRemovesTheFadeAndTheEndExceptForVillagers)
+{
+	// The option off keeps the game's choice
+	EXPECT_TRUE(mesh_detail::FadesOut(true, false, false));
+	EXPECT_TRUE(mesh_detail::FadesOut(true, false, true));
+	EXPECT_FALSE(mesh_detail::FadesOut(false, false, false));
+	// The option on: only a villager fades out and leaves the view
+	EXPECT_FALSE(mesh_detail::FadesOut(true, true, false));
+	EXPECT_TRUE(mesh_detail::FadesOut(true, true, true));
+	EXPECT_FALSE(mesh_detail::FadesOut(false, true, true));
+	const float reach = 2.0f;
+	for (const float depth : {10.0f, 200.0f, 300.0f, 1000.0f, 100000.0f})
+	{
+		// Any other thing takes its high mesh at full opacity at all depths
+		const auto thing =
+		    mesh_detail::Finest(mesh_detail::Choose(depth, reach, mesh_detail::FadesOut(true, true, false)), true);
+		ASSERT_TRUE(thing.mesh.has_value());
+		EXPECT_EQ(*thing.mesh, Mesh::High);
+		EXPECT_FALSE(thing.alpha.has_value());
+		// A villager keeps the fade and the end of the draw
+		const auto villager =
+		    mesh_detail::Finest(mesh_detail::Choose(depth, reach, mesh_detail::FadesOut(true, true, true)), true);
+		const auto vanilla = mesh_detail::Choose(depth, reach, true);
+		EXPECT_EQ(villager.alpha, vanilla.alpha);
+		EXPECT_EQ(villager.mesh.has_value(), vanilla.mesh.has_value());
+	}
+}

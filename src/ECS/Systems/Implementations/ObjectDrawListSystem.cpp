@@ -199,6 +199,14 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 			changed = object_draw_list::ShowingChanged(shows, block.shown) || changed;
 		}
 	}
+	// The player's "maximum detail" option removes the range and the most objects. A change of the option makes the
+	// list again.
+	const auto limits = object_draw_list::LimitsFor(Locator::config::has_value() && Locator::config::value().maximumDetail);
+	if (limits != _limits)
+	{
+		_limits = limits;
+		changed = true;
+	}
 	// Things made since the last frame go onto their blocks now, as the game puts them there when they are made
 	static_cast<void>(Locator::entitiesMap::value().GetOffBlocks());
 	_frame = _clock.Next(turn, _view->eye, camera.GetFocus(), changed || _requests.Pending());
@@ -291,7 +299,7 @@ void ObjectDrawListSystem::MakeList()
 	_farthestWalked = 0.0f;
 	for (const auto& block : nearToFar)
 	{
-		if (block.distance >= object_draw_list::k_Range)
+		if (block.distance >= _limits.range)
 		{
 			break;
 		}
@@ -300,7 +308,7 @@ void ObjectDrawListSystem::MakeList()
 	}
 	_list = object_draw_list::MakeList(
 	    nearToFar, [&map](glm::ivec2 block) { return map.GetOnBlock(block); }, offBlocks,
-	    [this](entt::entity entity) { return DrawnOnTheirOwn(*_registry, entity); });
+	    [this](entt::entity entity) { return DrawnOnTheirOwn(*_registry, entity); }, _limits);
 	for (const auto entity : _list)
 	{
 		const auto index = static_cast<size_t>(entt::to_entity(entity));
@@ -445,7 +453,7 @@ ObjectDrawListSystemInterface::Summary ObjectDrawListSystem::GetSummary() const
 	        .things = static_cast<uint32_t>(_list.size()),
 	        .kept = static_cast<uint32_t>(std::ranges::count_if(
 	            _list, [this](entt::entity entity) { return _keptByIndex[static_cast<size_t>(entt::to_entity(entity))]; })),
-	        .full = _list.size() >= object_draw_list::k_MostObjects,
+	        .full = _list.size() >= _limits.most,
 	        .rebuildsAsked = _requests.Left()};
 }
 

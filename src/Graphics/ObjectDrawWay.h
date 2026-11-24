@@ -47,9 +47,15 @@ inline constexpr uint32_t k_SortedWholeFlag = 0x200u;
 }
 
 /// Whether the far cull cuts a draw at once. The radius is half the diagonal of the mesh's box. The game multiplies it
-/// by the model's scale and then by 300, and compares the square with the square of the distance.
-[[nodiscard]] inline bool FarCulled(float halfDiagonal, float scale, const glm::vec3& place, const glm::vec3& camera) noexcept
+/// by the model's scale and then by 300, and compares the square with the square of the distance. With the player's
+/// "maximum detail" option, the far cull cuts no draw.
+[[nodiscard]] inline bool FarCulled(float halfDiagonal, float scale, const glm::vec3& place, const glm::vec3& camera,
+                                    bool maximumDetail) noexcept
 {
+	if (maximumDetail)
+	{
+		return false;
+	}
 	const float far = (halfDiagonal * scale) * k_FarCullRadii;
 	return (far * far) < zsort::Key(place, camera);
 }

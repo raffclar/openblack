@@ -434,6 +434,15 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			           ? GroundShadow::Fade(glm::distance(camera, glm::vec3(place.x, ground, place.z)), radius)
 			           : 0.0f;
 		};
+		// The fade of a creature's or the hand's shadow. With the player's "maximum detail" option, it has no range of
+		// the blocks and no fade with the distance.
+		const bool maximumDetail = Locator::config::value().maximumDetail;
+		const auto creatureFadeAt = [&sights, &camera, maximumDetail](const glm::vec3& place, float ground, float radius) {
+			return GroundShadow::NearBlockShows(place, sights, GroundShadow::CreatureBlockRange(maximumDetail))
+			           ? GroundShadow::CreatureFade(glm::distance(camera, glm::vec3(place.x, ground, place.z)), radius,
+			                                        maximumDetail)
+			           : 0.0f;
+		};
 		// A globe in a hand has no model of its own in the draws of the things in the hands. Its shadow uses the
 		// globe's dome where the hand holds it, as the shadow of any other thing does.
 		using HeldDraws = std::vector<ecs::systems::RenderContext::HighDetailDraw>;
@@ -474,8 +483,8 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				const auto radius =
 				    openblack::graphics::mesh_detail::HalfDiagonal(handMesh->GetBoundingBox().Size()) * scaleOf(model);
 				const auto& sky = Locator::skyClockSystem::value();
-				const auto fade =
-				    fadeAt(transform->position, ground, radius) * HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
+				const auto fade = creatureFadeAt(transform->position, ground, radius) *
+				                  HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
 				const auto alpha = GroundShadow::ScaledAlpha(fade);
 				// What the hand holds. The trees have a draw of their own, thus a held tree is in a list of its own.
 				const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
@@ -582,7 +591,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			const auto standsAt = glm::vec3(model[3]);
 			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
 			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
-			const auto alpha = GroundShadow::ScaledAlpha(fadeAt(standsAt, ground, radius));
+			const auto alpha = GroundShadow::ScaledAlpha(creatureFadeAt(standsAt, ground, radius));
 			if (alpha == 0)
 			{
 				continue;

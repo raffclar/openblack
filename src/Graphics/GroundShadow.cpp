@@ -25,7 +25,7 @@
 namespace openblack::graphics
 {
 
-bool GroundShadow::NearBlockShows(const glm::vec3& place, const BlockSights& sights)
+bool GroundShadow::NearBlockShows(const glm::vec3& place, const BlockSights& sights, float range)
 {
 	// The block of a point, none off the map. The game truncates towards zero, thus a point a little below 0 is on the
 	// map.
@@ -40,7 +40,7 @@ bool GroundShadow::NearBlockShows(const glm::vec3& place, const BlockSights& sig
 		return &sights.at(static_cast<size_t>(index));
 	};
 	// When the block of the place is present and not near, the shadow does not show
-	if (const auto* own = blockOf(place.x, place.z); own != nullptr && own->present && !(own->distance < k_BlockRange))
+	if (const auto* own = blockOf(place.x, place.z); own != nullptr && own->present && !(own->distance < range))
 	{
 		return false;
 	}
@@ -51,7 +51,7 @@ bool GroundShadow::NearBlockShows(const glm::vec3& place, const BlockSights& sig
 			const float x = (static_cast<float>(stepX) * k_BlockSearch) + place.x;
 			const float z = (static_cast<float>(stepZ) * k_BlockSearch) + place.z;
 			if (const auto* block = blockOf(x, z);
-			    block != nullptr && block->present && block->inView && block->distance < k_BlockRange)
+			    block != nullptr && block->present && block->inView && block->distance < range)
 			{
 				return true;
 			}
@@ -76,6 +76,20 @@ float GroundShadow::Fade(float cameraDistance, float radius)
 		return 255.0f - ((radii - k_FadeStart) * 255.0f) / (k_FadeEnd - k_FadeStart);
 	}
 	return 0.0f;
+}
+
+float GroundShadow::CreatureBlockRange(bool maximumDetail)
+{
+	return maximumDetail ? std::numeric_limits<float>::infinity() : k_BlockRange;
+}
+
+float GroundShadow::CreatureFade(float cameraDistance, float radius, bool maximumDetail)
+{
+	if (maximumDetail)
+	{
+		return radius > 0.0f ? 255.0f : 0.0f;
+	}
+	return Fade(cameraDistance, radius);
 }
 
 uint8_t GroundShadow::Alpha(float cameraDistance, float radius)

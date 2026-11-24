@@ -26,7 +26,8 @@ namespace
 constexpr float k_BlockSize = 160.0f;
 } // namespace
 
-std::vector<glm::vec2> weather_blocks::InView(const LandIslandInterface& island, const rain::View& view, bool reflected)
+std::vector<glm::vec2> weather_blocks::InView(const LandIslandInterface& island, const rain::View& view, bool reflected,
+                                              float reach)
 {
 	std::vector<glm::vec2> corners;
 	const glm::vec2 eye {view.eye.x, view.eye.z};
@@ -35,14 +36,14 @@ std::vector<glm::vec2> weather_blocks::InView(const LandIslandInterface& island,
 		const auto corner = block.GetMapPosition();
 		// A block that is further than the reach across the ground is also further than the reach from the eye
 		const auto& lnd = block.GetLndBlock();
-		if (lnd == nullptr || !(glm::distance(corner + glm::vec2(k_BlockSize * 0.5f), eye) < rain::k_BlockReach))
+		if (lnd == nullptr || !(glm::distance(corner + glm::vec2(k_BlockSize * 0.5f), eye) < reach))
 		{
 			continue;
 		}
 		const object_draw_list::Block box {
 		    .corner = corner, .highestAltitude = block.GetHighestAltitude(), .reflected = reflected};
 		if (object_draw_list::BlockInView(view.viewProjection, view.nearPlane, box) &&
-		    object_draw_list::BlockDistance(view.eye, box) < rain::k_BlockReach)
+		    object_draw_list::BlockDistance(view.eye, box) < reach)
 		{
 			corners.push_back(corner);
 		}

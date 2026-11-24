@@ -85,7 +85,9 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 	};
 	std::vector<Snowed> snowed;
 	bool snowing = false;
-	for (const auto& origin : weather_blocks::InView(island, view, detail.landReflection))
+	// The player's "maximum detail" option shows the snow over every block in view, with no fade by the distance
+	const bool maximumDetail = Locator::config::value().maximumDetail;
+	for (const auto& origin : weather_blocks::InView(island, view, detail.landReflection, rain::BlockReach(maximumDetail)))
 	{
 		for (const auto& quarter :
 		     std::array {glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f)})
@@ -100,7 +102,7 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 				snowiest = std::max<int32_t>(snowiest, weather.GetWeather(glm::vec3(point.x, 0.0f, point.y)).snow);
 			}
 			snowing = snowing || snowiest > snowfall::k_LeastSnow;
-			if (auto tile = snowfall::TileOf(centre, snowiest, eye))
+			if (auto tile = snowfall::TileOf(centre, snowiest, eye, maximumDetail))
 			{
 				tile->ground = island.GetHeightAt(tile->corner);
 				tile->sortKey = rain::DrawKey(centre, island.GetHeightAt(centre), view.eye);

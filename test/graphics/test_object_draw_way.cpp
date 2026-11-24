@@ -34,13 +34,22 @@ TEST(ObjectDrawWay, TheFarCullCutsAModelFurtherThan300OfItsRadii)
 {
 	const glm::vec3 camera {0.0f, 0.0f, 0.0f};
 	// A radius of 2 at a scale of 0.5 reaches 300 units
-	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.5f, {0.0f, 0.0f, 300.0f}, camera));
-	EXPECT_TRUE(object_draw::FarCulled(2.0f, 0.5f, {0.0f, 0.0f, 300.1f}, camera));
-	EXPECT_TRUE(object_draw::FarCulled(2.0f, 0.5f, {200.0f, 100.0f, 201.0f}, camera));
+	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.5f, {0.0f, 0.0f, 300.0f}, camera, false));
+	EXPECT_TRUE(object_draw::FarCulled(2.0f, 0.5f, {0.0f, 0.0f, 300.1f}, camera, false));
+	EXPECT_TRUE(object_draw::FarCulled(2.0f, 0.5f, {200.0f, 100.0f, 201.0f}, camera, false));
 	// A model at exactly 300 of its radii is not cut
-	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.5f, {200.0f, 100.0f, 200.0f}, camera));
+	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.5f, {200.0f, 100.0f, 200.0f}, camera, false));
 	// A model of no size is cut at once
-	EXPECT_TRUE(object_draw::FarCulled(2.0f, 0.0f, {0.0f, 0.0f, 1.0f}, camera));
+	EXPECT_TRUE(object_draw::FarCulled(2.0f, 0.0f, {0.0f, 0.0f, 1.0f}, camera, false));
+}
+
+// With the "maximum detail" option, the far cull cuts no draw
+TEST(ObjectDrawWay, MaximumDetailRemovesTheFarCull)
+{
+	const glm::vec3 camera {0.0f, 0.0f, 0.0f};
+	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.5f, {0.0f, 0.0f, 300.1f}, camera, true));
+	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.5f, {0.0f, 0.0f, 5000.0f}, camera, true));
+	EXPECT_FALSE(object_draw::FarCulled(2.0f, 0.0f, {0.0f, 0.0f, 1.0f}, camera, true));
 }
 
 // The object draw cuts a model after its fade and gives no draw

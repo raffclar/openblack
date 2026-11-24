@@ -25,7 +25,9 @@ namespace openblack::weather_blocks
 {
 
 /// The corners of the land blocks in view whose box middle is nearer than the reach to the eye, in the order of the
-/// land's blocks. When the reflection shows, a box goes down to the water's level.
-[[nodiscard]] std::vector<glm::vec2> InView(const LandIslandInterface& island, const rain::View& view, bool reflected);
+/// land's blocks. When the reflection shows, a box goes down to the water's level. The reach is rain::k_BlockReach, or
+/// none with the player's "maximum detail" option (see rain::BlockReach).
+[[nodiscard]] std::vector<glm::vec2> InView(const LandIslandInterface& island, const rain::View& view, bool reflected,
+                                            float reach = rain::k_BlockReach);
 
 } // namespace openblack::weather_blocks

@@ -170,6 +170,14 @@ TEST(FishShoal, AShoalFadesOutPastTwoHundredMetresAndIsGoneAtThreeHundred)
 	EXPECT_FALSE(fish_shoal::AlphaAt(301.0f * 301.0f).has_value());
 }
 
+// With the "maximum detail" option, a shoal shows fully opaque at all distances
+TEST(FishShoal, MaximumDetailShowsTheShoalAtAllDistances)
+{
+	EXPECT_EQ(fish_shoal::AlphaAt(48400.0f, true), 255);
+	EXPECT_EQ(fish_shoal::AlphaAt(301.0f * 301.0f, true), 255);
+	EXPECT_EQ(fish_shoal::AlphaAt(5000.0f * 5000.0f, true), 255);
+}
+
 TEST(FishShoal, AFishIsMadeAboutItsCentre)
 {
 	std::vector<std::pair<float, float>> asked;

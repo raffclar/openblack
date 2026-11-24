@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <limits>
 #include <optional>
 #include <span>
 #include <unordered_set>
@@ -175,6 +176,29 @@ template <typename CornerAt>
 /// The most objects the list holds; the nearest blocks fill it first
 constexpr size_t k_MostObjects = 2999;
 
+/// How far the list reaches and how many objects it holds
+struct Limits
+{
+	/// A land block's objects are in the list when the block's middle is nearer the eye than this
+	float range {k_Range};
+	/// The most objects the list holds
+	size_t most {k_MostObjects};
+
+	bool operator==(const Limits&) const = default;
+};
+
+/// The limits of the list with the player's "maximum detail" option. When the option is on, the list has no range and
+/// no most objects, thus it holds the objects on all the blocks in view. When the option is off, the limits are the
+/// game's.
+[[nodiscard]] constexpr Limits LimitsFor(bool maximumDetail) noexcept
+{
+	if (maximumDetail)
+	{
+		return {.range = std::numeric_limits<float>::infinity(), .most = std::numeric_limits<size_t>::max()};
+	}
+	return {};
+}
+
 /// A land block in view, by its column and row, and how far the eye is from its middle
 struct NearBlock
 {
@@ -188,13 +212,13 @@ struct NearBlock
 
 /// Makes the draw list. The blocks are walked from near to far up to the first that isn't within range; each adds its
 /// objects in the order it keeps them, then the objects off the land's blocks. An object already listed, or one left
-/// out (`leftOut`: those drawn on their own), isn't added, and once the list holds `most` nothing more is.
+/// out (`leftOut`: those drawn on their own), isn't added, and once the list holds `limits.most` nothing more is.
 /// `objectsOn(block)` gives a block's objects.
 template <typename ObjectsOn, typename LeftOut>
 [[nodiscard]] std::vector<entt::entity> MakeList(std::span<const NearBlock> nearToFar, ObjectsOn&& objectsOn,
-                                                 std::span<const entt::entity> offBlocks, LeftOut&& leftOut,
-                                                 size_t most = k_MostObjects)
+                                                 std::span<const entt::entity> offBlocks, LeftOut&& leftOut, Limits limits = {})
 {
+	const size_t most = limits.most;
 	std::vector<entt::entity> list;
 	std::unordered_set<entt::entity> listed;
 	const auto add = [&](std::span<const entt::entity> objects) {
@@ -213,7 +237,7 @@ template <typename ObjectsOn, typename LeftOut>
 	};
 	for (const auto& block : nearToFar)
 	{
-		if (block.distance >= k_Range)
+		if (block.distance >= limits.range)
 		{
 			break;
 		}

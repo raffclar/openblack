@@ -112,7 +112,7 @@ std::array<glm::vec3, 4> Corners(const Flake& flake)
 	return {middle + across + up, middle + across - up, middle - across - up, middle - across + up};
 }
 
-std::optional<Tile> TileOf(glm::vec2 centre, int32_t snowiest, glm::vec2 camera)
+std::optional<Tile> TileOf(glm::vec2 centre, int32_t snowiest, glm::vec2 camera, bool maximumDetail)
 {
 	if (snowiest <= k_LeastSnow)
 	{
@@ -128,7 +128,9 @@ std::optional<Tile> TileOf(glm::vec2 centre, int32_t snowiest, glm::vec2 camera)
 	// The flakes fall about the quarter's corner, in whole quarters across the land
 	const glm::vec2 corner {std::trunc(centre.x / k_Span) * k_Span, std::trunc(centre.y / k_Span) * k_Span};
 	const auto offset = camera - corner;
-	const float distance = std::sqrt((offset.x * offset.x) + (offset.y * offset.y));
+	const float straight = std::sqrt((offset.x * offset.x) + (offset.y * offset.y));
+	// With the player's "maximum detail" option, the snow does not fade past the near distance
+	const float distance = maximumDetail ? std::min(straight, k_Fading) : straight;
 	if (distance > k_Farthest)
 	{
 		return std::nullopt;

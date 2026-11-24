@@ -83,7 +83,8 @@ struct Tile
 	bool operator==(const Tile&) const = default;
 };
 /// The snow over the quarter of a land block centred at `centre`, the most snow about it being `snowiest` percent: none
-/// for a little snow or a quarter too far from the camera, and fainter from 50 units away
-[[nodiscard]] std::optional<Tile> TileOf(glm::vec2 centre, int32_t snowiest, glm::vec2 camera);
+/// for a little snow or a quarter too far from the camera, and fainter from 50 units away. With the player's "maximum
+/// detail" option, a quarter further than 50 units has the snow of a quarter at 50 units.
+[[nodiscard]] std::optional<Tile> TileOf(glm::vec2 centre, int32_t snowiest, glm::vec2 camera, bool maximumDetail = false);
 
 } // namespace openblack::snowfall

@@ -65,11 +65,12 @@ public:
 };
 
 std::vector<entt::entity> Make(std::span<const NearBlock> blocks, const FakeBlocks& fake, std::span<const entt::entity> off,
-                               size_t most = k_MostObjects, std::vector<entt::entity> leftOut = {})
+                               size_t most = k_MostObjects, std::vector<entt::entity> leftOut = {}, float range = k_Range)
 {
 	return MakeList(
 	    blocks, [&fake](glm::ivec2 block) { return fake.On(block); }, off,
-	    [&leftOut](entt::entity entity) { return std::ranges::find(leftOut, entity) != leftOut.end(); }, most);
+	    [&leftOut](entt::entity entity) { return std::ranges::find(leftOut, entity) != leftOut.end(); },
+	    Limits {.range = range, .most = most});
 }
 } // namespace
 
@@ -150,6 +151,26 @@ TEST(ObjectDrawList, TheListHoldsAtMost2999)
 	const auto list = Make(blocks, fake, {});
 	ASSERT_EQ(list.size(), 2999u);
 	EXPECT_EQ(list.back(), E(2998));
+}
+
+// With the "maximum detail" option, the list has no range and no most objects
+TEST(ObjectDrawList, MaximumDetailListsEveryBlockInViewAndEveryObject)
+{
+	EXPECT_EQ(LimitsFor(false), Limits {});
+	EXPECT_EQ(LimitsFor(false).range, 700.0f);
+	EXPECT_EQ(LimitsFor(false).most, 2999u);
+	const auto limits = LimitsFor(true);
+	FakeBlocks fake;
+	auto& many = fake.objects[{0, 0}];
+	for (uint32_t i = 0; i < 4000; ++i)
+	{
+		many.push_back(E(i));
+	}
+	fake.objects[{1, 0}] = {E(5000)};
+	const std::vector<NearBlock> blocks {{.block = {0, 0}, .distance = 10.0f}, {.block = {1, 0}, .distance = 5000.0f}};
+	const auto list = Make(blocks, fake, {}, limits.most, {}, limits.range);
+	ASSERT_EQ(list.size(), 4001u);
+	EXPECT_EQ(list.back(), E(5000));
 }
 
 TEST(BlockLists, ThingsGoToTheBackOfTheirBlock)
