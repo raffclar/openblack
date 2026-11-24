@@ -129,6 +129,7 @@ std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
 			return static_cast<size_t>(size);
 		}
 	}
+	// NOLINTNEXTLINE(bugprone-empty-catch): a file that the code cannot find gives nothing to load
 	catch (const std::exception&)
 	{
 		// Not found: there is nothing to load
