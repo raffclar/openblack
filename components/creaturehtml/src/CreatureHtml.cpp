@@ -100,7 +100,7 @@ std::string creaturehtml::Fill(std::string_view page, std::span<const Value> val
 				break;
 			}
 		}
-		FillPart(std::string_view(text).substr(start, end - start), values, filled);
+		FillPart(std::string_view {text}.substr(start, end - start), values, filled);
 		start = end;
 	}
 

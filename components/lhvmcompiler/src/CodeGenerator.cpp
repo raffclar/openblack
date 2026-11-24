@@ -289,14 +289,14 @@ void CodeGenerator::CompileScript(const ParsedScript& parsed, const std::string&
 	const auto except = EmitPlaceholder(Opcode::Except);
 	for (const auto& param : script.params)
 	{
-		Emit(Opcode::Pop, VMMode::Reference, DataType::Float, *VariableId(param));
+		Emit(Opcode::Pop, VMMode::Reference, DataType::Float, VariableId(param).value());
 	}
 	for (const auto& local : script.locals)
 	{
 		SetLine(*local);
 		EmitValue(*local->expr, ArgType::Float);
 		_line = _map->EndLine(local.get());
-		Emit(Opcode::Pop, VMMode::Reference, DataType::Float, *VariableId(local->name));
+		Emit(Opcode::Pop, VMMode::Reference, DataType::Float, VariableId(local->name).value());
 	}
 	_line = 0;
 	Emit(Opcode::EndExcept, VMMode::Yield, DataType::Int, 0);

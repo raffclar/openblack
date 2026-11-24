@@ -101,6 +101,8 @@ struct God
 	bool operator==(const God&) const = default;
 };
 
+// The report comes from the copy of an optional that holds a value.
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct Start
 {
 	/// The script of the land, as a path under the Scripts folder of the game (for example "Land1.txt" or

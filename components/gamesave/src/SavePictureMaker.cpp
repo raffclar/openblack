@@ -346,6 +346,7 @@ std::vector<uint8_t> openblack::gamesave::WritePictureFile(std::span<const uint8
 
 std::vector<uint8_t> openblack::gamesave::NewPictureBlocks()
 {
+	// NOLINTNEXTLINE(modernize-return-braced-init-list): a braced list would not call the count and value constructor
 	return std::vector<uint8_t>(k_PictureDataSize, 0xFF);
 }
 

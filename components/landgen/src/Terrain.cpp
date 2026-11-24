@@ -1209,6 +1209,8 @@ Grid<float> terrain::ShoreShelf(Grid<float>& heights, const Grid<float>* riverDi
 			}
 			// Land near the water is never lower than the shore steps, so that no land is at the sea level
 			const float lowest = ShoreStepAt(away);
+			// The arguments are in the right order; the clamp order is kept, and the order of the arguments is right.
+			// NOLINTNEXTLINE(readability-suspicious-call-argument)
 			height = std::max(std::min(height, highest), lowest);
 		}
 	}

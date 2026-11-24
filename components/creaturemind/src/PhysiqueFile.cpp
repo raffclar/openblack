@@ -72,6 +72,8 @@ public:
 		std::vector<uint32_t> marks(*count);
 		for (auto& mark : marks)
 		{
+			// The read gives a value or the default, so the path cannot happen.
+			// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 			// The size check above makes sure that every mark is in the bytes
 			mark = Get<uint32_t>().value_or(0);
 		}
