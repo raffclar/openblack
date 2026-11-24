@@ -3,7 +3,7 @@
 [ ${#IN[@]} -gt 0 ] || { echo "STOP: nothing merged"; exit 1; }
 if [ -f src/Debug/TestbedScenarioRegistry.h ]; then
   python "$HERE/fix_kind_names.py" . || { echo "STOP: testbed kinds and names differ"; exit 3; }
-  [ -n "$(git status --porcelain src/Debug/TestbedScenarioRegistry.cpp)" ] && git commit -qam "Testbed: the command names array holds every command after the merge" -m "$OB_TRAIN_TRAILER"
+  [ -n "$(git status --porcelain src/Debug/TestbedScenarioRegistry.cpp)" ] && git commit -qam "Testbed: the command names array holds every command after the merge"
 fi
 echo "--- format (clang-format 17, every changed C++ file)"; bash "$HERE/format_check.sh" "$WT" </dev/null || { echo "STOP: format: a changed C++ file is not clang-format 17 clean, or clang-format 17 is missing (see the lines above)"; exit 21; }
 extra_check start "$WT" "$NAME"
@@ -45,7 +45,7 @@ for f in car-*.log; do mv "$f" "$P/carlogs/batch$NAME-$f"; done
 OPENBLACK_UPDATE_INSPECTOR_QUERIES=1 $OB test -R '^test_inspector_systems$' 2>&1 | grep "tests passed"
 python tools/inspector/generate_component_fields.py >/dev/null 2>&1
 if [ -n "$(git status --porcelain)" ]; then
-  git add -u && git commit -q -m "Inspector: regenerate the catalogue and component fields" -m "$OB_TRAIN_TRAILER"
+  git add -u && git commit -q -m "Inspector: regenerate the catalogue and component fields"
 fi
 cd "$OB_MAIN_CHECKOUT" && git fetch -q $R
 git -C "$WT" merge-base --is-ancestor $R/$M HEAD || { echo "STOP: $M moved during the build"; exit 9; }
@@ -66,7 +66,6 @@ body=$P/prs/batch-$NAME.md
       echo "### ${c#*:} (no PR body in prs/$s.md)"
     fi
   done
-  echo; echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 } > "$body"
 titles=$(for c in "${IN[@]}"; do echo -n "${c#*:}, "; done | sed 's/, $//')
 url=$(gh pr create -R "$OB_GITHUB_REPO" --base $M --head batch-$NAME-pr --title "Merge train $N: batch $NAME ($titles)" --body-file "$body") || { echo "STOP: pr create failed"; exit 10; }
