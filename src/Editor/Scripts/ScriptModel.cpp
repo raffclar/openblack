@@ -245,7 +245,7 @@ namespace
 std::string_view TypeSuffix(DataType type)
 {
 	const auto index = static_cast<size_t>(type);
-	return index < lhvm::k_DataTypeChars.size() ? std::string_view(lhvm::k_DataTypeChars.at(index)) : std::string_view();
+	return index < lhvm::k_DataTypeChars.size() ? std::string_view {lhvm::k_DataTypeChars.at(index)} : std::string_view();
 }
 
 std::string OpcodeName(Opcode code)

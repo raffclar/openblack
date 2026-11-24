@@ -133,7 +133,7 @@ glm::mat3 YawRotation(float yawRadians)
 {
 	// The edits of a network game turn things with this rotation on every computer. The portable sine and cosine give the
 	// same bits on each build, and the C library does not.
-	return glm::mat3(portable_math::EulerAngleY(yawRadians));
+	return {portable_math::EulerAngleY(yawRadians)};
 }
 
 float YawOf(const glm::mat3& rotation)
