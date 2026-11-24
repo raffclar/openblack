@@ -26,6 +26,8 @@ public:
 	[[nodiscard]] entt::entity Hand() const override;
 	[[nodiscard]] PlayerNames HandPlayer() const override;
 	void SetActingPlayer(std::optional<PlayerNames> player) override { _acting = player; }
+	[[nodiscard]] std::optional<glm::vec3> MindTurnPlaceOf(entt::entity hand) const override;
+	[[nodiscard]] std::optional<glm::vec3> MindDrawnPlaceOf(entt::entity hand) const override;
 	[[nodiscard]] bool IsOtherPlayersHand(entt::entity hand) const override;
 	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity hand) const override;
 	[[nodiscard]] glm::vec3 AsMapPlace(glm::vec3 point) const override;

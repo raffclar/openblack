@@ -41,6 +41,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -49,6 +50,7 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -130,6 +132,7 @@
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
 #include "EngineConfig.h"
+#include "Hand/GodHand.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
 #include "Help/HelpProfile.h"
@@ -1111,6 +1114,59 @@ glm::vec3 GameHandGrabWorld::ReportedPlaceOf(entt::entity hand) const
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
 	return reported != nullptr ? reported->handPoint : glm::vec3(0.0f);
+}
+
+namespace
+{
+/// The entity of the player of a hand, when a computer mind plays that player. None for the hand of a person.
+std::optional<entt::entity> MindPlayerOf(entt::entity hand)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	// The hands of the first player have no god's mark
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	const auto player = god != nullptr ? god->player : PlayerNames::PLAYER_ONE;
+	const auto& players = Locator::playerSystem::value();
+	if (players.IsHumanPlayer(player))
+	{
+		return std::nullopt;
+	}
+	const auto entity = players.FindPlayer(player);
+	if (!entity.has_value() || !registry.Valid(*entity) || !registry.AllOf<ComputerPlayer>(*entity))
+	{
+		return std::nullopt;
+	}
+	return entity;
+}
+} // namespace
+
+std::optional<glm::vec3> GameHandGrabWorld::MindTurnPlaceOf(entt::entity hand) const
+{
+	// The input of each turn copies the place that the mind reported after its last step. Before the first step, the
+	// mind has no report, and the hand is at the origin of the world.
+	const auto entity = MindPlayerOf(hand);
+	if (!entity.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* mind = Locator::entitiesRegistry::value().TryGet<const ComputerPlayer>(*entity);
+	return mind != nullptr && mind->hand.reported.has_value() ? *mind->hand.reported : god_hand::k_NoReport;
+}
+
+std::optional<glm::vec3> GameHandGrabWorld::MindDrawnPlaceOf(entt::entity hand) const
+{
+	// The hand of the god as the world has it after the turn. This is the place of the input, or the place before the
+	// step of the mind.
+	const auto entity = MindPlayerOf(hand);
+	if (!entity.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* stillness = Locator::entitiesRegistry::value().TryGet<const HandStillness>(*entity);
+	return stillness != nullptr ? std::optional(stillness->last) : MindTurnPlaceOf(hand);
 }
 
 bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const

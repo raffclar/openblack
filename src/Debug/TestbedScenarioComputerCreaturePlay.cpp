@@ -165,6 +165,27 @@ void testbed_scenarios::AddComputerGodCreaturePlayScenarios(std::vector<Scenario
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
 	});
+	// The same food in the hand of the god, seen as another god of a network game
+	all.push_back({
+	    .id = "mind.computer_god_carry_network",
+	    .name = "What the hand of a computer god carries in a network game",
+	    .facet = Facet::Mind,
+	    .description = "The scenario of the god that throws food at its creature, but the testbed acts as a network game. "
+	                   "This computer does not draw the hand of the computer god. It draws only the food that the hand "
+	                   "holds.",
+	    .expected = "The hand of the god takes food from a field and moves it to 20 metres from the tiger. The food moves "
+	                "in steps, ten steps each second. It does not glide between two steps. Then the food falls near the "
+	                "tiger in an arc.",
+	    .environment = {.networkGame = true},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(140.0f, 100.0f)}},
+	    .creatures = {GodCreature({30.0f, -30.0f})},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {100.0f, 20.0f}, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = {100.0f, 60.0f}, .ripeCrop = true}},
+	    .landScript = k_ComputerGodTownScript,
+	    .commands = StrokeThen("ThrowFoodatCreature"),
+	    .worshipShare = 0.5f,
+	    .objectsAfterLandScript = true,
+	});
 	all.push_back({
 	    .id = "mind.computer_god_slap",
 	    .name = "A computer god that slaps its creature",
