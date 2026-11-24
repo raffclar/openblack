@@ -231,8 +231,9 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 	}
 
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
-	for (uint8_t slot = 0; slot < _lakePasses.size(); ++slot)
+	for (size_t index = 0; index < _lakePasses.size(); ++index)
 	{
+		const auto slot = static_cast<uint8_t>(index);
 		const auto& pass = _lakePasses[slot];
 		const float level = _lakeLevels[pass.level].level;
 		_lakeMirrorLevels.at(slot) = level;

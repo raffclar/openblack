@@ -1181,7 +1181,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 
 	auto& history = system.GetHistory();
 	// In a network game undo and redo wait for the turn of the last change of the editor
-	const auto waitNote = history.Waiting() ? " (waits for the turn of the last change)" : "";
+	const auto* const waitNote = history.Waiting() ? " (waits for the turn of the last change)" : "";
 	ImGui::BeginDisabled(!history.CanUndo());
 	if (ImGui::Button("Undo"))
 	{
