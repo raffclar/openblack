@@ -170,7 +170,7 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 				}
 			}
 		}
-		bodies.push_back(std::move(drawn));
+		bodies.push_back(drawn);
 	}
 	if (instances.empty())
 	{

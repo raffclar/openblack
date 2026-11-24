@@ -72,7 +72,8 @@ public:
 		std::vector<uint32_t> marks(*count);
 		for (auto& mark : marks)
 		{
-			mark = *Get<uint32_t>();
+			// The size check above makes sure that every mark is in the bytes
+			mark = Get<uint32_t>().value_or(0);
 		}
 		return marks;
 	}

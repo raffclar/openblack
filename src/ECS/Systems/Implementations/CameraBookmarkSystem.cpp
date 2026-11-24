@@ -119,9 +119,9 @@ void CameraBookmarkSystem::ForgetLand()
 
 void CameraBookmarkSystem::ResetSlots()
 {
-	for (uint8_t number = 0; number < _slots.size(); ++number)
+	for (size_t slot = 0; slot < _slots.size(); ++slot)
 	{
-		_slots.at(number) = CameraBookmark {.number = number};
+		_slots.at(slot) = CameraBookmark {.number = static_cast<uint8_t>(slot)};
 	}
 }
 
@@ -224,10 +224,10 @@ bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
 	auto slots = _slots;
 	if (in.Remaining() > 0)
 	{
-		for (uint8_t number = 0; number < slots.size(); ++number)
+		for (size_t slot = 0; slot < slots.size(); ++slot)
 		{
-			auto& bookmark = slots.at(number);
-			bookmark = CameraBookmark {.number = number};
+			auto& bookmark = slots.at(slot);
+			bookmark = CameraBookmark {.number = static_cast<uint8_t>(slot)};
 			reflection::Load(in, bookmark.set);
 			reflection::Load(in, bookmark.point);
 			reflection::Load(in, bookmark.thing);
