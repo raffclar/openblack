@@ -55,6 +55,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -63,6 +64,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
@@ -276,17 +278,10 @@ void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId
 		return;
 	}
 	const auto& walls = *meshes.Handle(wallsId);
-	const auto& infos = Locator::infoConstants::value().vortex;
 	// Every frame, open or not: four walls round a square under the vortex's middle, from the sea's level down, at the
 	// kind's base size and facing out, that write their depth and no colour, before the funnel and the land
-	desc.entities.Each<const ecs::components::Vortex>([&](entt::entity, const ecs::components::Vortex& vortex) {
-		const auto row = static_cast<size_t>(vortex.type);
-		if (row >= infos.size())
-		{
-			return;
-		}
-		const auto model =
-		    glm::translate(glm::vec3(vortex.centre.x, 0.0f, vortex.centre.z)) * glm::scale(glm::vec3(infos.at(row).baseScale));
+	for (const auto& model : desc.frame->effects.vortexWalls)
+	{
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = viewId;
 		submitDesc.program = _shaderManager->GetShader("Object");
@@ -295,7 +290,7 @@ void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId
 		submitDesc.modelMatrices = &model;
 		submitDesc.matrixCount = 1;
 		DrawMesh(walls, submitDesc, std::numeric_limits<uint8_t>::max());
-	});
+	}
 }
 
 void Renderer::DrawMists(const DrawSceneDesc& desc) const
@@ -327,7 +322,6 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const glm::vec4 skyLight {0.0f, 500000.0f, 0.0f, 210.0f};
 
 	// The clouds' colour follows the sky's alignment, in the land's light at full luminosity
-	const bool cloudsShown = Locator::config::value().detail.clouds;
 	uint32_t fullLight = 0xFFFFFF;
 	if (_landLightTable)
 	{
@@ -426,22 +420,18 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		}
 	};
 
-	desc.entities.Each<const Mist, const ecs::components::Transform>(
-	    [&](const Mist& mist, const ecs::components::Transform& transform) {
-		    // A land mist draws with an alpha that its whole alpha gives, not with the alpha byte of its colour
-		    const auto drawnAlpha = mists::DrawnAlpha(mists::WholeAlphaOf(mist.colour, mist.alphaHighBits));
-		    drawMist(mist, transform.position, (static_cast<uint32_t>(drawnAlpha) << 24u) | (mist.colour & 0xFFFFFFu), nullptr);
-	    });
-	// The sky's clouds are things of the drawn registry
-	if (cloudsShown && Locator::drawnRegistry::has_value())
+	for (const auto& [mist, position] : desc.frame->effects.landMists)
 	{
-		std::as_const(Locator::drawnRegistry::value())
-		    .Each<const ecs::components::Cloud, const Mist, const ecs::components::Transform>(
-		        [&](const ecs::components::Cloud& /*unused*/, const Mist& mist, const ecs::components::Transform& transform) {
-			        // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
-			        const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
-			        drawMist(mist, transform.position, (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu), nullptr);
-		        });
+		// A land mist draws with an alpha that its whole alpha gives, not with the alpha byte of its colour
+		const auto drawnAlpha = mists::DrawnAlpha(mists::WholeAlphaOf(mist.colour, mist.alphaHighBits));
+		drawMist(mist, position, (static_cast<uint32_t>(drawnAlpha) << 24u) | (mist.colour & 0xFFFFFFu), nullptr);
+	}
+	// The fill copied the sky's clouds only when they show
+	for (const auto& [mist, position] : desc.frame->effects.skyClouds)
+	{
+		// How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
+		const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
+		drawMist(mist, position, (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu), nullptr);
 	}
 	// A storm's cloud takes the land's colour, darkened by the storm's shade
 	for (const auto& stormCloud : desc.frame->effects.stormClouds)
@@ -454,12 +444,12 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 void Renderer::DrawInfluenceRipples(const DrawSceneDesc& desc) const
 {
 	using ecs::components::Mist;
-	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->effects.influenceShown)
 	{
 		return;
 	}
 	const auto& textures = Locator::resources::value().GetTextures();
-	const auto ripples = Locator::influenceSystem::value().GetRipples();
+	const auto& ripples = desc.frame->effects.borderRipples;
 	if (ripples.empty() || !textures.Contains(Mist::k_TextureId) || !textures.Contains(Mist::k_AlphaTextureId))
 	{
 		return;
@@ -523,7 +513,7 @@ void Renderer::DrawInfluenceRipples(const DrawSceneDesc& desc) const
 
 void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->effects.influenceShown)
 	{
 		return;
 	}
@@ -549,8 +539,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	const auto& influenceSystem = Locator::influenceSystem::value();
-	const auto offset = influenceSystem.GetScrollOffset();
+	const auto offset = desc.frame->effects.borderScroll;
 	struct Vertex
 	{
 		glm::vec3 position;
@@ -582,12 +571,9 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 		return;
 	}
-	for (const auto& circle : influenceSystem.GetCircles())
+	// The fill copied only the circles of the borders that show
+	for (const auto& circle : desc.frame->effects.borderCircles)
 	{
-		if (!influenceSystem.IsBorderShown(circle.player))
-		{
-			continue;
-		}
 		const auto& curtain = circle.curtain;
 		const auto vertexCount = static_cast<uint32_t>(curtain.positions.size());
 		const auto indexCount = static_cast<uint32_t>(curtain.indices.size());
@@ -650,11 +636,8 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 	const auto origin = desc.camera->GetOrigin();
 	// Turned to face the camera, with the texture's own alpha, blended over what is behind
 	const glm::vec4 u_spriteParams {1.0f, 1.0f, 0.0f, 0.0f};
-	desc.entities.Each<const ChimneySmoke>([&](const ChimneySmoke& smoke) {
-		if (smoke.state == ChimneySmoke::State::Out)
-		{
-			return;
-		}
+	for (const auto& smoke : desc.frame->effects.chimneySmokes)
+	{
 		// The whole smoke takes its place in the sort by its chimney, its puffs in turn
 		const auto depth = zsort::Depth(smoke.chimney, origin);
 		for (const auto& puff : smoke.puffs)
@@ -686,7 +669,7 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 			               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 			spriteShader->Submit(viewId, depth);
 		}
-	});
+	}
 }
 
 void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
@@ -755,10 +738,145 @@ void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 	program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 
+void Renderer::CollectRainAndSnow(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
+{
+	effects.rainTiles.clear();
+	effects.rainStreaks.clear();
+	effects.rainHeight = 0.0f;
+	effects.snowTiles.clear();
+	effects.snowFlakes.clear();
+	// The systems count the tiles that the fill takes as drawn. Only the main view shows the rain and the snow. A warm-up,
+	// the temple and a frame without the things of the world show none.
+	if (_warmingUp || !drawDesc.drawEntities || drawDesc.frame == nullptr || drawDesc.frame->templeActive)
+	{
+		return;
+	}
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (!textures.Contains(entt::hashed_string("raw/ATMOS").value()) ||
+	    !textures.Contains(entt::hashed_string("raw/ATMOSA").value()))
+	{
+		return;
+	}
+	const rain::View view {.eye = drawDesc.camera->GetOrigin(),
+	                       .viewProjection = drawDesc.camera->GetViewProjectionMatrix(),
+	                       .nearPlane = drawDesc.camera->GetNearClip()};
+	if (Locator::rainSystem::has_value())
+	{
+		auto& rainSystem = Locator::rainSystem::value();
+		effects.rainTiles = rainSystem.TakeTiles(view);
+		if (!effects.rainTiles.empty())
+		{
+			const auto most = std::ranges::max(effects.rainTiles, {}, &rain::Tile::streaks).streaks;
+			const auto streaks = rainSystem.GetStreaks();
+			const auto count = std::min(streaks.size(), static_cast<size_t>(std::max(most, 0)));
+			effects.rainStreaks.assign(streaks.begin(), streaks.begin() + static_cast<std::ptrdiff_t>(count));
+			effects.rainHeight = rainSystem.GetHeight();
+		}
+	}
+	if (Locator::snowfallSystem::has_value())
+	{
+		auto& snowfallSystem = Locator::snowfallSystem::value();
+		effects.snowTiles = snowfallSystem.TakeTiles(view);
+		if (!effects.snowTiles.empty())
+		{
+			const auto most = std::ranges::max(effects.snowTiles, {}, &snowfall::Tile::flakes).flakes;
+			const auto flakes = snowfallSystem.GetFlakes();
+			const auto count = std::min(flakes.size(), static_cast<size_t>(std::max(most, 0)));
+			effects.snowFlakes.assign(flakes.begin(), flakes.begin() + static_cast<std::ptrdiff_t>(count));
+		}
+	}
+}
+
+void Renderer::CollectMistsAndSmoke(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
+{
+	using ecs::components::Mist;
+	using ecs::components::Transform;
+	effects.chimneySmokes.clear();
+	drawDesc.entities.Each<const ecs::components::ChimneySmoke>([&effects](const ecs::components::ChimneySmoke& smoke) {
+		if (smoke.state != ecs::components::ChimneySmoke::State::Out)
+		{
+			effects.chimneySmokes.push_back(smoke);
+		}
+	});
+	effects.landMists.clear();
+	drawDesc.entities.Each<const Mist, const Transform>([&effects](const Mist& mist, const Transform& transform) {
+		effects.landMists.push_back({.mist = mist, .position = transform.position});
+	});
+	effects.skyClouds.clear();
+	if (Locator::config::value().detail.clouds && Locator::drawnRegistry::has_value())
+	{
+		std::as_const(Locator::drawnRegistry::value())
+		    .Each<const ecs::components::Cloud, const Mist, const Transform>(
+		        [&effects](const ecs::components::Cloud& /*unused*/, const Mist& mist, const Transform& transform) {
+			        effects.skyClouds.push_back({.mist = mist, .position = transform.position});
+		        });
+	}
+	effects.villagerEyes.clear();
+	drawDesc.entities.Each<const ecs::components::HighDetail, const ecs::components::Mesh>(
+	    [&effects](const ecs::components::HighDetail& detail, const ecs::components::Mesh& mesh) {
+		    if (detail.drawnEyes.has_value() && detail.face.has_value())
+		    {
+			    effects.villagerEyes.push_back({.face = *detail.face, .mesh = mesh.id, .eyes = *detail.drawnEyes});
+		    }
+	    });
+	// The border shows on the temple's map, or from high enough over the land. Only then the fill copies its circles.
+	effects.borderCircles.clear();
+	effects.borderRipples.clear();
+	effects.borderScroll = glm::vec2(0.0f);
+	if (Locator::influenceSystem::has_value())
+	{
+		const auto& influenceSystem = Locator::influenceSystem::value();
+		effects.borderScroll = influenceSystem.GetScrollOffset();
+		const auto ripples = influenceSystem.GetRipples();
+		effects.borderRipples.assign(ripples.begin(), ripples.end());
+		const bool shown = drawDesc.frame->templeActive ? drawDesc.frame->temple.mapInfluence.has_value()
+		                                                : influence::CurtainAlpha(drawDesc.camera->GetOrigin().y).has_value();
+		if (shown && !_warmingUp)
+		{
+			for (const auto& circle : influenceSystem.GetCircles())
+			{
+				if (influenceSystem.IsBorderShown(circle.player))
+				{
+					effects.borderCircles.push_back(circle);
+				}
+			}
+		}
+	}
+	effects.ghostsShown = Locator::entitiesRegistry::has_value() && Locator::explosionSystem::has_value();
+	effects.destructionGhosts.clear();
+	if (effects.ghostsShown)
+	{
+		const auto ghosts = Locator::explosionSystem::value().Ghosts();
+		effects.destructionGhosts.assign(ghosts.begin(), ghosts.end());
+	}
+	effects.lightningFlashes.clear();
+	drawDesc.entities.Each<const ecs::components::Storm>([&effects](const ecs::components::Storm& storm) {
+		if (!storm.dead && storm.flash.active)
+		{
+			effects.lightningFlashes.push_back(storm.flash);
+		}
+	});
+	effects.vortexWalls.clear();
+	const auto& infos = Locator::infoConstants::value().vortex;
+	drawDesc.entities.Each<const ecs::components::Vortex>([&](entt::entity, const ecs::components::Vortex& vortex) {
+		const auto row = static_cast<size_t>(vortex.type);
+		if (row < infos.size())
+		{
+			effects.vortexWalls.push_back(glm::translate(glm::vec3(vortex.centre.x, 0.0f, vortex.centre.z)) *
+			                              glm::scale(glm::vec3(infos.at(row).baseScale)));
+		}
+	});
+}
+
 void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 {
-	// Taking the tiles counts them as drawn, which a warm-up must not do
-	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::snowfallSystem::has_value() || desc.frame->templeActive)
+	// The fill took the quarters of the main view, and the systems counted them as drawn
+	if (_warmingUp || desc.viewId != RenderPass::Main || desc.frame->templeActive)
+	{
+		return;
+	}
+	const auto& tiles = desc.frame->effects.snowTiles;
+	if (tiles.empty())
 	{
 		return;
 	}
@@ -769,15 +887,7 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	auto& snowfallSystem = Locator::snowfallSystem::value();
-	const auto origin = desc.camera->GetOrigin();
-	const auto tiles = snowfallSystem.TakeTiles(
-	    {.eye = origin, .viewProjection = desc.camera->GetViewProjectionMatrix(), .nearPlane = desc.camera->GetNearClip()});
-	if (tiles.empty())
-	{
-		return;
-	}
-	const auto flakes = snowfallSystem.GetFlakes();
+	const auto& flakes = desc.frame->effects.snowFlakes;
 	struct Vertex
 	{
 		glm::vec3 position;
@@ -837,8 +947,13 @@ void Renderer::DrawSnowfall(const DrawSceneDesc& desc) const
 
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
 {
-	// Taking the tiles counts them as drawn, which a warm-up must not do
-	if (_warmingUp || desc.viewId != RenderPass::Main || !Locator::rainSystem::has_value() || desc.frame->templeActive)
+	// The fill took the blocks of the main view, and the systems counted them as drawn
+	if (_warmingUp || desc.viewId != RenderPass::Main || desc.frame->templeActive)
+	{
+		return;
+	}
+	const auto& tiles = desc.frame->effects.rainTiles;
+	if (tiles.empty())
 	{
 		return;
 	}
@@ -849,16 +964,8 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	auto& rainSystem = Locator::rainSystem::value();
-	const auto origin = desc.camera->GetOrigin();
-	const auto tiles = rainSystem.TakeTiles(
-	    {.eye = origin, .viewProjection = desc.camera->GetViewProjectionMatrix(), .nearPlane = desc.camera->GetNearClip()});
-	if (tiles.empty())
-	{
-		return;
-	}
-	const auto streaks = rainSystem.GetStreaks();
-	const float height = rainSystem.GetHeight();
+	const auto& streaks = desc.frame->effects.rainStreaks;
+	const float height = desc.frame->effects.rainHeight;
 	struct Vertex
 	{
 		glm::vec3 position;
@@ -907,7 +1014,7 @@ void Renderer::DrawRain(const DrawSceneDesc& desc) const
 
 void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::entitiesRegistry::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->effects.ghostsShown)
 	{
 		return;
 	}
@@ -924,10 +1031,6 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto camera = desc.camera->GetOrigin();
 	const auto translucent = TranslucentView(desc.viewId);
-	if (!Locator::explosionSystem::has_value())
-	{
-		return;
-	}
 	// A warm-up draws a ghost of each building model that is loaded, at no size. Thus the first building that goes makes
 	// no new states of the graphics card, also when the building comes after the load.
 	std::vector<ecs::components::DestructionGhost> warmUpGhosts;
@@ -943,7 +1046,7 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 		}
 	}
 	const auto ghosts = _warmingUp ? std::span<const ecs::components::DestructionGhost>(warmUpGhosts)
-	                               : Locator::explosionSystem::value().Ghosts();
+	                               : std::span<const ecs::components::DestructionGhost>(desc.frame->effects.destructionGhosts);
 	std::ranges::for_each(ghosts, [&](const ecs::components::DestructionGhost& ghost) {
 		if (!meshes.Contains(ghost.mesh))
 		{

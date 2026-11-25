@@ -89,31 +89,23 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 			}
 		}
 	};
-	const auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const ecs::components::FishFarm>([&addShoal](const ecs::components::FishFarm& farm) {
-		if (farm.shoal.has_value() && farm.shownAlpha.has_value())
-		{
-			addShoal(*farm.shoal, *farm.shownAlpha);
-		}
-	});
+	const auto& effects = desc.frame->effects;
+	for (const auto& [shoal, alpha] : effects.farmShoals)
+	{
+		addShoal(shoal, alpha);
+	}
 	// The shoals of the fish puzzle swim in the turns wherever the camera is, but show only as near as a farm's shoal.
 	// After the fish are caught, they do not show.
 	const auto eye = desc.camera->GetOrigin();
 	const bool maximumDetail = Locator::config::value().maximumDetail;
-	registry.Each<const ecs::components::PuzzleGame>([&addShoal, eye, maximumDetail](const ecs::components::PuzzleGame& game) {
-		if (!game.fish.has_value() || game.fish->net.caught)
+	for (const auto& shoal : effects.puzzleShoals)
+	{
+		const auto offset = eye - shoal.centre;
+		if (const auto alpha = fish_shoal::AlphaAt(glm::dot(offset, offset), maximumDetail))
 		{
-			return;
+			addShoal(shoal, *alpha);
 		}
-		for (const auto& shoal : game.fish->shoals)
-		{
-			const auto offset = eye - shoal.centre;
-			if (const auto alpha = fish_shoal::AlphaAt(glm::dot(offset, offset), maximumDetail))
-			{
-				addShoal(shoal, *alpha);
-			}
-		}
-	});
+	}
 	if (vertices.empty())
 	{
 		// A warm-up draws one triangle of no size, so that the first shoal in sight makes no pipeline
@@ -160,28 +152,45 @@ void Renderer::DrawFishPuzzleFloats(const DrawSceneDesc& desc) const
 	}
 	const auto& mesh = *meshes.Handle(ecs::fish_puzzle::k_FloatMeshId.value());
 	const auto* program = _shaderManager->GetShader("Object");
-	// The draw only reads the registry, so that it adds no store while the side threads read the stores
-	std::as_const(Locator::entitiesRegistry::value())
-	    .Each<const ecs::components::PuzzleGame>([this, &mesh, program](const ecs::components::PuzzleGame& game) {
-		    if (!game.fish.has_value())
-		    {
-			    return;
-		    }
-		    // Only what of each float is under the sea's level is drawn, beneath the sea's surface, which the sea is then
-		    // blended over. The float keeps its own colour.
-		    for (const auto& point : ecs::fish_puzzle::FloatPoints(game.fish->net))
-		    {
-			    const auto model = glm::translate(glm::mat4(1.0f), point);
-			    L3DMeshSubmitDesc submitDesc = {};
-			    submitDesc.viewId = RenderPass::UnderSea;
-			    submitDesc.program = program;
-			    submitDesc.state = k_OpaqueState;
-			    submitDesc.modelMatrices = &model;
-			    submitDesc.matrixCount = 1;
-			    submitDesc.useMaterialBlending = true;
-			    submitDesc.useMaterialCulling = true;
-			    submitDesc.cutAbove = 0.0f;
-			    DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
-		    }
-	    });
+	// Only what of each float is under the sea's level is drawn, beneath the sea's surface, which the sea is then blended
+	// over. The float keeps its own colour.
+	for (const auto& point : desc.frame->effects.puzzleFloats)
+	{
+		const auto model = glm::translate(glm::mat4(1.0f), point);
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = RenderPass::UnderSea;
+		submitDesc.program = program;
+		submitDesc.state = k_OpaqueState;
+		submitDesc.modelMatrices = &model;
+		submitDesc.matrixCount = 1;
+		submitDesc.useMaterialBlending = true;
+		submitDesc.useMaterialCulling = true;
+		submitDesc.cutAbove = 0.0f;
+		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	}
+}
+
+void Renderer::CollectFish(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
+{
+	effects.farmShoals.clear();
+	effects.puzzleShoals.clear();
+	effects.puzzleFloats.clear();
+	drawDesc.entities.Each<const ecs::components::FishFarm>([&effects](const ecs::components::FishFarm& farm) {
+		if (farm.shoal.has_value() && farm.shownAlpha.has_value())
+		{
+			effects.farmShoals.emplace_back(*farm.shoal, *farm.shownAlpha);
+		}
+	});
+	drawDesc.entities.Each<const ecs::components::PuzzleGame>([&effects](const ecs::components::PuzzleGame& game) {
+		if (!game.fish.has_value())
+		{
+			return;
+		}
+		const auto floats = ecs::fish_puzzle::FloatPoints(game.fish->net);
+		effects.puzzleFloats.insert(effects.puzzleFloats.end(), floats.begin(), floats.end());
+		if (!game.fish->net.caught)
+		{
+			effects.puzzleShoals.insert(effects.puzzleShoals.end(), game.fish->shoals.begin(), game.fish->shoals.end());
+		}
+	});
 }

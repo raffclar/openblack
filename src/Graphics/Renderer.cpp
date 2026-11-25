@@ -809,6 +809,7 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	}
 	// What the particle effects draw, once for the land's colours and every pass
 	CollectParticles(effects);
+	CollectShellMeshes(effects, drawDesc.entities);
 	// What the other effects draw, from the world as the frame shows it
 	CollectGroundBlobs(effects, drawDesc);
 	CollectCreatureFootprints(effects, drawDesc);
@@ -816,6 +817,14 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	CollectTempleLooks(effects, drawDesc);
 	CollectSprites(frame, drawDesc);
 	CollectWeatherAndWater(effects, frame.clock.turnFraction);
+	// The rain makes its splashes when the fill takes its blocks. The rings of the frame are copied before, thus the new
+	// rings show in the next frame.
+	CollectRainAndSnow(effects, drawDesc);
+	CollectMistsAndSmoke(effects, drawDesc);
+	CollectFish(effects, drawDesc);
+	CollectSeeds(effects, drawDesc);
+	CollectLightColumns(effects, drawDesc);
+	CollectKnockReadout(effects, drawDesc);
 	_effectsFilled = true;
 }
 

@@ -25,6 +25,7 @@
 #include "Components/SpellDispenser.h"
 #include "Components/Town.h"
 #include "Components/Villager.h"
+#include "DrawReadWatch.h"
 #include "KeptStores.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
@@ -165,12 +166,19 @@ void Registry::Destroy(entt::entity entity)
 
 RegistryContext& Registry::Context()
 {
+	NoteRead<>("Context");
 	return _registry.ctx().get<RegistryContext>();
 }
 
 const RegistryContext& Registry::Context() const
 {
+	NoteRead<>("Context");
 	return _registry.ctx().get<const RegistryContext>();
+}
+
+void Registry::NoteReadOf(std::string_view call, std::initializer_list<std::string_view> components) const noexcept
+{
+	_readWatch->Note(_readWatchName, call, components);
 }
 
 void Registry::Reset()

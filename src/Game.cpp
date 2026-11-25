@@ -326,6 +326,7 @@ Game::Game(Arguments&& args) noexcept
     , _deviceRestoreFrame(args.deviceRestoreFrame)
     , _deviceLossFrame(args.deviceLossFrame)
     , _turnApiCheck(args.turnApiCheck)
+    , _drawReadWatch(args.drawReadCheck)
     , _turnBesideDraw(args.turnBesideDraw)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
@@ -478,6 +479,7 @@ Game::~Game() noexcept
 		Locator::landSystem::value().SetView(nullptr);
 	}
 	ReportTurnApiCheck();
+	ReportDrawReadCheck();
 	ShutDownServices();
 	// A later caller of Instance must not get this game once it is gone
 	if (s_Instance == this)
@@ -1334,14 +1336,18 @@ bool Game::RunFrame() noexcept
 				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
 				// The interface's creatures of this frame are not shown, and are not kept for the next
 				Locator::rendererInterface::value().ShowInterfaceCreatures({});
+				WatchDrawReads(true);
 				DrawFilmCreature(drawDesc);
+				WatchDrawReads(false);
 			}
 			else
 			{
 				// The effects step their walks and copy what they draw before the checksum reads the world beside the draw
 				Locator::rendererInterface::value().FillDrawnEffects(*_drawnFrame, drawDesc);
 				Locator::syncChecksumSystem::value().StartHashBesideDraw();
+				WatchDrawReads(true);
 				Locator::rendererInterface::value().DrawScene(drawDesc);
+				WatchDrawReads(false);
 			}
 			// The labels that the scene did not draw, such as in the temple, go after it
 			if (Locator::gameInterface::has_value())
