@@ -26,6 +26,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/Extent.h"
+#include "3D/LandHeights.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/VortexSystemInterface.h"
@@ -146,9 +147,12 @@ struct DrawnFrame
 		/// The height of the highest land that a corner can have
 		float highestHeight {0.0f};
 		/// The land's blocks: their meshes, textures and pages. Only the game's thread changes them, between the draws
-		/// (see LandIslandInterface::CommitAltitudeChanges). The turn can change the heights of the corners. Thus a pass
-		/// that reads the heights reads them while no turn runs.
+		/// (see LandIslandInterface::CommitAltitudeChanges). The turn can change the heights of the corners. Thus the
+		/// passes read the heights from `heights`, not from the land.
 		const LandIslandInterface* island {nullptr};
+		/// The heights of the land as the frame shows them. The copy keeps its memory from frame to frame and is made
+		/// again only when the heights changed.
+		LandHeights heights;
 	};
 
 	/// What the passes read of the hands of this computer

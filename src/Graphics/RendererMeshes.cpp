@@ -315,9 +315,12 @@ const Renderer::Cap& Renderer::LandCapOf(const L3DSubMesh& subMesh, const CapPri
 	std::span<const uint16_t> indices(surface.indices);
 	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
 	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
-	const auto& land = Locator::terrainSystem::value();
-	const auto risen = partial_build_cap::RisenWithLand(surface.positions, placement,
-	                                                    [&land](glm::vec2 point) { return land.GetHeightAt(point); });
+	// The heights of the land as the frame shows them. A draw before the fill of the frame reads the land itself.
+	const auto landHeight = [this](glm::vec2 point) {
+		return _drawnFrame != nullptr ? _drawnFrame->land.heights.HeightAt(point)
+		                              : Locator::terrainSystem::value().GetHeightAt(point);
+	};
+	const auto risen = partial_build_cap::RisenWithLand(surface.positions, placement, landHeight);
 	Cap cap {
 	    .drawsBelow = partial_build_cap::DrawsAnythingBelow(risen, indices, height),
 	    .vertices = partial_build_cap::Build(risen, surface.uvs, surface.normals, indices, height, InsetOf(primitive.twoSided)),

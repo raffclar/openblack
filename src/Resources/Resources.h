@@ -97,6 +97,18 @@ public:
 	}
 
 	void StopLoading() override { _loadQueue.Cancel(); }
+
+	void BlockLoads(bool blocked) override
+	{
+		ForEachManager([blocked](auto& manager) { manager.BlockLoads(blocked); });
+	}
+
+	size_t LoadPending() override
+	{
+		size_t loaded = 0;
+		ForEachManager([&loaded](auto& manager) { loaded += manager.LoadPending(); });
+		return loaded;
+	}
 	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
 	LandThumbnailManager& GetLandThumbnails() override { return _landThumbnails; }
 

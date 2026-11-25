@@ -118,8 +118,7 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& temple = desc.frame->temple;
 	const auto* shader = _shaderManager->GetShader("Beam");
-	// The mists are things of the temple's rooms
-	const auto& registry = *temple.rooms;
+	// The fill copied the mists of the rooms that the temple draws
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto smoke = entt::hashed_string("raw/smoke");
 	const auto smokeAlpha = entt::hashed_string("raw/smokea");
@@ -140,44 +139,39 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 	// It turns to the camera as the camera is turned
 	const auto facing = glm::mat4(glm::mat3(desc.frame->camera->GetRotationMatrix()));
 
-	registry.Each<const MistDome, const Transform, const TempleInteriorPart>(
-	    [&](const MistDome& mist, const Transform& transform, const TempleInteriorPart& part) {
-		    if (mist.dome == nullptr || !temple.IsRoomDrawn(part.room))
-		    {
-			    return;
-		    }
-		    const auto vertexCount = static_cast<uint32_t>(mist.dome->vertices.size());
-		    const auto indexCount = static_cast<uint32_t>(mist.dome->indices.size());
-		    if (vertexCount == 0 || indexCount == 0 || bgfx::getAvailTransientVertexBuffer(vertexCount, layout) < vertexCount ||
-		        bgfx::getAvailTransientIndexBuffer(indexCount) < indexCount)
-		    {
-			    return;
-		    }
-		    bgfx::TransientVertexBuffer vertices;
-		    bgfx::TransientIndexBuffer indices;
-		    bgfx::allocTransientVertexBuffer(&vertices, vertexCount, layout);
-		    bgfx::allocTransientIndexBuffer(&indices, indexCount);
-		    auto* out = reinterpret_cast<BeamVertex*>(vertices.data);
-		    const auto colour = glm::u8vec4(glm::clamp(mist.colour, 0.0f, 1.0f) * 255.0f);
-		    for (uint32_t i = 0; i < vertexCount; ++i)
-		    {
-			    out[i] = mist.dome->vertices[i];
-			    out[i].colour = colour;
-			    out[i].uv += mist.uvOffset;
-		    }
-		    std::memcpy(indices.data, mist.dome->indices.data(), indexCount * sizeof(uint16_t));
+	std::ranges::for_each(temple.mists, [&](const DrawnTemple::Mist& mist) {
+		const auto vertexCount = static_cast<uint32_t>(mist.dome->vertices.size());
+		const auto indexCount = static_cast<uint32_t>(mist.dome->indices.size());
+		if (vertexCount == 0 || indexCount == 0 || bgfx::getAvailTransientVertexBuffer(vertexCount, layout) < vertexCount ||
+		    bgfx::getAvailTransientIndexBuffer(indexCount) < indexCount)
+		{
+			return;
+		}
+		bgfx::TransientVertexBuffer vertices;
+		bgfx::TransientIndexBuffer indices;
+		bgfx::allocTransientVertexBuffer(&vertices, vertexCount, layout);
+		bgfx::allocTransientIndexBuffer(&indices, indexCount);
+		auto* out = reinterpret_cast<BeamVertex*>(vertices.data);
+		const auto colour = glm::u8vec4(glm::clamp(mist.colour, 0.0f, 1.0f) * 255.0f);
+		for (uint32_t i = 0; i < vertexCount; ++i)
+		{
+			out[i] = mist.dome->vertices[i];
+			out[i].colour = colour;
+			out[i].uv += mist.uvOffset;
+		}
+		std::memcpy(indices.data, mist.dome->indices.data(), indexCount * sizeof(uint16_t));
 
-		    const glm::vec4 u_beamParams {1.0f, 0.0f, 0.0f, 0.0f};
-		    shader->SetTextureSampler("s_diffuse", 0, *textures.Handle(smoke));
-		    shader->SetTextureSampler("s_alpha", 1, *textures.Handle(smokeAlpha));
-		    shader->SetUniformValue("u_beamParams", &u_beamParams);
-		    const auto model = glm::translate(glm::mat4(1.0f), transform.position) * facing * glm::scale(transform.scale);
-		    bgfx::setTransform(glm::value_ptr(model));
-		    bgfx::setVertexBuffer(0, &vertices);
-		    bgfx::setIndexBuffer(&indices);
-		    bgfx::setState(k_State);
-		    shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
-	    });
+		const glm::vec4 u_beamParams {1.0f, 0.0f, 0.0f, 0.0f};
+		shader->SetTextureSampler("s_diffuse", 0, *textures.Handle(smoke));
+		shader->SetTextureSampler("s_alpha", 1, *textures.Handle(smokeAlpha));
+		shader->SetUniformValue("u_beamParams", &u_beamParams);
+		const auto model = glm::translate(glm::mat4(1.0f), mist.position) * facing * glm::scale(mist.scale);
+		bgfx::setTransform(glm::value_ptr(model));
+		bgfx::setVertexBuffer(0, &vertices);
+		bgfx::setIndexBuffer(&indices);
+		bgfx::setState(k_State);
+		shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+	});
 }
 
 void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
@@ -192,8 +186,7 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 	const auto& temple = desc.frame->temple;
 	const auto inDrawnRoom = [&temple](TempleRoom room) { return temple.IsRoomDrawn(room); };
 	const auto* beamShader = _shaderManager->GetShader("Beam");
-	// The cones and the rooms are things of the temple's rooms
-	const auto& registry = *temple.rooms;
+	// The fill copied the cones and the models of the temple's rooms
 	auto& resources = Locator::resources::value();
 
 	bgfx::VertexLayout layout;
@@ -236,17 +229,19 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 	// The spot lights' cones, with the atmosphere texture. Each room's lights drift on together, a step for each cone
 	// drawn, so a room of more cones drifts faster.
 	std::map<TempleRoom, uint32_t> coneCounts;
-	registry.Each<const LightBeam, const TempleInteriorPart>(
-	    [&coneCounts](const LightBeam& /*unused*/, const TempleInteriorPart& part) { coneCounts[part.room]++; });
+	for (const auto& cone : temple.cones)
+	{
+		coneCounts[cone.room]++;
+	}
 	BeamMesh cones;
-	registry.Each<const LightBeam, const TempleInteriorPart>(
-	    [&cones, &coneCounts, &inDrawnRoom, &desc](const LightBeam& beam, const TempleInteriorPart& part) {
-		    if (inDrawnRoom(part.room))
-		    {
-			    const float seconds = static_cast<float>(desc.time) * 0.001f;
-			    AppendCone(beam.cone, seconds * static_cast<float>(coneCounts[part.room]) * 0.1f, cones);
-		    }
-	    });
+	for (const auto& cone : temple.cones)
+	{
+		if (inDrawnRoom(cone.room))
+		{
+			const float seconds = static_cast<float>(desc.time) * 0.001f;
+			AppendCone(cone.cone, seconds * static_cast<float>(coneCounts[cone.room]) * 0.1f, cones);
+		}
+	}
 	const auto atmos = resources.GetTextures().Handle(entt::hashed_string("raw/ATMOS"));
 	const auto atmosAlpha = resources.GetTextures().Handle(entt::hashed_string("raw/ATMOSA"));
 	if (atmos && atmosAlpha)
@@ -255,22 +250,21 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 	}
 
 	// The light the rooms' windows shed, with the windows' textures
-	registry.Each<const ecs::components::Mesh, const Transform, const TempleInteriorPart>(
-	    [&](const ecs::components::Mesh& mesh, const Transform& transform, const TempleInteriorPart& part) {
-		    if (part.mesh != TempleInteriorMesh::Room || !inDrawnRoom(part.room))
-		    {
-			    return;
-		    }
-		    const auto l3dMesh = resources.GetMeshes().Handle(mesh.id);
-		    const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		    for (const auto& volumeLight : l3dMesh->GetVolumeLights())
-		    {
-			    if (const auto* texture = GetTexture(volumeLight.skinID, l3dMesh->GetSkins()); texture != nullptr)
-			    {
-				    submit(volumeLight.mesh, model, *texture, nullptr);
-			    }
-		    }
-	    });
+	for (const auto& room : temple.roomModels)
+	{
+		if (!inDrawnRoom(room.room))
+		{
+			continue;
+		}
+		const auto l3dMesh = resources.GetMeshes().Handle(room.mesh);
+		for (const auto& volumeLight : l3dMesh->GetVolumeLights())
+		{
+			if (const auto* texture = GetTexture(volumeLight.skinID, l3dMesh->GetSkins()); texture != nullptr)
+			{
+				submit(volumeLight.mesh, room.model, *texture, nullptr);
+			}
+		}
+	}
 }
 
 void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId) const
@@ -450,13 +444,10 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		        });
 	}
 	// A storm's cloud takes the land's colour, darkened by the storm's shade
-	if (Locator::cloudSystem::has_value())
+	for (const auto& stormCloud : desc.frame->effects.stormClouds)
 	{
-		for (const auto& stormCloud : Locator::cloudSystem::value().GetStormClouds())
-		{
-			const auto colour = (stormCloud.mist.colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud.shade);
-			drawMist(stormCloud.mist, stormCloud.position, colour, &stormCloud);
-		}
+		const auto colour = (stormCloud.mist.colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud.shade);
+		drawMist(stormCloud.mist, stormCloud.position, colour, &stormCloud);
 	}
 }
 
@@ -700,11 +691,11 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 
 void Renderer::DrawWaterRings(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::waterRingSystem::has_value() || desc.frame->templeActive)
+	if (desc.viewId != RenderPass::Main || desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto rings = Locator::waterRingSystem::value().GetRings();
+	const auto& rings = desc.frame->effects.waterRings;
 	const auto& textures = Locator::resources::value().GetTextures();
 	if (rings.empty() || !textures.Contains(water_rings::k_TextureId.value()) ||
 	    !textures.Contains(water_rings::k_AlphaTextureId.value()))

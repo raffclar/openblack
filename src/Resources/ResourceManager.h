@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
@@ -22,6 +23,7 @@
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -300,7 +302,38 @@ public:
 
 	[[nodiscard]] bool Contains(entt::id_type identifier) const
 	{
-		return _resourceCache.contains(identifier) || _deferred.contains(identifier);
+		return _resourceCache.contains(identifier) || (_loadBlocks == 0 && _deferred.contains(identifier));
+	}
+
+	/// While loads are blocked, the questions find only the loaded resources: a registered resource that is not loaded
+	/// yet does not load, and is not there. The draw blocks the loads, thus it does not change the cache. A question
+	/// for such a resource while the loads are blocked is logged once for each resource. Each block must have its own
+	/// end: the loads stay blocked until the last block ends.
+	void BlockLoads(bool blocked)
+	{
+		if (blocked)
+		{
+			++_loadBlocks;
+		}
+		else if (_loadBlocks > 0)
+		{
+			--_loadBlocks;
+		}
+	}
+
+	/// Loads each registered resource that is not loaded yet and that is not held (see Hold). Returns how many it loaded.
+	size_t LoadPending()
+	{
+		std::vector<entt::id_type> pending;
+		for (const auto& [identifier, deferred] : _deferred)
+		{
+			if (!deferred.held || deferred.wanted)
+			{
+				pending.push_back(identifier);
+			}
+		}
+		std::ranges::for_each(pending, [this](entt::id_type identifier) { Resolve(identifier); });
+		return pending.size();
 	}
 
 	/// The resource, or null when there is none of the id: one lookup, for what runs for every draw
@@ -400,6 +433,17 @@ private:
 		{
 			return;
 		}
+		if (_loadBlocks > 0)
+		{
+			if (_missedWhileBlocked.insert(identifier).second)
+			{
+				if (const auto logger = spdlog::get("graphics"))
+				{
+					logger->error("The draw asked for resource {}, which is not loaded. The fill must load it.", identifier);
+				}
+			}
+			return;
+		}
 		auto job = it->second.job ? std::move(it->second.job)
 		                          : std::make_shared<detail::LoadJob<ResourceType>>(std::move(it->second.load));
 		_deferred.erase(it);
@@ -436,5 +480,9 @@ private:
 	size_t _runningBytes {0};
 	/// The threads the prefetched resources were handed to
 	LoadQueue* _queue {nullptr};
+	/// The blocks of the loads that did not end. While there is one, no question loads a resource (see BlockLoads).
+	uint32_t _loadBlocks {0};
+	/// The resources that a question asked for while the loads were blocked, logged once each
+	mutable std::unordered_set<entt::id_type> _missedWhileBlocked;
 };
 } // namespace openblack::resources

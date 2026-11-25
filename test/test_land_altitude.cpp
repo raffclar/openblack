@@ -16,6 +16,7 @@
 #include <LNDFile.h>
 #include <gtest/gtest.h>
 
+#include "3D/LandHeights.h"
 #include "3D/LandIslandInterface.h"
 
 using namespace openblack;
@@ -197,4 +198,74 @@ TEST(LandHeightField, AChangedAltitudeSetsTheFieldThroughTheCurve)
 	EXPECT_EQ(island.CornerUnits({0, 0}), 40);
 	island.SetCorner(255);
 	EXPECT_EQ(island.CornerUnits({0, 0}), island.GetHeightCurve().WholeUnitsOf(255.0f));
+}
+
+namespace
+{
+/// Compares the copy of the heights with the land at points over the first cell and round it
+void ExpectSameHeights(const LandIslandInterface& island, const LandHeights& heights)
+{
+	for (int32_t x = -k_Fixed; x <= 2 * k_Fixed; x += k_Fixed / 8 + 3)
+	{
+		for (int32_t z = -k_Fixed; z <= 2 * k_Fixed; z += k_Fixed / 8 + 5)
+		{
+			EXPECT_EQ(heights.Altitude(x, z), island.GetAltitude(x, z)) << x << ", " << z;
+			EXPECT_EQ(heights.Altitude(x, z, false), island.GetAltitude(x, z, false)) << x << ", " << z;
+		}
+	}
+	for (uint16_t x = 0; x < 20; ++x)
+	{
+		for (uint16_t z = 0; z < 20; ++z)
+		{
+			EXPECT_EQ(heights.CornerUnits({x, z}), island.CornerUnits({x, z})) << x << ", " << z;
+		}
+	}
+	EXPECT_EQ(heights.CornerUnits({600, 0}), 0);
+	EXPECT_EQ(heights.HeightAt({7.5f, 2.5f}),
+	          island.GetAltitude(LandIslandInterface::ToMapCoords(7.5f), LandIslandInterface::ToMapCoords(2.5f)));
+}
+} // namespace
+
+TEST(LandHeights, TheCopyGivesTheHeightsOfTheLand)
+{
+	for (const bool split : {false, true})
+	{
+		const OneCellIsland island(40, 48, 56, 72, split);
+		LandHeights heights;
+		heights.Follow(island);
+		ExpectSameHeights(island, heights);
+	}
+	// Low land at the shore
+	const OneCellIsland shore(3, 4, 3, 4, false);
+	LandHeights heights;
+	heights.Follow(shore);
+	ExpectSameHeights(shore, heights);
+}
+
+TEST(LandHeights, TheCopyGivesTheHeightsOfAHeightField)
+{
+	OneCellIsland island(0, 0, 0, 0, false);
+	island.SetFieldCorners(1000, 1200, 2000, 2600);
+	LandHeights heights;
+	heights.Follow(island);
+	ExpectSameHeights(island, heights);
+}
+
+TEST(LandHeights, TheCopyIsMadeAgainOnlyWhenTheHeightsChange)
+{
+	OneCellIsland island(0, 0, 0, 0, false);
+	island.SetFieldCorners(1000, 1000, 1000, 1000);
+	LandHeights heights;
+	heights.Follow(island);
+	heights.Follow(island);
+	EXPECT_EQ(heights.Copies(), 1);
+	island.SetCorner(40);
+	EXPECT_NE(heights.CornerUnits({0, 0}), island.CornerUnits({0, 0}));
+	heights.Follow(island);
+	EXPECT_EQ(heights.Copies(), 2);
+	ExpectSameHeights(island, heights);
+
+	heights.Clear();
+	EXPECT_EQ(heights.Altitude(0, 0), 0.0f);
+	EXPECT_EQ(heights.CornerUnits({0, 0}), 0);
 }

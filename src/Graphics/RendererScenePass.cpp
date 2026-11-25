@@ -2219,13 +2219,13 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			return true;
 		}
-		const auto& land = *desc.frame->land.island;
+		const auto& heights = desc.frame->land.heights;
 		if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * desc.frame->land.highestHeight))
 		{
 			return false;
 		}
 		const float highestRise = view_frustum::HighestLandUnder(
-		    model, box.minima, box.maxima, [&land](glm::ivec2 corner) { return land.CornerUnits(glm::u16vec2(corner)); });
+		    model, box.minima, box.maxima, [&heights](glm::ivec2 corner) { return heights.CornerUnits(glm::u16vec2(corner)); });
 		return view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * highestRise);
 	};
 	// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A
