@@ -144,7 +144,7 @@ TEST(CreatureEatFromStores, AHandfulGoesByTheSizeThatTheCreatureShows)
 	EXPECT_FLOAT_EQ(meals::HandfulScale(shown, meals::HandfulFrom::Thing), 0.375f);
 	EXPECT_EQ(meals::HandfulAmount(shown, 5000), 100u);
 	// The size that the body shows is never less than the smallest size that the game draws
-	ecs::components::Creature tiny {.size = 0.01f};
+	const ecs::components::Creature tiny {.size = 0.01f};
 	EXPECT_FLOAT_EQ(meals::HandfulScale(ecs::components::ShownSize(tiny), meals::HandfulFrom::Thing), 0.05f * 3.75f);
 }
 
