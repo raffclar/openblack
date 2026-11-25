@@ -8,6 +8,7 @@
 // asks (see the frame present code of the web platform). It also writes the diagnostic lines of the game threads to the
 // game log (see pre.js), and it gives the stack of an error of a game thread to the error reports. When a game thread
 // reads a game file that the site streams and that the page does not have yet, this code asks the page for the file.
+// When the page records the trace of the game files, this code gives the page each first read of a block of a thread.
 //
 // When the game thread asks for a lobby session from the sign-in of the site, this code asks the page of the site around
 // the game page (the site's /play/ page), and gives the answer to that thread only. Only the parent page of the same
@@ -112,6 +113,10 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
       askSite(worker, event.data.openblackSiteSessionRequest);
     } else if (event.data && event.data.openblackGameFileWanted) {
       wantGameFile(worker, event.data.openblackGameFileWanted);
+    } else if (event.data && event.data.openblackGameRead && openblackWeb.noteGameRead) {
+      // The first read of a block of a game file in this thread, for the trace of the game files
+      const { file, offset, length } = event.data.openblackGameRead;
+      openblackWeb.noteGameRead(file, offset, length);
     } else if (event.data && event.data.openblackProfileWrite) {
       // The game wrote files of its profiles: the page sends the saved games and creatures to the site
       if (globalThis.openblackProfileWrite) {
@@ -135,7 +140,7 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
       openblackWeb: {
         folder: openblackWeb.folder, storage: openblackWeb.storage, version: openblackWeb.version,
         requests: openblackWeb.requests, displayFrames: openblackWeb.displayFrames,
-        gameFrames: openblackWeb.gameFrames,
+        gameFrames: openblackWeb.gameFrames, recordReads: Boolean(openblackWeb.noteGameRead),
       },
     });
     if (!listened.has(worker)) {

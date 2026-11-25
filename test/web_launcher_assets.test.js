@@ -7,7 +7,7 @@ const {
   isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
   refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset, planAssetStart,
   planAssetPrefetch, assetBlockBounds, assetBlockRange,
-  parseContentRange,
+  parseContentRange, parseAssetTiers, fetchAssetTiers, k_AssetTiersAddress,
   k_AssetIndexAddress, k_AssetCacheFolder,
 } = require('../web/page/launcher-assets.js');
 
@@ -427,6 +427,111 @@ check('the plan for later gets the miracles after the start, the next land, and 
     ['Data/Landscape/land2.fot']);
   assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/Landscape/Land5.lnd' })), []);
   assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/AllMeshes.g3d' })), []);
+});
+
+// A tiers file for the streamed files: the meshes at the startup, land 1 at the land load, the first and the third
+// block of the music at the startup and the heal miracle in the play of land 1. Land 2 is a later land.
+const tiersText = (extra = {}) => JSON.stringify({
+  format: 1,
+  made_from: { start: ['traces/land1.json'], later: ['traces/land2.json'] },
+  phases: ['boot', 'pre-intro', 'startup', 'land-load', 'land-soon', 'later', 'background'],
+  start_phases: 4,
+  block_size: k_BlockSize,
+  files: {
+    'data/allmeshes.g3d': { phase: 2, order: 0 },
+    'audio/music/align/good.sad': { phase: 2, order: 1, blocks: [[2, 0, 1], [2, 2, 1], [4, 3, 2]] },
+    'data/landscape/land1.lnd': { phase: 3, order: 0 },
+    'data/spells/anims/heal.anm': { phase: 4, order: 1 },
+    'data/intro.bik': { phase: 4, order: 0 },
+    'data/landscape/land2.fot': { phase: 5, order: 0 },
+    'data/not/in/the/list.txt': { phase: 0, order: 0 },
+  },
+  lands: { land2: ['data/landscape/land2.fot', 'data/landscape/land2.lnd'] },
+  ...extra,
+});
+
+check('the tiers file gives the phase of each file, the files of the first land and the files of each land', () => {
+  const tiers = parseAssetTiers(tiersText());
+  assert.equal(tiers.startPhases, 4);
+  assert.equal(tiers.files.get('data/landscape/land1.lnd').phase, 3);
+  assert.equal(tiers.files.get('data/allmeshes.g3d').blocks, null);
+  assert.deepEqual(tiers.soon, ['data/intro.bik', 'data/spells/anims/heal.anm']);
+  assert.deepEqual(tiers.lands.get('land2'), ['data/landscape/land2.fot', 'data/landscape/land2.lnd']);
+  const good = JSON.parse(tiersText());
+  for (const wrong of [
+    { ...good, format: 2 },
+    { ...good, start_phases: 9 },
+    { ...good, block_size: 0 },
+    { ...good, files: { 'Data/Upper.txt': { phase: 0, order: 0 } } },
+    { ...good, files: { '../a.txt': { phase: 0, order: 0 } } },
+    { ...good, files: { 'a.txt': { phase: 7, order: 0 } } },
+    { ...good, files: { 'a.txt': { phase: 0, order: 0, blocks: [[0, 0, 0]] } } },
+    { ...good, lands: { land2: ['Data/Upper.txt'] } },
+  ]) {
+    assert.throws(() => parseAssetTiers(JSON.stringify(wrong)), Error, JSON.stringify(wrong));
+  }
+  assert.throws(() => parseAssetTiers('not json'), /not JSON/);
+});
+
+check('the page uses its rules when it has no correct tiers file', async () => {
+  const logged = [];
+  const answer = (status, text) => async (address) => {
+    assert.equal(address, k_AssetTiersAddress);
+    return fakeResponse(status, text);
+  };
+  assert.equal(await fetchAssetTiers(answer(404, ''), (line) => logged.push(line)), null);
+  assert.equal(await fetchAssetTiers(answer(200, '{"format": 9}'), (line) => logged.push(line)), null);
+  assert.equal(await fetchAssetTiers(async () => {
+    throw new Error('no network');
+  }, (line) => logged.push(line)), null);
+  assert.equal(logged.length, 3);
+  assert.match(logged[0], /status 404/);
+  assert.equal((await fetchAssetTiers(answer(200, tiersText()))).startPhases, 4);
+});
+
+check('with the tiers the start gets the files and the blocks of the phases before the start, in the list order', () => {
+  const { files } = parseAssetIndex(streamedText());
+  const tiers = parseAssetTiers(tiersText());
+  for (const path of ['Data/AllMeshes.g3d', 'DATA/LANDSCAPE/Land1.lnd', 'Audio/Music/align/Good.sad']) {
+    assert.equal(isStartAsset(path, tiers), true, path);
+  }
+  // A file of the play of the first land, a later file and a file that no trace reads
+  for (const path of ['Data/INTRO.bik', 'Data/Landscape/land2.fot', 'Data/Landscape/Land2.lnd']) {
+    assert.equal(isStartAsset(path, tiers), false, path);
+  }
+  const start = planAssetStart(files, tiers, k_BlockSize);
+  assert.deepEqual(start.whole.map((number) => files[number].path), ['Data/AllMeshes.g3d', 'Data/Landscape/Land1.lnd']);
+  const bank = numberOf(files, 'Audio/Music/align/Good.sad');
+  assert.deepEqual(start.blocks, [{ number: bank, block: 0 }, { number: bank, block: 2 }]);
+  // The list has blocks of another size: the page gets the whole file
+  assert.deepEqual(planAssetStart(files, tiers, 8).whole.map((number) => files[number].path),
+    ['Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad', 'Data/Landscape/Land1.lnd']);
+});
+
+check('with the tiers the plan for later gets the files of the first land first, then those of the next land', () => {
+  const { files } = parseAssetIndex(streamedText());
+  const tiers = parseAssetTiers(tiersText());
+  const paths = (numbers) => numbers.map((number) => files[number].path);
+  // The play of the first land in the order of the trace, then the rules for the miracles
+  assert.deepEqual(paths(planAssetPrefetch(files, { tiers })), ['Data/INTRO.bik', 'Data/Spells/Anims/heal.anm']);
+  assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/Landscape/Land1.lnd', tiers })),
+    ['Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot']);
+  const have = (sha256) => sha256 === sha('land two');
+  assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/Landscape/Land1.lnd', have, tiers })),
+    ['Data/Landscape/land2.fot']);
+  // A network map gets its other files as with the rules (the file that the game read is there already in the page)
+  assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Online Maps/mpm_2p_1.map', tiers })),
+    ['Online Maps/mpm_2p_1.map']);
+});
+
+check('with the tiers the start downloads the files and blocks of the tiers', async () => {
+  const root = new FakeFolder();
+  const site = fakeSite(k_Streamed, { index: streamedText() });
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  await streamAssets(index, { fetchFile: site.fetchFile, digest, root, tiers: parseAssetTiers(tiersText()) });
+  const music = assetAddress('Audio/Music/align/Good.sad');
+  assert.deepEqual([...site.requests.keys()].sort(), [k_AssetIndexAddress, assetAddress('Data/AllMeshes.g3d'),
+    assetAddress('Data/Landscape/Land1.lnd'), `${music} bytes=0-3`, `${music} bytes=8-11`].sort());
 });
 
 // A site for the second version of the list, and the store of the page with what it gave to the game threads

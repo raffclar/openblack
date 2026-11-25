@@ -11,6 +11,11 @@
 // the list. When the game first reads a file that the page does not have, the page gets it at once. After the start,
 // the page gets the files that the game will probably read next, one at a time. A player can also get all the files
 // before the start.
+//
+// The file asset-tiers.json of the page gives the phase of the game in which the game first reads each file. The tool
+// tools/web-asset-tiers makes it from the traces of the game (launcher-asset-trace.js). With this file, the page gets
+// before the start the files of the phases up to the first land, and after the start the files that the first land
+// reads in its play. With no correct file, the page uses the rules below.
 'use strict';
 
 // The address of the list of the game files, and the start of the address of each file
@@ -72,6 +77,12 @@ const k_AssetHeaderRules = [
 const k_AssetReadAheadBlocks = 2;
 
 const k_Sha256Pattern = /^[0-9a-f]{64}$/;
+
+// The address of the tiers file of the page, and the format of the tiers file that the page reads
+const k_AssetTiersAddress = 'asset-tiers.json';
+const k_AssetTiersFormat = 1;
+// The name of the phase of the files that the first land reads in its play
+const k_AssetSoonPhase = 'land-soon';
 
 /**
  * True when the path of a game file is safe in the game folder: a relative path with "/" between its parts, with no
@@ -335,10 +346,130 @@ async function fetchAsset(fetchFile, digest, file, received) {
   return bytes;
 }
 
-/** True when the start of the game reads the file at this path, so that the page gets it before the start */
-function isStartAsset(path) {
+/**
+ * The tiers of the game files in the text of the tiers file. Gives { phases, startPhases, blockSize, files, soon, lands }:
+ * - phases: the names of the phases, in order; startPhases: the number of phases that come before the start,
+ * - blockSize: the size of a block in the tiers file,
+ * - files: a Map from the lower-case path to { phase, order, blocks }, where blocks is null for a file that the game
+ *   reads whole, or a list of [phase, first block, number of blocks],
+ * - soon: the lower-case paths of the files that the first land reads in its play, in the order of their first read,
+ * - lands: a Map from the lower-case name of a land or a map to the lower-case paths that it reads, in order.
+ * The page ignores a path that is not in the list of the game files. Throws an error when the file is not correct.
+ */
+function parseAssetTiers(text) {
+  let tiers;
+  try {
+    tiers = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`the tiers of the game files are not JSON: ${error.message}`);
+  }
+  if (tiers === null || typeof tiers !== 'object' || tiers.format !== k_AssetTiersFormat) {
+    throw new Error(`the tiers of the game files do not have the format ${k_AssetTiersFormat}`);
+  }
+  const { phases } = tiers;
+  if (!Array.isArray(phases) || phases.length === 0 || !phases.every((name) => typeof name === 'string')) {
+    throw new Error('the tiers of the game files have no phases');
+  }
+  const startPhases = tiers.start_phases;
+  if (!Number.isSafeInteger(startPhases) || startPhases < 0 || startPhases > phases.length) {
+    throw new Error(`the tiers of the game files have ${tiers.start_phases} phases before the start`);
+  }
+  const isPhase = (value) => Number.isSafeInteger(value) && value >= 0 && value < phases.length;
+  const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
+  const blockSize = tiers.block_size;
+  if (!Number.isSafeInteger(blockSize) || blockSize <= 0 || blockSize > k_AssetMostBlockSize) {
+    throw new Error(`the tiers of the game files have the block size ${tiers.block_size}`);
+  }
+  const listed = tiers.files;
+  if (listed === null || typeof listed !== 'object' || Array.isArray(listed) ||
+    Object.keys(listed).length > k_AssetMostFiles) {
+    throw new Error('the tiers of the game files have no correct files');
+  }
+  const files = new Map();
+  for (const [path, entry] of Object.entries(listed)) {
+    if (!isSafeAssetPath(path) || path !== path.toLowerCase() || entry === null || typeof entry !== 'object' ||
+      !isPhase(entry.phase) || !isCount(entry.order)) {
+      throw new Error(`the tiers of the game files have no correct phase for ${JSON.stringify(path)}`);
+    }
+    const blocks = entry.blocks ?? null;
+    if (blocks !== null && !(Array.isArray(blocks) && blocks.every((run) => Array.isArray(run) && run.length === 3 &&
+      isPhase(run[0]) && isCount(run[1]) && isCount(run[2]) && run[2] > 0))) {
+      throw new Error(`the tiers of the game files have no correct blocks for ${path}`);
+    }
+    files.set(path, { phase: entry.phase, order: entry.order, blocks });
+  }
+  const soonPhase = phases.indexOf(k_AssetSoonPhase);
+  const soon = [...files].filter(([, entry]) => entry.phase === soonPhase)
+    .sort(([, a], [, b]) => a.order - b.order).map(([path]) => path);
+  const listedLands = tiers.lands ?? {};
+  if (listedLands === null || typeof listedLands !== 'object' || Array.isArray(listedLands)) {
+    throw new Error('the tiers of the game files have no correct lands');
+  }
+  const lands = new Map();
+  for (const [name, paths] of Object.entries(listedLands)) {
+    if (!Array.isArray(paths) || !paths.every((path) => isSafeAssetPath(path) && path === path.toLowerCase())) {
+      throw new Error(`the tiers of the game files have no correct paths for ${JSON.stringify(name)}`);
+    }
+    lands.set(name.toLowerCase(), [...paths]);
+  }
+  return { phases, startPhases, blockSize, files, soon, lands };
+}
+
+/**
+ * Gets the tiers file of the page. Gives the tiers, or no value when the page has no correct tiers file. The page then
+ * uses its rules. The function log gets the reason.
+ */
+async function fetchAssetTiers(fetchFile, log = () => {}) {
+  try {
+    const response = await fetchFile(k_AssetTiersAddress, { cache: 'no-cache', credentials: 'same-origin' });
+    if (!response.ok) {
+      log(`The page has no tiers of the game files (status ${response.status}). It uses its rules.`);
+      return null;
+    }
+    return parseAssetTiers(await response.text());
+  } catch (error) {
+    log(`The page cannot read the tiers of the game files: ${error.message || error}. It uses its rules.`);
+    return null;
+  }
+}
+
+/**
+ * True when the start of the game reads the file at this path, so that the page gets it before the start. With the
+ * tiers, the file must have a phase before the start.
+ */
+function isStartAsset(path, tiers = null) {
   const lower = path.toLowerCase();
+  if (tiers) {
+    const tier = tiers.files.get(lower);
+    return tier !== undefined && tier.phase < tiers.startPhases;
+  }
   return !k_AssetLaterRules.some((rule) => rule.test(lower));
+}
+
+/**
+ * What the page gets before the start with the tiers, as planAssetStart gives it. The page gets each file of a phase
+ * before the start whole. For a file that the list gives in blocks, the page gets only the blocks of a phase before
+ * the start. A file keeps its place in the list of the game files.
+ */
+function planAssetTierStart(files, tiers, blockSize) {
+  const whole = [];
+  const blocks = [];
+  files.forEach((file, number) => {
+    const tier = tiers.files.get(file.path.toLowerCase());
+    if (tier === undefined || tier.phase >= tiers.startPhases) {
+      return;
+    }
+    if (!file.blocks || tier.blocks === null || blockSize !== tiers.blockSize) {
+      whole.push(number);
+      return;
+    }
+    for (const [phase, first, count] of tier.blocks.filter(([phase]) => phase < tiers.startPhases)) {
+      for (let block = first; block < first + count && block < file.blocks.length; block += 1) {
+        blocks.push({ number, block });
+      }
+    }
+  });
+  return { whole, blocks };
 }
 
 /**
@@ -350,20 +481,32 @@ function isStartAsset(path) {
  * - After the game read the landscape of a land: the landscape and the footpaths of the next land.
  * - After the game read a file of a network map: the other files of the same map.
  */
-function planAssetPrefetch(files, { path = null, have = () => false }) {
+function planAssetPrefetch(files, { path = null, have = () => false, tiers = null }) {
   const numbers = [];
   const seen = new Set();
+  const addNumber = (number) => {
+    const file = files[number];
+    if (!seen.has(file.sha256) && !have(file.sha256)) {
+      seen.add(file.sha256);
+      numbers.push(number);
+    }
+  };
   const add = (test) => {
     files.forEach((file, number) => {
-      if (!seen.has(file.sha256) && !have(file.sha256) && test(file.path.toLowerCase())) {
-        seen.add(file.sha256);
-        numbers.push(number);
+      if (test(file.path.toLowerCase())) {
+        addNumber(number);
       }
     });
   };
+  // The files of a list of the tiers, in the order of the list
+  const addTiers = (paths) => {
+    const numberOf = new Map(files.map((file, number) => [file.path.toLowerCase(), number]));
+    paths.map((other) => numberOf.get(other)).filter((number) => number !== undefined).forEach(addNumber);
+  };
   if (path === null) {
+    addTiers(tiers ? tiers.soon : []);
     for (const soon of k_AssetSoonRules) {
-      add((lower) => !isStartAsset(lower) && soon.test(lower));
+      add((lower) => !isStartAsset(lower, tiers) && soon.test(lower));
     }
     return numbers;
   }
@@ -372,15 +515,17 @@ function planAssetPrefetch(files, { path = null, have = () => false }) {
   if (land) {
     const next = Number(land[1]) + 1;
     add((other) => other === `data/landscape/land${next}.lnd` || other === `data/landscape/land${next}.fot`);
+    addTiers(tiers?.lands.get(`land${next}`) ?? []);
     return numbers;
   }
   const map = /^(online maps\/|data\/landscape\/(multi_player\/)?)([^/]+?)\.[^./]+$/.exec(lower);
-  if (map && !isStartAsset(lower)) {
+  if (map && !isStartAsset(lower, tiers)) {
     const name = map[3];
     add((other) => {
       const stem = /([^/]+?)\.[^./]+$/.exec(other);
-      return stem !== null && stem[1] === name && !isStartAsset(other);
+      return stem !== null && stem[1] === name && !isStartAsset(other, tiers);
     });
+    addTiers(tiers?.lands.get(name) ?? []);
   }
   return numbers;
 }
@@ -400,9 +545,12 @@ async function assetProblem(digest, file, bytes) {
 /**
  * What the page gets before the start: whole: the numbers of the files to get whole; blocks: { number, block } for
  * the first block of each music bank that the list gives in blocks. The files are the files of the list in the order
- * of their numbers.
+ * of their numbers. With the tiers, the tiers give the files and the blocks (planAssetTierStart).
  */
-function planAssetStart(files) {
+function planAssetStart(files, tiers = null, blockSize = null) {
+  if (tiers) {
+    return planAssetTierStart(files, tiers, blockSize ?? tiers.blockSize);
+  }
   const whole = [];
   const blocks = [];
   files.forEach((file, number) => {
@@ -724,6 +872,7 @@ async function keepAssets(index, options) {
  */
 async function streamAssets(index, {
   fetchFile, digest, root, wanted = () => true, progress = () => {}, all = false, share = () => {}, log = () => {},
+  tiers = null,
 }) {
   const files = index.files.filter((file) => wanted(file.path));
   const blockSize = index.blockSize ?? 0;
@@ -733,7 +882,7 @@ async function streamAssets(index, {
   for (const name of plan.remove) {
     await folder.removeEntry(name, { recursive: true });
   }
-  const start = planAssetStart(files);
+  const start = planAssetStart(files, tiers, blockSize);
   const startShas = new Set(start.whole.map((number) => files[number].sha256));
   const download = all ? plan.download : plan.download.filter((file) => startShas.has(file.sha256));
   const blockNames = new Set();
@@ -839,7 +988,8 @@ if (typeof module !== 'undefined') {
   module.exports = {
     isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
     refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
-    planAssetStart, planAssetPrefetch, assetProblem, assetBlockBounds,
+    planAssetStart, planAssetPrefetch, assetProblem, assetBlockBounds, parseAssetTiers, fetchAssetTiers,
+    planAssetTierStart, k_AssetTiersAddress,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
     k_AssetIndexAddress, k_AssetCacheFolder,
   };

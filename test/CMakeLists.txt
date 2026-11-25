@@ -752,6 +752,12 @@ if (Python3_Interpreter_FOUND)
     NAME test_progress_map
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test_progress_map.py
   )
+  # The tool that makes the tiers of the game files of the web page from the traces of the game, and the check that
+  # web/page/asset-tiers.json is the output of its traces
+  add_test(
+    NAME test_web_asset_tiers
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/web-asset-tiers/test_make_tiers.py
+  )
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other
@@ -2202,6 +2208,10 @@ if (NODE_EXECUTABLE)
   add_test(NAME test_web_launcher_assets
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_assets.test.js
+  )
+  add_test(NAME test_web_launcher_asset_trace
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_asset_trace.test.js
   )
   add_test(NAME test_web_launcher_buttons
            COMMAND ${NODE_EXECUTABLE}
