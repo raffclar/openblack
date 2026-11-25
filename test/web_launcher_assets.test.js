@@ -506,9 +506,8 @@ check('the tiers give each file and each run of blocks its phase, and a file tha
   assert.deepEqual(phases.map(paths), [[], [],
     ['Data/Landscape/Land1.lnd', 'Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad 0'],
     ['Audio/Music/align/Good.sad 2'],
-    ['Audio/Music/align/Good.sad 3', 'Audio/Music/align/Good.sad 4'],
-    ['Data/INTRO.bik', 'Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot', 'Data/Spells/Anims/heal.anm',
-      'Online Maps/mpm_2p_1.map']]);
+    ['Audio/Music/align/Good.sad 3', 'Audio/Music/align/Good.sad 4', 'Data/Spells/Anims/heal.anm'],
+    ['Data/INTRO.bik', 'Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']]);
   // The list has blocks of another size: the page gets the whole file
   assert.deepEqual(paths(planAssetTiers(files, tiers, 8)[2]),
     ['Data/Landscape/Land1.lnd', 'Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad']);
@@ -528,6 +527,9 @@ check('the tiers file of the page starts the game with the boot files and never 
   for (const path of ['data/citadel/engine/creaturelo_l3d.zzz', 'data/landscape/land2.lnd', 'scripts/html/banner.gif']) {
     assert.equal(isStartAsset(path, tiers), false, path);
   }
+  // The voice banks of the species come in the land-soon phase, also when no trace read them
+  const files = parseAssetIndex(indexText({ 'Audio/SFX/Creature/btiger.sad': 'tiger', 'Data/Landscape/Land2.lnd': 'two' })).files;
+  assert.deepEqual(planAssetTiers(files, tiers).map((items) => items.length), [0, 0, 0, 0, 1, 1]);
   const boot = [...tiers.files.values()].filter((tier) => tier.phase === 0);
   assert.ok(boot.length > 0 && boot.length < 20, `${boot.length} boot files`);
 });

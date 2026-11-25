@@ -484,7 +484,8 @@ function assetPhaseOf(tiers, phase) {
  * size of their blocks, and tiers the result of parseAssetTiers.
  * - With the tiers, each file goes in its phase, in the order of the tiers. For a file that the list gives in blocks,
  *   with blocks in the tiers, each run of blocks goes in its own phase. The other blocks come when the game reads them.
- *   A file that the tiers do not give is a later file.
+ *   A file that the tiers do not give is a later file, but a file of k_AssetSoonRules is a land-soon file after the
+ *   others, so that the first sound of each species never waits for the site.
  * - With no tiers, the boot phase has all the files of the start and the first block of each music bank, and the
  *   land-soon phase has the files that the first land can read in its play (k_AssetSoonRules).
  */
@@ -506,7 +507,10 @@ function planAssetTiers(files, tiers = null, blockSize = 0) {
     files.forEach((file, number) => {
       const tier = tiers.files.get(file.path.toLowerCase());
       if (tier === undefined) {
-        phases[k_AssetPhaseLater].push({ number, block: null, order: 0 });
+        // A file that the first land can read in its play, but that the traces did not read, comes after the files of
+        // the land-soon phase of the tiers
+        const soon = k_AssetSoonRules.findIndex((rule) => rule.test(file.path.toLowerCase()));
+        phases[soon < 0 ? k_AssetPhaseLater : k_AssetPhaseSoon].push({ number, block: null, order: k_AssetMostFiles + soon });
         return;
       }
       if (!file.blocks || tier.blocks === null || blockSize !== tiers.blockSize) {
