@@ -8,7 +8,7 @@ const {
   refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets: streamWithTiers, isStartAsset,
   parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetBlockBounds, assetBlockRange,
   parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange, AssetStore,
-  k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPhases, k_AssetSmallFile,
+  k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile,
   k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads,
 } = require('../web/page/launcher-assets.js');
 
@@ -1009,6 +1009,15 @@ check('a caller can start the phases itself, for example after the program of th
   assert.equal(site.requests.get(assetAddress('Data/pre_intro.bik')), 1);
   const all = await streamAssets(index, { fetchFile: site.fetchFile, digest, root: new FakeFolder(), all: true });
   assert.equal(all.phases, null);
+});
+
+check('the scripts of the page about the game files load in one scope with no name twice', () => {
+  const vm = require('node:vm');
+  const fs = require('node:fs');
+  const scope = vm.createContext({ console });
+  for (const name of ['launcher-assets.js', 'launcher-map.js', 'launcher-asset-trace.js']) {
+    vm.runInContext(fs.readFileSync(`${__dirname}/../web/page/${name}`, 'utf8'), scope, { filename: name });
+  }
 });
 
 // A test that never ends leaves node with no work, and node stops with no error. The run then fails here.

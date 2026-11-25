@@ -81,7 +81,7 @@ const k_AssetReadAheadBlocks = 2;
 // startup and land-load phases in this order while the logos, the pre-intro film and the name box play. It gets the
 // land-soon files after them, and the later files only when the game reads them. A phase of the tiers file with another
 // name is a later phase.
-const k_AssetPhases = ['boot', 'pre-intro', 'startup', 'land-load', 'land-soon', 'later'];
+const k_AssetPagePhases = ['boot', 'pre-intro', 'startup', 'land-load', 'land-soon', 'later'];
 const k_AssetPhaseBoot = 0;
 const k_AssetPhaseLandLoad = 3;
 const k_AssetPhaseSoon = 4;
@@ -472,14 +472,14 @@ function isStartAsset(path, tiers = null) {
   return !k_AssetLaterRules.some((rule) => rule.test(lower));
 }
 
-/** The phase of the page (k_AssetPhases) of a phase of the tiers file, by its name */
+/** The phase of the page (k_AssetPagePhases) of a phase of the tiers file, by its name */
 function assetPhaseOf(tiers, phase) {
-  const found = k_AssetPhases.indexOf(tiers.phases[phase]);
+  const found = k_AssetPagePhases.indexOf(tiers.phases[phase]);
   return found < 0 ? k_AssetPhaseLater : found;
 }
 
 /**
- * What the page gets in each phase (k_AssetPhases), in the order to get it: for each phase a list of { number, block },
+ * What the page gets in each phase (k_AssetPagePhases), in the order to get it: for each phase a list of { number, block },
  * with block null for a whole file. The files are the files of the list in the order of their numbers, blockSize the
  * size of their blocks, and tiers the result of parseAssetTiers.
  * - With the tiers, each file goes in its phase, in the order of the tiers. For a file that the list gives in blocks,
@@ -491,7 +491,7 @@ function assetPhaseOf(tiers, phase) {
  *   land-soon phase has the files that the first land can read in its play (k_AssetSoonRules).
  */
 function planAssetTiers(files, tiers = null, blockSize = 0) {
-  const phases = k_AssetPhases.map(() => []);
+  const phases = k_AssetPagePhases.map(() => []);
   if (tiers === null) {
     files.forEach((file, number) => {
       const lower = file.path.toLowerCase();
@@ -1202,7 +1202,7 @@ if (typeof module !== 'undefined') {
     assetPhaseOf, parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
     assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
-    k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPhases, k_AssetSmallFile, k_AssetSmallDownloads,
+    k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile, k_AssetSmallDownloads,
     k_AssetPhaseDownloads, k_AssetDownloads,
   };
 }
