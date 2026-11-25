@@ -72,9 +72,25 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
       fileWaits.delete(file);
     }
   };
+  // When the page records the trace of the game files (launcher-asset-trace.js), the thread tells the page about the
+  // first read of each block of each file. The page writes the time and the phase of the game for it.
+  const tracedBlocks = new Set();
+  const noteGameRead = (file, offset, length) => {
+    const size = 1024 * 1024;
+    const first = Math.floor(offset / size);
+    const last = Math.floor((offset + Math.max(length, 1) - 1) / size);
+    for (let block = first; block <= last; block += 1) {
+      const key = `${file}:${block}`;
+      if (!tracedBlocks.has(key)) {
+        tracedBlocks.add(key);
+        postMessage({ openblackGameRead: { file, offset: block * size, length: size } });
+      }
+    }
+  };
   self.addEventListener('message', (event) => {
     if (event.data && event.data.openblackWeb) {
       globalThis.openblackWeb = event.data.openblackWeb;
+      globalThis.openblackNoteGameRead = event.data.openblackWeb.recordReads ? noteGameRead : undefined;
     } else if (event.data && event.data.openblackGameFile) {
       const given = event.data.openblackGameFile;
       const folder = globalThis.openblackWeb && globalThis.openblackWeb.folder;

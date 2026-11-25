@@ -75,6 +75,8 @@ const logElement = element('log');
 // do that for each line, because the main thread of the page also shows the game's frames.
 const k_LogLines = 20000;
 const logLines = [];
+// The trace of the game files that the game reads, with the page parameter recordAssetTrace (see startAssetTrace)
+let assetTrace = null;
 let logShown = 0;
 let logUpdateDue = false;
 
@@ -108,6 +110,7 @@ function log(text) {
     gameCrashed(text.slice(k_CrashReportTag.length).split('/').pop());
   }
   logLines.push(text);
+  assetTrace?.log(text);
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
     // The box gets all its text again at the next update
@@ -564,8 +567,9 @@ function watchGameFrames(gameFrames, displayFrames) {
   const timer = setInterval(() => {
     const game = Atomics.load(gameFrames, 0);
     const display = Atomics.load(displayFrames, 0);
-    // A page that is not shown gets no display frames, and the game waits for them: that is not a stop
-    const stalled = game === lastGame && display !== lastDisplay && game > 0;
+    // A page that is not shown gets no display frames, and the game waits for them: that is not a stop. A read that
+    // waits for the site is not a stop either: the map of the game files shows its download.
+    const stalled = game === lastGame && display !== lastDisplay && game > 0 && gameFileWaits.size === 0;
     stalledMs = stalled ? stalledMs + k_GameStallCheckMs : 0;
     lastGame = game;
     lastDisplay = display;
@@ -695,6 +699,11 @@ function keepStorage() {
 
 // The states of the game files on the map (launcher-map.js), while the page and the game get them from the site
 let assetMap = null;
+// The time in milliseconds between two checks of the reads of the game that wait for the site
+const k_AssetWaitCheckMs = 250;
+// True when the page opens the map of the game files over the game while a read waits (watchGameFileWaits). The web
+// client only (deviation 296). The small map in the strip above the game also shows the download.
+const k_AssetWaitPanel = true;
 // The time when the page asked for the program. An earlier answer for the program is the answer to the HEAD request.
 let programAsked = Infinity;
 
@@ -773,6 +782,8 @@ function showAssetMap(index, programBytes) {
 async function useSiteGameFiles() {
   const fetchFile = (address, options) => fetch(address, options);
   const answer = await fetchAssetIndex(fetchFile);
+  // The tiers of the game files give the order of the downloads. With no tiers, the page uses its rules.
+  const tiers = answer.granted ? await fetchAssetTiers(fetchFile, log) : null;
   if (!answer.granted) {
     log(`The site gives no game files to this account (status ${answer.status}): ${answer.reason || 'no reason'}.`);
     return false;
@@ -814,20 +825,20 @@ async function useSiteGameFiles() {
   });
   const all = allBox.checked;
   try {
-    const { entries, store, blockSize } = await streamAssets(answer.index, {
+    const { entries, store, blockSize, phases } = await streamAssets(answer.index, {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
-      wanted: isGameFile, progress: show, all,
+      wanted: isGameFile, progress: show, all, startPhases: false, tiers,
       share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
       log, watch: (event, key, detail) => assetMap.handle(event, key, detail),
     });
-    siteFiles = { store, blockSize };
+    siteFiles = { store, blockSize, phases, tiers };
     getAll();
     log(`The page downloaded ${last.files} game files and blocks (${megabytes(last.bytes)}). The browser kept the ` +
       'other files.');
     progress.textContent = all
       ? 'This browser has all the game files. The next visit downloads only the files that change.'
-      : 'This browser has the game files for the start. The game gets the other files from the site when it reads ' +
-        'them.';
+      : 'This browser has the game files for the start. The page gets the other files while the game starts and ' +
+        'plays, in the order that the game reads them.';
     await choose(entries, 'the site', { copyAllowed: false });
     return true;
   } catch (error) {
@@ -855,6 +866,7 @@ function setPresent(present) {
 }
 
 function showFrame(frame) {
+  shownFrames += 1;
   const screen = element('screen');
   if (screen.width !== frame.width || screen.height !== frame.height) {
     screen.width = frame.width;
@@ -1041,18 +1053,125 @@ function gameFolder(list) {
 const obtainedGameFiles = new Set();
 
 /**
+ * Starts the trace of the game files that the game reads (launcher-asset-trace.js), for the tool
+ * tools/web-asset-tiers. The value of the page parameter recordAssetTrace is the name of the scenario.
+ * Nothing starts with no parameter. A button over the game saves the trace as a JSON file, and
+ * globalThis.openblackAssetTrace.text() gives its text to a test tool.
+ */
+function startAssetTrace(parameters, files, version) {
+  if (!parameters.has('recordAssetTrace')) {
+    return undefined;
+  }
+  const scenario = parameters.get('recordAssetTrace') || 'unnamed';
+  assetTrace = new AssetTraceRecorder(files, () => performance.now());
+  const text = () => `${JSON.stringify(assetTrace.trace({ scenario, build: version?.text ?? '' }), null, 1)}\n`;
+  const save = () => download(`asset-trace_${scenario}_${fileTime()}.json`, text());
+  globalThis.openblackAssetTrace = { text, save, reads: () => assetTrace.reads.length, phase: () => assetTrace.phase };
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = 'Save the asset trace';
+  button.id = 'asset-trace-save';
+  Object.assign(button.style, { position: 'fixed', right: '16px', bottom: '16px', zIndex: '10' });
+  button.addEventListener('click', (event) => {
+    save();
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
+  document.body.append(button);
+  log(`The page records the trace of the game files for the scenario ${scenario}.`);
+  return (file, offset, length) => assetTrace.read(file, offset, length);
+}
+// The reads of the game threads that wait for the site now, each with its start time and if it can stop the screen
+const gameFileWaits = new Set();
+// The number of frames that the game sent to the page as images, as its loading screens do
+let shownFrames = 0;
+// True while the page opened the map of the game files over the game for a read that waits
+let assetPanelForWait = false;
+// True when the player opened or closed the map while reads wait. The page then does not change the map until the
+// waits end.
+let assetPanelDismissed = false;
+// Starts the phases of the start when the game runs (startAssetPhases)
+let beginAssetPhases = () => {};
+// The longest time in milliseconds from the start of the game to the downloads of its phases
+const k_AssetPhasesLatestMs = 30000;
+
+/**
  * A game thread reads bytes of a game file that the page does not have. The page gets them first, then the files that
  * the game will probably read next.
  */
 async function obtainGameFile(number, offset, length) {
-  const { store } = siteFiles;
+  const { store, tiers } = siteFiles;
   const file = store.files[number];
   if (!obtainedGameFiles.has(number)) {
     obtainedGameFiles.add(number);
     log(`The game reads ${file.path}, which the page gets from the site now.`);
   }
-  await store.obtain(number, offset, length);
-  store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256) }));
+  beginAssetPhases();
+  const wait = { since: performance.now(), holdsScreen: assetWaitHoldsScreen(file.path) };
+  gameFileWaits.add(wait);
+  try {
+    await store.obtain(number, offset, length);
+  } finally {
+    gameFileWaits.delete(wait);
+  }
+  store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256), tiers }));
+}
+
+/**
+ * Starts the downloads of the phases of the start when the program of the game and its threads are ready, or at the
+ * first read of the game that waits. Thus the program and the scripts of the game threads do not share the network with
+ * the phases. A time limit starts them in any case.
+ */
+function startAssetPhases(files) {
+  let started = false;
+  beginAssetPhases = () => {
+    if (!started) {
+      started = true;
+      files.store.queuePhases(files.phases);
+    }
+  };
+  setTimeout(() => beginAssetPhases(), k_AssetPhasesLatestMs);
+}
+
+/** Opens or closes the map of the game files over the game */
+function setAssetPanel(open) {
+  document.body.classList.toggle('assets-open', open);
+  element('assets-toggle').setAttribute('aria-expanded', String(open));
+}
+
+/**
+ * While a read of the game waits for the site and the screen has no new frame, the game cannot draw its loading
+ * screen. The page then shows the map of the game files over the game, and closes it again when the read ends or the
+ * screen moves. A map that the player opened stays open.
+ */
+function watchGameFileWaits(gameFrames) {
+  let lastFrames = -1;
+  let stillSince = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    const frames = Atomics.load(gameFrames, 0) + shownFrames;
+    if (frames !== lastFrames) {
+      lastFrames = frames;
+      stillSince = now;
+    }
+    const oldest = Math.min(...[...gameFileWaits].filter((wait) => wait.holdsScreen).map((wait) => wait.since));
+    const change = assetWaitPanelChange({
+      open: document.body.classList.contains('assets-open'), forWait: assetPanelForWait,
+      dismissed: assetPanelDismissed, waitedMs: now - oldest, stillMs: now - stillSince,
+    });
+    if (oldest === Infinity) {
+      assetPanelDismissed = false;
+    }
+    if (change === 'open') {
+      assetPanelForWait = true;
+      setAssetPanel(true);
+      log('A read of the game waits for the site: the page shows the map of the game files.');
+    } else if (change === 'close') {
+      assetPanelForWait = false;
+      setAssetPanel(false);
+      log('The read of the game has its bytes: the page closes the map of the game files.');
+    }
+  }, k_AssetWaitCheckMs);
 }
 
 async function start(online = false) {
@@ -1102,6 +1221,10 @@ async function start(online = false) {
   log(`Renderer: ${diagnostics.renderer}.`);
   describeAdapter(renderer.backend);
   const version = await buildVersion;
+  const noteGameRead = startAssetTrace(parameters,
+    chosen.map((entry) => ({ path: entry.path, size: entry.size ?? entry.file.size })), version);
+  // The page stays at the end of a run that records the trace of the game files, so that the trace is not lost
+  staysAtEnd ||= Boolean(noteGameRead);
   element('chooser').hidden = true;
   element('game').hidden = false;
   element('build-badge').hidden = false;
@@ -1154,9 +1277,10 @@ async function start(online = false) {
     arguments: gameArguments,
     print: log,
     printErr: log,
+    onRuntimeInitialized: () => beginAssetPhases(),
     openblackWeb: {
       folder: gameFolder(list), storage, version: version.file, showFrame, setPresent, requests, displayFrames, gameFrames,
-      obtainGameFile: siteFiles ? obtainGameFile : undefined,
+      obtainGameFile: siteFiles ? obtainGameFile : undefined, noteGameRead,
     },
     onExit: (code) => {
       log(`The game stopped with the code ${code}.`);
@@ -1192,10 +1316,11 @@ async function start(online = false) {
     assetMap.handle('queued', 'program', 'now');
     assetMap.handle('started', 'program');
   }
-  // After the start, the page gets the files that the first land can read in its play, one at a time
-  if (siteFiles) {
-    const { store } = siteFiles;
-    store.prefetch(planAssetPrefetch(store.files, { have: (sha256) => store.kept.has(sha256) }));
+  if (siteFiles && assetMap && k_AssetWaitPanel) {
+    watchGameFileWaits(gameFrames);
+  }
+  if (siteFiles && siteFiles.phases) {
+    startAssetPhases(siteFiles);
   }
 }
 
@@ -1219,6 +1344,9 @@ async function main() {
     button.blur();
   });
   element('assets-toggle').addEventListener('click', (event) => {
+    // A map that the player opens or closes stays so
+    assetPanelForWait = false;
+    assetPanelDismissed = gameFileWaits.size > 0;
     const open = document.body.classList.toggle('assets-open');
     event.currentTarget.setAttribute('aria-expanded', String(open));
     // The keys go to the game again, not to the button
