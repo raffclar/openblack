@@ -860,6 +860,22 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.young_cow_holds_wheat",
+	    .name = "Young cow holds a handful of wheat",
+	    .facet = Facet::Objects,
+	    .description = "A new cow, as small as a player's creature at the start of Land 1, with its town's storage pit full "
+	                   "of food in front of it. A script tells it to eat from the pit. The camera follows it closely.",
+	    .expected = "It takes a handful of wheat with food in it. The bundle is 3.75 times its size and turns with the "
+	                "hand. The hand holds it near the tips of its ears, and the tie hangs 0.7 of its height away along "
+	                "the bundle.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Cow, .size = 0.22f, .phase = 0}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -25.0f}, .storedFood = 5000, .storedWood = 0}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromStoragePit"}},
+	});
+
+	all.push_back({
 	    .id = "needs.eats_from_tree",
 	    .name = "Creature eats from a tree",
 	    .facet = Facet::Needs,

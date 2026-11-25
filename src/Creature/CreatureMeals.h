@@ -36,6 +36,22 @@ constexpr float k_ThingsPerSize = 15.0f;
 constexpr float k_HandfulPerSize = 1000.0f;
 [[nodiscard]] uint32_t HandfulAmount(float size, uint32_t thingHolds);
 
+/// Where a new handful of a creature comes from
+enum class HandfulFrom
+{
+	/// A thing: a field, a tree, a pile or the food pile of a storage pit
+	Thing,
+	/// Nothing: the sea, or food that the creature makes from nothing
+	Nothing,
+};
+/// The scale of a handful from a thing is 3.75 times the size of the creature. The scale of food from nothing is 1.5
+/// times the size of the creature.
+constexpr float k_ThingHandfulScalePerSize = 3.75f;
+constexpr float k_NothingHandfulScalePerSize = 1.5f;
+/// The scale of a new handful. Give the size that the body of the creature shows, as for the amount of the handful. Thus a
+/// creature in the pen of its temple makes a handful for its smaller size.
+[[nodiscard]] float HandfulScale(float size, HandfulFrom from);
+
 /// The hunger after a meal that the creature did not bring up: the hunger less the energy of the meal (its food, divided
 /// by the size of the creature and the food for each unit of energy of its species). The hunger stays from 0 to 1.
 [[nodiscard]] float HungerAfterMeal(float hunger, float energy);
