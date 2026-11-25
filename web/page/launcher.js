@@ -564,8 +564,9 @@ function watchGameFrames(gameFrames, displayFrames) {
   const timer = setInterval(() => {
     const game = Atomics.load(gameFrames, 0);
     const display = Atomics.load(displayFrames, 0);
-    // A page that is not shown gets no display frames, and the game waits for them: that is not a stop
-    const stalled = game === lastGame && display !== lastDisplay && game > 0;
+    // A page that is not shown gets no display frames, and the game waits for them: that is not a stop. A read that
+    // waits for the site is not a stop either: the map of the game files shows its download.
+    const stalled = game === lastGame && display !== lastDisplay && game > 0 && gameFileWaits.size === 0;
     stalledMs = stalled ? stalledMs + k_GameStallCheckMs : 0;
     lastGame = game;
     lastDisplay = display;
@@ -695,6 +696,11 @@ function keepStorage() {
 
 // The states of the game files on the map (launcher-map.js), while the page and the game get them from the site
 let assetMap = null;
+// The time in milliseconds between two checks of the reads of the game that wait for the site
+const k_AssetWaitCheckMs = 250;
+// True when the page opens the map of the game files over the game while a read waits (watchGameFileWaits). It is off
+// until the user signs off deviation 296. The small map in the strip above the game shows the download in both cases.
+const k_AssetWaitPanel = false;
 // The time when the page asked for the program. An earlier answer for the program is the answer to the HEAD request.
 let programAsked = Infinity;
 
@@ -814,20 +820,20 @@ async function useSiteGameFiles() {
   });
   const all = allBox.checked;
   try {
-    const { entries, store, blockSize } = await streamAssets(answer.index, {
+    const { entries, store, blockSize, phases } = await streamAssets(answer.index, {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
-      wanted: isGameFile, progress: show, all,
+      wanted: isGameFile, progress: show, all, startPhases: false,
       share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
       log, watch: (event, key, detail) => assetMap.handle(event, key, detail),
     });
-    siteFiles = { store, blockSize };
+    siteFiles = { store, blockSize, phases };
     getAll();
     log(`The page downloaded ${last.files} game files and blocks (${megabytes(last.bytes)}). The browser kept the ` +
       'other files.');
     progress.textContent = all
       ? 'This browser has all the game files. The next visit downloads only the files that change.'
-      : 'This browser has the game files for the start. The game gets the other files from the site when it reads ' +
-        'them.';
+      : 'This browser has the game files for the start. The page gets the other files while the game starts and ' +
+        'plays, in the order that the game reads them.';
     await choose(entries, 'the site', { copyAllowed: false });
     return true;
   } catch (error) {
@@ -855,6 +861,7 @@ function setPresent(present) {
 }
 
 function showFrame(frame) {
+  shownFrames += 1;
   const screen = element('screen');
   if (screen.width !== frame.width || screen.height !== frame.height) {
     screen.width = frame.width;
@@ -1039,6 +1046,16 @@ function gameFolder(list) {
 
 // The game files that a game thread read and the page got from the site, for the log
 const obtainedGameFiles = new Set();
+// The reads of the game threads that wait for the site now, each with its start time and if it can stop the screen
+const gameFileWaits = new Set();
+// The number of frames that the game sent to the page as images, as its loading screens do
+let shownFrames = 0;
+// True while the page opened the map of the game files over the game for a read that waits
+let assetPanelForWait = false;
+// Starts the phases of the start when the game runs (startAssetPhases)
+let beginAssetPhases = () => {};
+// The longest time in milliseconds from the start of the game to the downloads of its phases
+const k_AssetPhasesLatestMs = 30000;
 
 /**
  * A game thread reads bytes of a game file that the page does not have. The page gets them first, then the files that
@@ -1051,8 +1068,65 @@ async function obtainGameFile(number, offset, length) {
     obtainedGameFiles.add(number);
     log(`The game reads ${file.path}, which the page gets from the site now.`);
   }
-  await store.obtain(number, offset, length);
+  beginAssetPhases();
+  const wait = { since: performance.now(), holdsScreen: assetWaitHoldsScreen(file.path) };
+  gameFileWaits.add(wait);
+  try {
+    await store.obtain(number, offset, length);
+  } finally {
+    gameFileWaits.delete(wait);
+  }
   store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256) }));
+}
+
+/**
+ * Starts the downloads of the phases of the start when the program of the game and its threads are ready, or at the
+ * first read of the game that waits. Thus the program and the scripts of the game threads do not share the network with
+ * the phases. A time limit starts them in any case.
+ */
+function startAssetPhases(files) {
+  let started = false;
+  beginAssetPhases = () => {
+    if (!started) {
+      started = true;
+      files.store.queuePhases(files.phases);
+    }
+  };
+  setTimeout(() => beginAssetPhases(), k_AssetPhasesLatestMs);
+}
+
+/** Opens or closes the map of the game files over the game */
+function setAssetPanel(open) {
+  document.body.classList.toggle('assets-open', open);
+  element('assets-toggle').setAttribute('aria-expanded', String(open));
+}
+
+/**
+ * While a read of the game waits for the site and the screen has no new frame, the game cannot draw its loading
+ * screen. The page then shows the map of the game files over the game, and closes it again when the read ends or the
+ * screen moves. A map that the player opened stays open.
+ */
+function watchGameFileWaits(gameFrames) {
+  let lastFrames = -1;
+  let stillSince = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    const frames = Atomics.load(gameFrames, 0) + shownFrames;
+    if (frames !== lastFrames) {
+      lastFrames = frames;
+      stillSince = now;
+    }
+    const oldest = Math.min(...[...gameFileWaits].filter((wait) => wait.holdsScreen).map((wait) => wait.since));
+    const show = assetWaitShowsPanel({ waitedMs: now - oldest, stillMs: now - stillSince });
+    if (show && !document.body.classList.contains('assets-open')) {
+      assetPanelForWait = true;
+      setAssetPanel(true);
+      log('A read of the game waits for the site: the page shows the map of the game files.');
+    } else if (!show && assetPanelForWait) {
+      assetPanelForWait = false;
+      setAssetPanel(false);
+    }
+  }, k_AssetWaitCheckMs);
 }
 
 async function start(online = false) {
@@ -1154,6 +1228,7 @@ async function start(online = false) {
     arguments: gameArguments,
     print: log,
     printErr: log,
+    onRuntimeInitialized: () => beginAssetPhases(),
     openblackWeb: {
       folder: gameFolder(list), storage, version: version.file, showFrame, setPresent, requests, displayFrames, gameFrames,
       obtainGameFile: siteFiles ? obtainGameFile : undefined,
@@ -1192,10 +1267,11 @@ async function start(online = false) {
     assetMap.handle('queued', 'program', 'now');
     assetMap.handle('started', 'program');
   }
-  // After the start, the page gets the files that the first land can read in its play, one at a time
-  if (siteFiles) {
-    const { store } = siteFiles;
-    store.prefetch(planAssetPrefetch(store.files, { have: (sha256) => store.kept.has(sha256) }));
+  if (siteFiles && assetMap && k_AssetWaitPanel) {
+    watchGameFileWaits(gameFrames);
+  }
+  if (siteFiles && siteFiles.phases) {
+    startAssetPhases(siteFiles);
   }
 }
 
@@ -1219,6 +1295,8 @@ async function main() {
     button.blur();
   });
   element('assets-toggle').addEventListener('click', (event) => {
+    // A map that the player opens or closes stays so
+    assetPanelForWait = false;
     const open = document.body.classList.toggle('assets-open');
     event.currentTarget.setAttribute('aria-expanded', String(open));
     // The keys go to the game again, not to the button

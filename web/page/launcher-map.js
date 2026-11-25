@@ -25,11 +25,12 @@ const k_AssetMapGroups = [
 ];
 
 // The states of a file or a block, in the order that the legend and a square of small files show them
-const k_AssetMapStates = ['present', 'downloading', 'urgent', 'prefetch', 'failed', 'lazy'];
+const k_AssetMapStates = ['present', 'downloading', 'urgent', 'phase', 'prefetch', 'failed', 'lazy'];
 const k_AssetMapStateNames = {
   present: 'In this browser',
   downloading: 'Downloading now',
   urgent: 'Queue: needed now',
+  phase: 'Queue: next for the game',
   prefetch: 'Queue: for later',
   failed: 'Failed',
   lazy: 'Not needed yet',
@@ -266,7 +267,7 @@ class AssetMapModel {
       break;
     case 'queued':
       if (entry.state !== 'present' && entry.state !== 'downloading') {
-        entry.state = detail === 'now' ? 'urgent' : 'prefetch';
+        entry.state = { now: 'urgent', phase: 'phase' }[detail] ?? 'prefetch';
       }
       break;
     case 'started':
@@ -335,7 +336,8 @@ class AssetMapModel {
   /** The state of a whole file for the player: the most urgent state of its parts. It is present only when all are. */
   stateOf(item) {
     const states = new Set(this.partsOf(item).map((part) => part.state));
-    return ['downloading', 'urgent', 'failed', 'prefetch', 'lazy', 'present'].find((state) => states.has(state));
+    return ['downloading', 'urgent', 'failed', 'phase', 'prefetch', 'lazy', 'present']
+      .find((state) => states.has(state));
   }
 
   /** Keeps the bytes that arrived until now, for the speed. The time is in milliseconds. */
@@ -374,7 +376,7 @@ class AssetMapModel {
         }
       }
     }
-    const remaining = bytes.downloading + bytes.urgent + bytes.prefetch;
+    const remaining = bytes.downloading + bytes.urgent + bytes.phase + bytes.prefetch;
     const speed = this.speed();
     return {
       bytes, total: this.map.size, received: this.received, wire: this.wire, remaining, active, speed,
@@ -433,7 +435,8 @@ function assetMapColours(element) {
   const value = (name) => style.getPropertyValue(name).trim();
   return {
     present: value('--map-present'), downloading: value('--map-downloading'), urgent: value('--map-urgent'),
-    prefetch: value('--map-prefetch'), failed: value('--map-failed'), lazy: value('--map-lazy'),
+    phase: value('--map-phase'), prefetch: value('--map-prefetch'), failed: value('--map-failed'),
+    lazy: value('--map-lazy'),
     frame: value('--map-frame'), label: value('--map-label'), hover: value('--map-hover'), back: value('--map-back'),
   };
 }
