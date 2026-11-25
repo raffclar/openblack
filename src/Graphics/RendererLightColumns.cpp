@@ -80,7 +80,7 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 	// Only the main pass draws the columns. The reflection draws only the symbols of belief.
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto columnId = resources::HashIdentifier(MeshId::SpellColumn);
-	const auto* column = desc.viewId == RenderPass::Main && Locator::influenceSystem::has_value() && meshes.Contains(columnId)
+	const auto* column = desc.viewId == RenderPass::Main && desc.frame->effects.influenceShown && meshes.Contains(columnId)
 	                         ? &*meshes.Handle(columnId)
 	                         : nullptr;
 	// The view of the main pass. A column out of it puts no pixel on the screen, so it is not drawn. A warm-up draws all
@@ -93,60 +93,13 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 		DrawLightShaft(desc, *column, desc.camera->GetOrigin(), glm::vec4(0.0f));
 	}
 
-	// Over each village centre, at the middle of its model, in its town's player's colour. The columns never fade: the
-	// game turns off the fade of their objects when it makes them.
-	std::unordered_map<uint32_t, PlayerNames> owners;
-	if (column != nullptr)
-	{
-		desc.entities.Each<const Town>([&owners](const Town& town) { owners.emplace(town.id, town.owner); });
-	}
-	const auto drawColumn = [&](entt::entity entity, const Abode& abode) {
-		const auto owner = owners.find(abode.townId);
-		const auto* transform = desc.entities.TryGet<const Transform>(entity);
-		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
-		if (owner == owners.end() || transform == nullptr || mesh == nullptr ||
-		    !light_column::Shown(owner->second, Locator::influenceSystem::value().IsBorderShown(owner->second)) ||
-		    !meshes.Contains(mesh->id))
+	// The centres draw in the game's order, the newest first. The game draws each centre's symbols of belief just after
+	// its column, also where the column does not show.
+	const auto& centres = desc.frame->effects.townCentres;
+	DrawTownBeliefCentres(desc, desc.frame->effects.townCentreEntities, _warmingUp ? nullptr : &seenBy, [&](size_t place) {
+		if (const auto& shown = centres[place].column; column != nullptr && shown.has_value())
 		{
-			return;
-		}
-		const auto centre = meshes.Handle(mesh->id)->GetBoundingBox().Center();
-		const auto model = glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
-		DrawLightShaft(desc, *column, glm::vec3(model * glm::vec4(centre, 1.0f)),
-		               light_column::Tint(ColourOf(owner->second), light_column::k_TownAlpha), testedView);
-	};
-	// The centres draw in the game's order, the newest first
-	auto& centres = _townColumnCentres;
-	auto& abodes = _townColumnAbodes;
-	centres.clear();
-	abodes.clear();
-	const auto addCentre = [&](entt::entity entity, const Abode& abode) {
-		if (abode.type == AbodeNumber::TownCentre)
-		{
-			centres.push_back(entity);
-			abodes.push_back(&abode);
-		}
-	};
-	if (!Locator::townSystem::has_value())
-	{
-		desc.entities.Each<const Abode>(addCentre);
-	}
-	else
-	{
-		for (const auto entity : Locator::townSystem::value().CentresInDrawOrder())
-		{
-			if (const auto* abode = desc.entities.Valid(entity) ? desc.entities.TryGet<const Abode>(entity) : nullptr;
-			    abode != nullptr)
-			{
-				addCentre(entity, *abode);
-			}
-		}
-	}
-	// The game draws each centre's symbols of belief just after its column, also where the column does not show
-	DrawTownBeliefCentres(desc, centres, _warmingUp ? nullptr : &seenBy, [&](size_t place) {
-		if (column != nullptr)
-		{
-			drawColumn(centres[place], *abodes[place]);
+			DrawLightShaft(desc, *column, shown->position, shown->tint, testedView);
 		}
 	});
 }
@@ -154,7 +107,7 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
 {
 	// The temple's column is seen only from outside, so it is not drawn while the player is inside the temple
-	if (desc.viewId != RenderPass::Main || !Locator::influenceSystem::has_value() || desc.frame->templeActive)
+	if (desc.viewId != RenderPass::Main || !desc.frame->effects.influenceShown || desc.frame->templeActive)
 	{
 		return;
 	}
@@ -164,24 +117,14 @@ void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	using namespace ecs::components;
 	const auto& column = *meshes.Handle(columnId);
-	const auto& influence = Locator::influenceSystem::value();
 	const auto seenBy = SceneFrustum(desc);
 	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
 	// Over each temple, where it stands, beating with its player's heart
-	const float turnFraction = desc.frame->clock.turnFraction;
-	desc.entities.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
-		if (!light_column::Shown(temple.owner, influence.IsBorderShown(temple.owner)) ||
-		    !light_column::TempleShown(temple.destroying, temple.destructionClock))
-		{
-			return;
-		}
-		const float pulse =
-		    Locator::heartbeatSystem::has_value() ? Locator::heartbeatSystem::value().Pulse(temple.owner, turnFraction) : 0.0f;
-		DrawLightShaft(desc, column, transform.position,
-		               light_column::Tint(ColourOf(temple.owner), light_column::TempleAlpha(pulse)), testedView);
-	});
+	for (const auto& [position, tint] : desc.frame->effects.templeColumns)
+	{
+		DrawLightShaft(desc, column, position, tint, testedView);
+	}
 }
 
 void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint,
@@ -225,7 +168,7 @@ void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, co
 
 void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::scriptHighlightSystem::has_value())
+	if (desc.viewId != RenderPass::Main || desc.frame->effects.scrollBeams.empty())
 	{
 		return;
 	}
@@ -236,35 +179,22 @@ void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& beam = *meshes.Handle(beamId);
-	const float turnFraction = desc.frame->clock.turnFraction;
-	const float pulseShare =
-	    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
-
-	// A started scroll stands in a beam the same shape as the temple's column, rising from its model's middle. A beam
-	// with no strength this frame adds nothing, thus the renderer does not send it. The beam's object keeps the fade
-	// that the game gives every object, thus the draw stops where the beam's distance bands end.
-	desc.entities.Each<const ecs::components::ScriptHighlight>([&](const ecs::components::ScriptHighlight& highlight) {
-		if (highlight.hidden || !ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
-		{
-			return;
-		}
-		const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
-		if ((colour >> 24u) == 0)
-		{
-			return;
-		}
-		DrawLightShaft(desc, beam, highlight.centre,
-		               light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)), nullptr, true);
-	});
+	// A started scroll stands in a beam the same shape as the temple's column, rising from its model's middle. The
+	// beam's object keeps the fade that the game gives every object, thus the draw stops where the beam's distance bands
+	// end.
+	for (const auto& [position, tint] : desc.frame->effects.scrollBeams)
+	{
+		DrawLightShaft(desc, beam, position, tint, nullptr, true);
+	}
 }
 
 void Renderer::DrawIconPulses(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::spellIconSystem::has_value())
+	if (desc.viewId != RenderPass::Main)
 	{
 		return;
 	}
-	const auto pulses = Locator::spellIconSystem::value().ChargePulses();
+	const auto& pulses = desc.frame->effects.iconPulses;
 	if (pulses.empty())
 	{
 		return;
@@ -313,5 +243,111 @@ void Renderer::DrawIconPulses(const DrawSceneDesc& desc) const
 		// The pulse's mesh is sorted whole, so the pulse takes the key of a placed model
 		submitDesc.sortDepth = zsort::ModelDepth(glm::vec3(pulse.model[3]), eye);
 		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	}
+}
+
+void Renderer::CollectLightColumns(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
+{
+	using namespace ecs::components;
+	const auto& registry = drawDesc.entities;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	effects.influenceShown = Locator::influenceSystem::has_value();
+	// The centres in the game's order, the newest first
+	effects.townCentres.clear();
+	effects.townCentreEntities.clear();
+	const auto addCentre = [&effects](entt::entity entity, const Abode& abode) {
+		if (abode.type == AbodeNumber::TownCentre)
+		{
+			effects.townCentres.push_back({.centre = entity});
+			effects.townCentreEntities.push_back(entity);
+		}
+	};
+	if (!Locator::townSystem::has_value())
+	{
+		registry.Each<const Abode>(addCentre);
+	}
+	else
+	{
+		for (const auto entity : Locator::townSystem::value().CentresInDrawOrder())
+		{
+			if (const auto* abode = registry.Valid(entity) ? registry.TryGet<const Abode>(entity) : nullptr; abode != nullptr)
+			{
+				addCentre(entity, *abode);
+			}
+		}
+	}
+	// Over each village centre, at the middle of its model, in its town's player's colour. The columns never fade: the
+	// game turns off the fade of their objects when it makes them.
+	if (effects.influenceShown)
+	{
+		const auto& influence = Locator::influenceSystem::value();
+		std::unordered_map<uint32_t, PlayerNames> owners;
+		registry.Each<const Town>([&owners](const Town& town) { owners.emplace(town.id, town.owner); });
+		for (auto& [entity, column] : effects.townCentres)
+		{
+			const auto* abode = registry.TryGet<const Abode>(entity);
+			const auto owner = abode != nullptr ? owners.find(abode->townId) : owners.end();
+			const auto* transform = registry.TryGet<const Transform>(entity);
+			const auto* mesh = registry.TryGet<const ecs::components::Mesh>(entity);
+			if (owner == owners.end() || transform == nullptr || mesh == nullptr ||
+			    !light_column::Shown(owner->second, influence.IsBorderShown(owner->second)) || !meshes.Contains(mesh->id))
+			{
+				continue;
+			}
+			const auto centre = meshes.Handle(mesh->id)->GetBoundingBox().Center();
+			const auto model =
+			    glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
+			column = DrawnEffects::LightColumn {
+			    .position = glm::vec3(model * glm::vec4(centre, 1.0f)),
+			    .tint = light_column::Tint(ColourOf(owner->second), light_column::k_TownAlpha),
+			};
+		}
+	}
+	// Over each temple, where it stands, beating with its player's heart
+	effects.templeColumns.clear();
+	if (effects.influenceShown)
+	{
+		const auto& influence = Locator::influenceSystem::value();
+		const float turnFraction = drawDesc.frame->clock.turnFraction;
+		registry.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
+			if (!light_column::Shown(temple.owner, influence.IsBorderShown(temple.owner)) ||
+			    !light_column::TempleShown(temple.destroying, temple.destructionClock))
+			{
+				return;
+			}
+			const float pulse = Locator::heartbeatSystem::has_value()
+			                        ? Locator::heartbeatSystem::value().Pulse(temple.owner, turnFraction)
+			                        : 0.0f;
+			effects.templeColumns.push_back({
+			    .position = transform.position,
+			    .tint = light_column::Tint(ColourOf(temple.owner), light_column::TempleAlpha(pulse)),
+			});
+		});
+	}
+	// A beam with no strength this frame adds nothing, thus the fill does not copy it
+	effects.scrollBeams.clear();
+	if (Locator::scriptHighlightSystem::has_value())
+	{
+		const float pulseShare = ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(),
+		                                                            drawDesc.frame->clock.turnFraction);
+		registry.Each<const ScriptHighlight>([&](const ScriptHighlight& highlight) {
+			if (highlight.hidden || !ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
+			{
+				return;
+			}
+			const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
+			if ((colour >> 24u) != 0)
+			{
+				effects.scrollBeams.push_back({
+				    .position = highlight.centre,
+				    .tint = light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)),
+				});
+			}
+		});
+	}
+	effects.iconPulses.clear();
+	if (Locator::spellIconSystem::has_value())
+	{
+		effects.iconPulses = Locator::spellIconSystem::value().ChargePulses();
 	}
 }

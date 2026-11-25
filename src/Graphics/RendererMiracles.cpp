@@ -346,13 +346,8 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	// A globe nobody owns shows its rings in the colour of the player at this computer
 	const auto ringColour = ColourOf(OwnColour(*desc.frame));
 
-	// Of the globes on the land's blocks only those that the land's draw list draws show
-	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
-	const auto drawGlobe = [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
-		if (drawList != nullptr && !drawList->Drawn(desc.entities, entity))
-		{
-			return;
-		}
+	// The fill copied only the globes that the land's draw list draws
+	const auto drawGlobe = [&](const OneOffSpellSeed& globe, const Transform& transform) {
 		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
 
 		// The miracle's seed spinning inside, below the middle, for the seeds that show one. Nobody owns a globe, and
@@ -411,7 +406,10 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 			                        .mirrored = false});
 		}
 	};
-	desc.entities.Each<const OneOffSpellSeed, const Transform>(drawGlobe);
+	for (const auto& [globe, transform] : desc.frame->effects.globes)
+	{
+		drawGlobe(globe, transform);
+	}
 }
 
 void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
@@ -421,24 +419,19 @@ void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	using ecs::components::Reward;
-	using ecs::components::RewardSeed;
 	// A town's new miracle spins above its opened chest, smaller than on an icon, lit by the land, in the colours of
 	// the chest's player
-	desc.entities.Each<const RewardSeed, const Reward>([&](const RewardSeed& shown, const Reward& chest) {
-		const auto player = chest.player.value_or(PlayerNames::NEUTRAL);
-		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
-		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
-		                            : 0.0f;
+	for (const auto& [shown, alignment, turnsLeft] : desc.frame->effects.rewardSeeds)
+	{
 		DrawSeedModel(desc, {.seed = shown.seed,
 		                     .middle = shown.middle,
 		                     .scale = ecs::reward::k_TownSeedSize,
 		                     .spin = shown.spin,
 		                     .phialPhase = shown.phialPhase,
 		                     .phialFrame = shown.phialFrame,
-		                     .phialAlpha = ecs::reward::TownSeedAlpha(chest.turnsLeft),
+		                     .phialAlpha = ecs::reward::TownSeedAlpha(turnsLeft),
 		                     .ownerAlignment = alignment});
-	});
+	}
 }
 
 void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
@@ -448,8 +441,6 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	using ecs::components::IconSeed;
-	const auto& registry = desc.entities;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const bool haveRing = meshes.Contains(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
 	// The view of this pass, as the pass sets it. The function does not draw the seeds and the rings out of it.
@@ -473,46 +464,17 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 			}
 		}
 	}
-	// Each icon with the player it is for, found on the game's thread. The models that the icons show are loaded here,
-	// so that the threads that draw them only read them.
-	struct Icon
-	{
-		const IconSeed* shown;
-		PlayerNames player;
-		float alignment;
-	};
-	std::vector<Icon> icons;
-	icons.reserve(registry.Size<IconSeed>());
+	// The fill found each icon with the player that it is for. The models that the icons show are found here, on the
+	// game's thread, thus the threads that draw them only read them.
+	const auto& icons = desc.frame->effects.iconSeeds;
 	const auto& info = Locator::infoConstants::value();
-	// The alignment of each player is found once for all of its icons, kept by the number of the player
-	std::array<std::optional<float>, std::numeric_limits<std::underlying_type_t<PlayerNames>>::max() + 1> alignments {};
-	const auto alignmentOf = [&alignments](PlayerNames player) {
-		if (!Locator::alignmentSystem::has_value() || player == PlayerNames::NEUTRAL)
-		{
-			return 0.0f;
-		}
-		auto& kept = alignments.at(static_cast<size_t>(player));
-		if (!kept.has_value())
-		{
-			kept = Locator::alignmentSystem::value().GetPlayerAlignment(player);
-		}
-		return *kept;
-	};
-	const auto* iconSystem = Locator::spellIconSystem::has_value() ? &Locator::spellIconSystem::value() : nullptr;
-	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
-		// The seed of an icon at a worship site that is not built does not show
-		if (iconSystem != nullptr && !iconSystem->Shown(icon))
-		{
-			return;
-		}
-		const auto player = ecs::world_objects::IconPlayer(registry, icon);
-		const float alignment = alignmentOf(player);
-		icons.push_back({.shown = &shown, .player = player, .alignment = alignment});
-		if (const auto model = magic::GetSeedModel(info, shown.seed, alignment); model.has_value())
+	for (const auto& icon : icons)
+	{
+		if (const auto model = magic::GetSeedModel(info, icon.shown.seed, icon.alignment); model.has_value())
 		{
 			static_cast<void>(meshes.Find(resources::HashIdentifier(*model)));
 		}
-	});
+	}
 	const auto& textures = Locator::resources::value().GetTextures();
 	static_cast<void>(textures.Find(entt::hashed_string("raw/envmap").value()));
 	static_cast<void>(textures.Find(entt::hashed_string("raw/S_IceEnvMap").value()));
@@ -521,14 +483,14 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	auto looks = FindSeedModelLooks();
 	looks.forward = desc.camera->GetForward();
 	EncodeInOrder(icons.size(), [&](size_t index, DrawEncoder& to) {
-		const auto& [shown, player, alignment] = icons[index];
+		const auto& [shown, player, alignment, colour] = icons[index];
 		DrawSeedModel(desc,
-		              {.seed = shown->seed,
-		               .middle = shown->middle,
+		              {.seed = shown.seed,
+		               .middle = shown.middle,
 		               .scale = 1.0f,
-		               .spin = shown->spin,
-		               .phialPhase = shown->phialPhase,
-		               .phialFrame = shown->phialFrame,
+		               .spin = shown.spin,
+		               .phialPhase = shown.phialPhase,
+		               .phialFrame = shown.phialFrame,
 		               .phialAlpha = std::numeric_limits<uint8_t>::max(),
 		               .ownerAlignment = alignment},
 		              &seenBy, &to, &looks);
@@ -537,11 +499,11 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		{
 			DrawPowerUpRings(desc,
 			                 {.mesh = ring,
-			                  .rings = magic::visuals::RingCount(shown->powerUp),
-			                  .spin = shown->ringSpin,
-			                  .middle = shown->middle,
+			                  .rings = magic::visuals::RingCount(shown.powerUp),
+			                  .spin = shown.ringSpin,
+			                  .middle = shown.middle,
 			                  .scale = 1.0f,
-			                  .colour = ColourOf(ecs::game_players::Colour(player)),
+			                  .colour = ColourOf(colour),
 			                  .alpha = magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max()),
 			                  .way = object_draw::Way::Banded,
 			                  .mirrored = reflection},
@@ -838,4 +800,57 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDept
 	};
 	std::ranges::for_each(fx->bands.bracelets, draw);
 	std::ranges::for_each(fx->bands.flying, draw);
+}
+
+void Renderer::CollectSeeds(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
+{
+	using ecs::components::IconSeed;
+	using ecs::components::OneOffSpellSeed;
+	using ecs::components::Transform;
+	const auto& registry = drawDesc.entities;
+	// Of the globes on the land's blocks only those that the land's draw list draws show
+	effects.globes.clear();
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	registry.Each<const OneOffSpellSeed, const Transform>(
+	    [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
+		    if (drawList == nullptr || drawList->Drawn(registry, entity))
+		    {
+			    effects.globes.push_back({.globe = globe, .transform = transform});
+		    }
+	    });
+	// The alignment of each player is found once for all of its seeds, kept by the number of the player
+	std::array<std::optional<float>, std::numeric_limits<std::underlying_type_t<PlayerNames>>::max() + 1> alignments {};
+	const auto alignmentOf = [&alignments](PlayerNames player) {
+		if (!Locator::alignmentSystem::has_value() || player == PlayerNames::NEUTRAL)
+		{
+			return 0.0f;
+		}
+		auto& kept = alignments.at(static_cast<size_t>(player));
+		if (!kept.has_value())
+		{
+			kept = Locator::alignmentSystem::value().GetPlayerAlignment(player);
+		}
+		return *kept;
+	};
+	effects.rewardSeeds.clear();
+	registry.Each<const ecs::components::RewardSeed, const ecs::components::Reward>(
+	    [&](const ecs::components::RewardSeed& shown, const ecs::components::Reward& chest) {
+		    effects.rewardSeeds.push_back({.shown = shown,
+		                                   .alignment = alignmentOf(chest.player.value_or(PlayerNames::NEUTRAL)),
+		                                   .turnsLeft = chest.turnsLeft});
+	    });
+	// Each icon with the player that it is for
+	effects.iconSeeds.clear();
+	const auto* iconSystem = Locator::spellIconSystem::has_value() ? &Locator::spellIconSystem::value() : nullptr;
+	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
+		// The seed of an icon at a worship site that is not built does not show
+		if (iconSystem != nullptr && !iconSystem->Shown(icon))
+		{
+			return;
+		}
+		const auto player = ecs::world_objects::IconPlayer(registry, icon);
+		const float alignment = alignmentOf(player);
+		effects.iconSeeds.push_back(
+		    {.shown = shown, .player = player, .alignment = alignment, .colour = ecs::game_players::Colour(player)});
+	});
 }

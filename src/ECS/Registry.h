@@ -11,11 +11,14 @@
 
 #include <cstdint>
 
+#include <initializer_list>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 
+#include <entt/core/type_info.hpp>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/helper.hpp>
 #include <entt/entity/registry.hpp>
@@ -29,6 +32,11 @@ namespace openblack
 {
 class Camera;
 }
+
+namespace openblack::ecs
+{
+class DrawReadWatch;
+} // namespace openblack::ecs
 
 namespace openblack::graphics
 {
@@ -144,49 +152,58 @@ public:
 	template <typename Component>
 	size_t Size()
 	{
+		NoteRead<Component>("Size");
 		return _registry.storage<Component>().size();
 	}
 	template <typename... Components>
 	[[nodiscard]] bool AllOf(entt::entity entity) const
 	{
+		NoteRead<Components...>("AllOf");
 		return _registry.all_of<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] bool AnyOf(entt::entity entity) const
 	{
+		NoteRead<Components...>("AnyOf");
 		return _registry.any_of<Components...>(entity);
 	}
 	template <typename... Components>
 	decltype(auto) Get(entt::entity entity)
 	{
 		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
+		NoteRead<Components...>("Get");
 		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Get(entt::entity entity) const
 	{
+		NoteRead<Components...>("Get");
 		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
 	decltype(auto) TryGet(entt::entity entity)
 	{
 		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
+		NoteRead<Components...>("TryGet");
 		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) TryGet(entt::entity entity) const
 	{
+		NoteRead<Components...>("TryGet");
 		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Front() const
 	{
+		NoteRead<Components...>("Front");
 		return _registry.view<Components...>().front();
 	}
 	template <typename... Components, typename... Exclude, typename Func>
 	decltype(auto) Each(Func func, Exclude... exclude)
 	{
 		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
+		NoteRead<Components...>("Each");
 		return _registry.view<Components...>(exclude...).each(func);
 	}
 	/// Changes the component of an entity in place, and marks the row for the hash of the world. The function gets the
@@ -194,6 +211,7 @@ public:
 	template <typename Component, typename Func>
 	decltype(auto) Write(entt::entity entity, Func func)
 	{
+		NoteRead<Component>("Write");
 		auto& value = _registry.get<Component>(entity);
 		_rowMarks.Mark(entt::type_hash<Component>::value(), entity);
 		return func(value);
@@ -203,6 +221,7 @@ public:
 	template <typename... Components, typename... Exclude, typename Func>
 	[[nodiscard]] decltype(auto) Each(Func func, Exclude... exclude) const
 	{
+		NoteRead<Components...>("Each");
 		return _registry.view<Components...>(exclude...).each(func);
 	}
 	/// The first entity in the order of Each that has the components and that the test accepts, or none. The search stops
@@ -210,6 +229,7 @@ public:
 	template <typename... Components, typename Test>
 	[[nodiscard]] std::optional<entt::entity> FindFirst(Test test) const
 	{
+		NoteRead<Components...>("FindFirst");
 		for (const auto found : _registry.view<Components...>().each())
 		{
 			if (std::apply(test, found))
@@ -222,6 +242,7 @@ public:
 	template <typename Component>
 	[[nodiscard]] decltype(auto) ToEntity(const Component& component) const
 	{
+		NoteRead<Component>("ToEntity");
 		const auto* storage = _registry.template storage<Component>();
 		return entt::to_entity(*storage, component);
 	}
@@ -238,14 +259,27 @@ public:
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Size() const
 	{
+		NoteRead<Components...>("Size");
 		return _registry.view<Components...>().size();
 	}
-	[[nodiscard]] decltype(auto) Valid(entt::entity entity) const { return _registry.valid(entity); }
+	[[nodiscard]] decltype(auto) Valid(entt::entity entity) const
+	{
+		NoteRead<>("Valid");
+		return _registry.valid(entity);
+	}
 	/// The registry beneath, read without knowing its component types, as the debug inspector lists entities
-	[[nodiscard]] const entt::registry& Underlying() const { return _registry; }
+	[[nodiscard]] const entt::registry& Underlying() const
+	{
+		NoteRead<>("Underlying");
+		return _registry;
+	}
 	/// The same written to, as the debug inspector adds, removes and sets components by their names; whoever writes
 	/// through it marks what is drawn as changed. A direct write to a value also calls StoresWritten.
-	[[nodiscard]] entt::registry& Underlying() { return _registry; }
+	[[nodiscard]] entt::registry& Underlying()
+	{
+		NoteRead<>("Underlying");
+		return _registry;
+	}
 	/// Told whenever an entity gains a component, or loses one (also as it is destroyed)
 	template <typename Component>
 	[[nodiscard]] decltype(auto) OnConstruct()
@@ -298,7 +332,28 @@ public:
 	Registry& operator=(const Registry&) = delete;
 	virtual ~Registry();
 
+	/// The watch counts the reads of the draw of this registry, with the name of the registry, until the next call. Give
+	/// no watch to stop.
+	void WatchReads(DrawReadWatch* watch, std::string_view name) noexcept
+	{
+		_readWatch = watch;
+		_readWatchName = name;
+	}
+
 protected:
+	/// The watch of the draw's reads counts a read of these components (see WatchReads)
+	template <typename... Components>
+	void NoteRead([[maybe_unused]] std::string_view call) const noexcept
+	{
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (_readWatch != nullptr) [[unlikely]]
+		{
+			NoteReadOf(call, {entt::type_name<Components>::value()...});
+		}
+#endif
+	}
+	void NoteReadOf(std::string_view call, std::initializer_list<std::string_view> components) const noexcept;
+
 	/// What is drawn changes with the components an entity gains or loses (see k_ChangesDrawLayout)
 	template <typename... Components>
 	void ComponentsChanged()
@@ -316,6 +371,8 @@ protected:
 	entt::registry _registry;
 
 private:
+	DrawReadWatch* _readWatch {nullptr};
+	std::string_view _readWatchName;
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
 	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
 	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.

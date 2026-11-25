@@ -24,6 +24,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerEyes.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -86,56 +87,61 @@ void Renderer::DrawVillagerEyes(const DrawSceneDesc& desc) const
 	submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
 	submitDesc.hazed = false;
 
-	desc.entities.Each<const ecs::components::HighDetail, const ecs::components::Mesh>(
-	    [&](const ecs::components::HighDetail& detail, const ecs::components::Mesh& mesh) {
-		    if (!detail.drawnEyes.has_value() || !detail.face.has_value() || !meshes.Contains(mesh.id))
-		    {
-			    return;
-		    }
-		    const auto face = *detail.face;
-		    std::array<const L3DMesh*, villager_eyes::k_PieceCount> pieces {};
-		    for (size_t i = 0; i < pieces.size(); ++i)
-		    {
-			    const auto id = resources::HashIdentifier(
-			        "misc/" + std::string(villager_eyes::PieceFile(face, static_cast<villager_eyes::Piece>(i))));
-			    if (!meshes.Contains(id))
-			    {
-				    return;
-			    }
-			    pieces.at(i) = meshes.Handle(id).operator->();
-		    }
-		    const auto headSkin = HeadSkin(*meshes.Handle(mesh.id));
-		    if (!headSkin.has_value())
-		    {
-			    return;
-		    }
-		    // The eyeball reads its face's iris, and the lids a patch of the head's skin
-		    const std::array eyeballSkin {std::pair {0u, eyeballTexture}};
-		    const std::array lidSkin {std::pair {0u, *headSkin}};
-		    const auto draw = [&](const L3DMesh& piece, const glm::mat4& matrix) {
-			    submitDesc.modelMatrices = &matrix;
-			    DrawMesh(piece, submitDesc, std::numeric_limits<uint8_t>::max());
-		    };
-		    // Each eye in its own shade of the villager's light: its eyeball turned as it looks, then its upper and lower
-		    // lids
-		    for (const auto side : {villager_eyes::Side::Right, villager_eyes::Side::Left})
-		    {
-			    const auto& eye = detail.drawnEyes->eyes.at(static_cast<size_t>(side));
-			    submitDesc.shadeAt = glm::vec4(detail.drawnEyes->standing, static_cast<float>(eye.shade));
-			    submitDesc.subMeshTextures = eyeballSkin;
-			    submitDesc.uvOffset = villager_eyes::IrisOffset(face);
-			    submitDesc.uvScale = 1.0f;
-			    draw(*pieces.at(static_cast<size_t>(villager_eyes::Piece::Eyeball)), eye.eyeball);
-			    const bool right = side == villager_eyes::Side::Right;
-			    submitDesc.subMeshTextures = lidSkin;
-			    submitDesc.uvOffset = glm::vec2(0.0f);
-			    submitDesc.uvScale = villager_eyes::k_LidTextureScale;
-			    draw(*pieces.at(
-			             static_cast<size_t>(right ? villager_eyes::Piece::RightUpperLid : villager_eyes::Piece::LeftUpperLid)),
-			         eye.upperLid);
-			    draw(*pieces.at(
-			             static_cast<size_t>(right ? villager_eyes::Piece::RightLowerLid : villager_eyes::Piece::LeftLowerLid)),
-			         eye.lowerLid);
-		    }
-	    });
+	const auto drawEyes = [&](const DrawnEffects::VillagerEyes& look) {
+		const auto face = look.face;
+		const auto meshId = look.mesh;
+		const auto& drawnEyes = look.eyes;
+		if (!meshes.Contains(meshId))
+		{
+			return;
+		}
+		std::array<const L3DMesh*, villager_eyes::k_PieceCount> pieces {};
+		for (size_t i = 0; i < pieces.size(); ++i)
+		{
+			const auto id = resources::HashIdentifier(
+			    "misc/" + std::string(villager_eyes::PieceFile(face, static_cast<villager_eyes::Piece>(i))));
+			if (!meshes.Contains(id))
+			{
+				return;
+			}
+			pieces.at(i) = meshes.Handle(id).operator->();
+		}
+		const auto headSkin = HeadSkin(*meshes.Handle(meshId));
+		if (!headSkin.has_value())
+		{
+			return;
+		}
+		// The eyeball reads its face's iris, and the lids a patch of the head's skin
+		const std::array eyeballSkin {std::pair {0u, eyeballTexture}};
+		const std::array lidSkin {std::pair {0u, *headSkin}};
+		const auto draw = [&](const L3DMesh& piece, const glm::mat4& matrix) {
+			submitDesc.modelMatrices = &matrix;
+			DrawMesh(piece, submitDesc, std::numeric_limits<uint8_t>::max());
+		};
+		// Each eye in its own shade of the villager's light: its eyeball turned as it looks, then its upper and lower
+		// lids
+		for (const auto side : {villager_eyes::Side::Right, villager_eyes::Side::Left})
+		{
+			const auto& eye = drawnEyes.eyes.at(static_cast<size_t>(side));
+			submitDesc.shadeAt = glm::vec4(drawnEyes.standing, static_cast<float>(eye.shade));
+			submitDesc.subMeshTextures = eyeballSkin;
+			submitDesc.uvOffset = villager_eyes::IrisOffset(face);
+			submitDesc.uvScale = 1.0f;
+			draw(*pieces.at(static_cast<size_t>(villager_eyes::Piece::Eyeball)), eye.eyeball);
+			const bool right = side == villager_eyes::Side::Right;
+			submitDesc.subMeshTextures = lidSkin;
+			submitDesc.uvOffset = glm::vec2(0.0f);
+			submitDesc.uvScale = villager_eyes::k_LidTextureScale;
+			draw(*pieces.at(
+			         static_cast<size_t>(right ? villager_eyes::Piece::RightUpperLid : villager_eyes::Piece::LeftUpperLid)),
+			     eye.upperLid);
+			draw(*pieces.at(
+			         static_cast<size_t>(right ? villager_eyes::Piece::RightLowerLid : villager_eyes::Piece::LeftLowerLid)),
+			     eye.lowerLid);
+		}
+	};
+	for (const auto& look : desc.frame->effects.villagerEyes)
+	{
+		drawEyes(look);
+	}
 }

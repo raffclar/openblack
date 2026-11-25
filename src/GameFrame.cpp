@@ -65,6 +65,7 @@
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/GameSpeed.h"
@@ -898,6 +899,46 @@ void Game::ReportTurnApiCheck() const
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Turn check: step {} {} {} {} calls ({})",
 		                   call.turnStep.has_value() ? std::to_string(*call.turnStep) : std::string("?"), Name(call.api),
 		                   call.what, call.count, call.where);
+	}
+}
+
+void Game::WatchDrawReads(bool drawing)
+{
+	if (_drawReadWatch.GetCheck() == ecs::DrawReadCheck::Off)
+	{
+		return;
+	}
+	auto* watch = drawing ? &_drawReadWatch : nullptr;
+	if (Locator::entitiesRegistry::has_value())
+	{
+		Locator::entitiesRegistry::value().WatchReads(watch, "land registry");
+	}
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().WatchReads(watch, "drawn registry");
+	}
+	if (drawing)
+	{
+		_drawReadWatch.Start();
+	}
+	else
+	{
+		_drawReadWatch.Stop();
+	}
+}
+
+void Game::ReportDrawReadCheck() const
+{
+	if (_drawReadWatch.GetCheck() == ecs::DrawReadCheck::Off)
+	{
+		return;
+	}
+	const auto reads = _drawReadWatch.GetReads();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The check of the draw's reads found {} kinds of reads of the registries",
+	                   reads.size());
+	for (const auto& read : reads)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Draw check: {} {} {} reads", read.registry, read.what, read.count);
 	}
 }
 
