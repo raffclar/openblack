@@ -9,7 +9,14 @@ echo "--- format (clang-format 17, every changed C++ file)"; bash "$HERE/format_
 extra_check start "$WT" "$NAME"
 if [ -f tools/build/check_draw_order.py ]; then echo "--- draw order"; python tools/build/check_draw_order.py || { echo "STOP: two random draws in no fixed order (tools/build/check_draw_order.py)"; exit 13; }; fi
 echo "--- configure"; $OB configure --fresh > car-cfg.log 2>&1 || { tail -20 car-cfg.log; echo "STOP: configure"; exit 4; }
-echo "--- tidy (clang-tidy 17, changed lines)"; bash "$HERE/tidy_check.sh" "$WT" "$($OB dir)" </dev/null || { s=$?; [ $s = 23 ] && echo "STOP: tidy: a changed line has a clang-tidy 17 finding, or a NOLINT without a check name or a reason (see the lines above)" || echo "STOP: tidy: the check cannot run (clang-tidy 17 or compile_commands.json is missing, or a file timed out)"; exit $s; }
+WEB=$OB_BUILDS/prm-wtb$NAME-web
+# A change to src/Web needs the web build's compile database for the tidy step: configure the web build now (only then).
+# The web check below builds in the same folder, so this configure is not paid twice.
+if [ -n "$(git diff --name-only "$R/$M"...HEAD -- src/Web </dev/null)" ]; then
+  echo "--- web configure (ob-web, for the tidy step: src/Web changed)"
+  bash "${OB_WEB_TOOL:-$(dirname "${OB_BUILD_TOOL:?}")/ob-web}" configure --worktree "$WT" --build-dir "$WEB" --config Release > car-web-cfg.log 2>&1 || { tail -20 car-web-cfg.log; echo "STOP: web configure (needed by the tidy step)"; exit 4; }
+fi
+echo "--- tidy (clang-tidy 17, changed lines)"; bash "$HERE/tidy_check.sh" "$WT" "$($OB dir)" "$WEB" </dev/null || { s=$?; [ $s = 23 ] && echo "STOP: tidy: a changed line has a clang-tidy 17 finding, or a NOLINT without a check name or a reason (see the lines above)" || echo "STOP: tidy: the check cannot run (clang-tidy 17 or compile_commands.json is missing, or a file timed out)"; exit $s; }
 echo "--- debug"; $OB build > car-dbg.log 2>&1 || { grep -E "error|warning" car-dbg.log | head; echo "STOP: debug build"; exit 5; }
 dw=$(warnings car-dbg.log); echo "debug warnings: $dw"
 echo "--- relwdi"; $OB build --config RelWithDebInfo > car-rel.log 2>&1 || { grep -E "error|warning" car-rel.log | head; echo "STOP: relwdi build"; exit 6; }
@@ -35,7 +42,7 @@ echo "--- full test program in one process, then shuffled (test order leaks)"; b
 (cd "$bd/test" && "$tp" > "$WT/car-full.log" 2>&1 && "$tp" --gtest_shuffle --gtest_random_seed=1 > "$WT/car-shuffle.log" 2>&1) || { grep -E "FAILED  \]|Assertion" "$WT/car-full.log" "$WT/car-shuffle.log" | head; echo "STOP: the full openblack_tests run (plain or shuffled) failed: a test leaks state into a later test"; exit 14; }
 echo "--- relwdi oracle and bit tests"; $OB test -C RelWithDebInfo -R "oracle|x87|sweep|bit" > car-reltest.log 2>&1; grep -m1 -E "tests passed, [0-9]+ tests failed" car-reltest.log; grep -q "100% tests passed" car-reltest.log || { echo "STOP: relwdi oracle/bit tests failed"; exit 12; }
 echo "--- net_check mpm_3p_1, 3 clients"; bash "$HERE/nc3_check.sh" "$WT" "$($OB dir)" > car-nc3.log 2>&1 </dev/null || { cat car-nc3.log; echo "STOP: mpm_3p_1 3-client net_check failed (a slot parted, a client resumed or an expect was missed)"; exit 15; }
-echo "--- web check (one Release web build, Land 1 on WebGPU in headless Chrome)"; WEB=$OB_BUILDS/prm-wtb$NAME-web
+echo "--- web check (one Release web build, Land 1 on WebGPU in headless Chrome)"
 bash "$HERE/web_check.sh" "$WT" "$WEB" "$P/carlogs/batch$NAME-web" > car-web.log 2>&1 </dev/null || { tail -25 car-web.log; echo "STOP: web check failed: the land did not draw or the console has a fault on WebGPU ($P/carlogs/batch$NAME-web, $WEB stays for a look)"; exit 18; }
 grep -E "^web (build|gate|check):" car-web.log; rm -rf "$WEB"
 if [ -n "$OB_EXTRA_CHECK" ]; then echo "--- extra check (train.extraCheck)"; extra_check report "$WT" "$NAME" || { echo "STOP: extra check failed"; exit 15; }; fi
