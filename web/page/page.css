@@ -22,6 +22,7 @@
   --map-present: #a7c88e;
   --map-downloading: #63c9cf;
   --map-urgent: #92866a;
+  --map-phase: #6a7fa8;
   --map-prefetch: #386f77;
   --map-failed: #f08a8f;
   --map-lazy: #1d323d;
@@ -121,6 +122,7 @@ body.playing.log-open #log { max-height: 40vh; }
 .swatch[data-state="present"] { background: var(--map-present); }
 .swatch[data-state="downloading"] { background: var(--map-downloading); }
 .swatch[data-state="urgent"] { background: var(--map-urgent); }
+.swatch[data-state="phase"] { background: var(--map-phase); }
 .swatch[data-state="prefetch"] { background: var(--map-prefetch); }
 .swatch[data-state="lazy"] { background: var(--map-lazy); outline: 1px solid var(--map-frame); }
 .swatch[data-state="failed"] { background: var(--map-failed); }

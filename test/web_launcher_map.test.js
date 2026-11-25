@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const {
   assetGroupOf, buildAssetMap, squarify, layoutAssetMap, assetCellAt, formatAssetBytes, formatAssetTime, AssetMapModel,
-  describeAssetCell,
+  describeAssetCell, k_AssetMapStateNames,
 } = require('../web/page/launcher-map.js');
 const { AssetStore } = require('../web/page/launcher-assets.js');
 
@@ -152,6 +152,26 @@ check('the events of the downloads give the state of each square and the totals'
   assert.equal(model.animating(), false);
   model.addWire(70);
   assert.equal(model.totals().wire, 70);
+});
+
+check('a file in the queue of the phases of the start has its own state, which counts in the bytes to get', () => {
+  const files = [file('Scripts/a.txt', 100), file('Data/AllMeshes.g3d', 300)];
+  const map = buildAssetMap(files, { blockSize: 4 });
+  const model = new AssetMapModel(map);
+  const item = (path) => map.groups.flatMap((group) => group.items).find((entry) => entry.path === path);
+  model.handle('queued', item('Data/AllMeshes.g3d').key, 'phase');
+  model.handle('queued', item('Scripts/a.txt').key, 'later');
+  assert.equal(model.stateOf(item('Data/AllMeshes.g3d')), 'phase');
+  assert.equal(k_AssetMapStateNames.phase, 'Queue: next for the game');
+  let totals = model.totals();
+  assert.equal(totals.bytes.phase, 300);
+  assert.equal(totals.remaining, 400);
+  // The game reads the file: it goes to the queue now
+  model.handle('queued', item('Data/AllMeshes.g3d').key, 'now');
+  assert.equal(model.stateOf(item('Data/AllMeshes.g3d')), 'urgent');
+  totals = model.totals();
+  assert.equal(totals.bytes.phase, 0);
+  assert.equal(totals.bytes.urgent, 300);
 });
 
 check('the speed and the time left come from the bytes of the last seconds', () => {

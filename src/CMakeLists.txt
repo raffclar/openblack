@@ -834,6 +834,7 @@ else ()
          "${CMAKE_SOURCE_DIR}/web/page/launcher*.js"
          "${CMAKE_SOURCE_DIR}/web/page/*-worker.js"
          "${CMAKE_SOURCE_DIR}/web/page/*-worklet.js"
+         "${CMAKE_SOURCE_DIR}/web/page/asset-tiers.json"
     )
     # The page of a build with the error reports may connect to the origin of the DSN, which gets the reports. The
     # configure step writes the page with this origin in its content security policy. The page holds no key of the DSN.
