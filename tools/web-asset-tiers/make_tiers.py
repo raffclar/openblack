@@ -135,7 +135,19 @@ def make_tiers(start, later, block_size, made_from):
 
 
 def tiers_text(tiers):
-    return json.dumps(tiers, indent=1, sort_keys=True) + "\n"
+    """The JSON text of the tiers, with one line for each file and each land, so that a change shows as few lines"""
+
+    def compact(value):
+        return json.dumps(value, sort_keys=True, separators=(", ", ": "))
+
+    def table(entries):
+        lines = [f"  {json.dumps(key)}: {compact(value)}" for key, value in entries.items()]
+        return "{\n" + ",\n".join(lines) + "\n }" if lines else "{}"
+
+    head = [f" {json.dumps(key)}: {compact(tiers[key])}" for key in sorted(tiers) if key not in ("files", "lands")]
+    head.append(f' "files": {table(tiers["files"])}')
+    head.append(f' "lands": {table(tiers["lands"])}')
+    return "{\n" + ",\n".join(head) + "\n}\n"
 
 
 def build(out, start_paths, later_paths):

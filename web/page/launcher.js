@@ -1058,6 +1058,8 @@ async function start(online = false) {
   const version = await buildVersion;
   const noteGameRead = startAssetTrace(parameters,
     chosen.map((entry) => ({ path: entry.path, size: entry.size ?? entry.file.size })), version);
+  // The page stays at the end of a run that records the trace of the game files, so that the trace is not lost
+  staysAtEnd ||= Boolean(noteGameRead);
   element('chooser').hidden = true;
   element('game').hidden = false;
   element('build-badge').hidden = false;
