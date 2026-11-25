@@ -74,6 +74,11 @@ void MendBest(entt::entity town, MendLists& lists);
 /// town's other plans; the plan remembers whether the building had been finished. A building of no town is not.
 void PlanAgain(entt::entity building);
 
+/// A building that the editor makes again where it went takes the place of the plan that its town made then. The plan
+/// goes from the town's plans, and its footpaths go back to the building. If the town started the plan already, the
+/// unfinished building of the plan goes, and its town does not plan it again. With no such plan, all stays as it is.
+void TakeBackPlan(entt::entity building);
+
 /// The buildings of a tribe that a town can build from a held scaffold of a value at a place, in the order of their
 /// abode numbers, each with how much the town wants it. With an abode number, only the building of that number. A
 /// number that the tribe has no building of is left out. The wonder is of the wonder tribe, and its size comes from the
