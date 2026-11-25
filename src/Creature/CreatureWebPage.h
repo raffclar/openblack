@@ -107,6 +107,14 @@ struct Chance
 	uint32_t action {0};
 };
 
+/// Whether a creature takes the pictures for the page. Only the primary creature of the player of this computer takes
+/// them: the first creature that the player got that is still theirs. The other creatures of the player take none.
+template <typename Id>
+[[nodiscard]] constexpr bool TakesPicturesFor(Id creature, std::optional<Id> primary)
+{
+	return primary.has_value() && *primary == creature;
+}
+
 /// Whether the game takes a picture this turn: the player looks at the creature, more than ten seconds went by since
 /// the last picture, the body gets to the moment of its action, and no picture that the creature keeps shows the action
 [[nodiscard]] bool TakesPicture(std::span<const Picture> pictures, const Chance& chance);

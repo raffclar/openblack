@@ -648,11 +648,10 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "editor.many_creatures",
-	    .name = "The editor over 100 creatures that take pictures",
+	    .name = "The editor over 100 creatures",
 	    .facet = Facet::Editor,
-	    .description = "100 creatures of four players live round four towns, and the editor opens after a second. The "
-	                   "player's creatures take pictures of the screen for the creature's page, often two in the same "
-	                   "frame.",
+	    .description = "100 creatures of four players live round four towns, and the editor opens after a second. Only "
+	                   "the first creature of the player takes pictures of the screen for the creature's page.",
 	    .expected = "The editor's windows stay on the screen with no flicker. Only the frame of a picture does not show "
 	                "them, and each picture comes back.",
 	    .environment = {.dispenserGrid = false},
