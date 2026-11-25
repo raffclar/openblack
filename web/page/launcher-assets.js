@@ -611,6 +611,23 @@ function assetWaitShowsPanel({ waitedMs, stillMs }) {
   return waitedMs >= k_AssetWaitPanelMs && stillMs >= k_AssetWaitPanelMs;
 }
 
+/**
+ * The change of the map over the game at a check of the reads that wait: 'open', 'close' or no value. The argument has:
+ * open: true when the map is open; forWait: true when the page opened it for a wait; dismissed: true when the player
+ * closed or opened the map during the waits; waitedMs and stillMs as for assetWaitShowsPanel, with waitedMs -Infinity
+ * when no read that can stop the screen waits. The page closes only a map that it opened for a wait, and only when the
+ * read ends. A map that the player opened or closed stays so until the waits end.
+ */
+function assetWaitPanelChange({ open, forWait, dismissed = false, waitedMs, stillMs }) {
+  if (!open && !dismissed && assetWaitShowsPanel({ waitedMs, stillMs })) {
+    return 'open';
+  }
+  if (open && forWait && waitedMs === -Infinity) {
+    return 'close';
+  }
+  return undefined;
+}
+
 /** The first byte, the last byte and the size of the file in a Content-Range header, or no value */
 function parseContentRange(text) {
   const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(typeof text === 'string' ? text.trim() : '');
@@ -1183,7 +1200,7 @@ if (typeof module !== 'undefined') {
     isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
     refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
     assetPhaseOf, parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
-    assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel,
+    assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
     k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPhases, k_AssetSmallFile, k_AssetSmallDownloads,
     k_AssetPhaseDownloads, k_AssetDownloads,

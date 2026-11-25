@@ -7,7 +7,7 @@ const {
   isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
   refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets: streamWithTiers, isStartAsset,
   parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetBlockBounds, assetBlockRange,
-  parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, AssetStore,
+  parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange, AssetStore,
   k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPhases, k_AssetSmallFile,
   k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads,
 } = require('../web/page/launcher-assets.js');
@@ -549,6 +549,15 @@ check('a read that waits for the site shows the map only when the screen has no 
   assert.equal(assetWaitShowsPanel({ waitedMs: 1500, stillMs: 300 }), false);
   assert.equal(assetWaitShowsPanel({ waitedMs: 400, stillMs: 5000 }), false);
   assert.equal(assetWaitShowsPanel({ waitedMs: -Infinity, stillMs: 5000 }), false);
+  // The map opens after one second of wait with no new frame, and closes only when the read ends
+  assert.equal(assetWaitPanelChange({ open: false, forWait: false, waitedMs: 1500, stillMs: 1200 }), 'open');
+  assert.equal(assetWaitPanelChange({ open: false, forWait: false, waitedMs: 900, stillMs: 1200 }), undefined);
+  assert.equal(assetWaitPanelChange({ open: true, forWait: true, waitedMs: 3000, stillMs: 0 }), undefined);
+  assert.equal(assetWaitPanelChange({ open: true, forWait: true, waitedMs: -Infinity, stillMs: 0 }), 'close');
+  // A map that the player opened stays open, and a map that the player closed during a wait stays closed
+  assert.equal(assetWaitPanelChange({ open: true, forWait: false, waitedMs: -Infinity, stillMs: 0 }), undefined);
+  assert.equal(assetWaitPanelChange({ open: false, forWait: false, dismissed: true, waitedMs: 5000, stillMs: 5000 }),
+    undefined);
 });
 
 check('the plan for later gets the next land, and the files of a network map', () => {

@@ -701,9 +701,9 @@ function keepStorage() {
 let assetMap = null;
 // The time in milliseconds between two checks of the reads of the game that wait for the site
 const k_AssetWaitCheckMs = 250;
-// True when the page opens the map of the game files over the game while a read waits (watchGameFileWaits). It is off
-// until the user signs off deviation 296. The small map in the strip above the game shows the download in both cases.
-const k_AssetWaitPanel = false;
+// True when the page opens the map of the game files over the game while a read waits (watchGameFileWaits). The web
+// client only (deviation 296). The small map in the strip above the game also shows the download.
+const k_AssetWaitPanel = true;
 // The time when the page asked for the program. An earlier answer for the program is the answer to the HEAD request.
 let programAsked = Infinity;
 
@@ -1087,6 +1087,9 @@ const gameFileWaits = new Set();
 let shownFrames = 0;
 // True while the page opened the map of the game files over the game for a read that waits
 let assetPanelForWait = false;
+// True when the player opened or closed the map while reads wait. The page then does not change the map until the
+// waits end.
+let assetPanelDismissed = false;
 // Starts the phases of the start when the game runs (startAssetPhases)
 let beginAssetPhases = () => {};
 // The longest time in milliseconds from the start of the game to the downloads of its phases
@@ -1152,14 +1155,21 @@ function watchGameFileWaits(gameFrames) {
       stillSince = now;
     }
     const oldest = Math.min(...[...gameFileWaits].filter((wait) => wait.holdsScreen).map((wait) => wait.since));
-    const show = assetWaitShowsPanel({ waitedMs: now - oldest, stillMs: now - stillSince });
-    if (show && !document.body.classList.contains('assets-open')) {
+    const change = assetWaitPanelChange({
+      open: document.body.classList.contains('assets-open'), forWait: assetPanelForWait,
+      dismissed: assetPanelDismissed, waitedMs: now - oldest, stillMs: now - stillSince,
+    });
+    if (oldest === Infinity) {
+      assetPanelDismissed = false;
+    }
+    if (change === 'open') {
       assetPanelForWait = true;
       setAssetPanel(true);
       log('A read of the game waits for the site: the page shows the map of the game files.');
-    } else if (!show && assetPanelForWait) {
+    } else if (change === 'close') {
       assetPanelForWait = false;
       setAssetPanel(false);
+      log('The read of the game has its bytes: the page closes the map of the game files.');
     }
   }, k_AssetWaitCheckMs);
 }
@@ -1336,6 +1346,7 @@ async function main() {
   element('assets-toggle').addEventListener('click', (event) => {
     // A map that the player opens or closes stays so
     assetPanelForWait = false;
+    assetPanelDismissed = gameFileWaits.size > 0;
     const open = document.body.classList.toggle('assets-open');
     event.currentTarget.setAttribute('aria-expanded', String(open));
     // The keys go to the game again, not to the button
