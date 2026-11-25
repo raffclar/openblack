@@ -211,8 +211,12 @@ struct BgfxCallback: public bgfx::CallbackI
 			// bgfx only says so in its notes when it had no screen to read for a picture, which is then never written
 			if (const auto uncaptured = graphics::UncapturedScreenshotPath(out); uncaptured.has_value())
 			{
-				failures.Record(std::string(*uncaptured),
-				                "the renderer had no screen to read (a Vulkan window has none while it is minimised)");
+				// Each picture of the frame shares the request, so each one fails
+				for (auto& path : batch.Receive(std::string(*uncaptured)))
+				{
+					failures.Record(std::move(path),
+					                "the renderer had no screen to read (a Vulkan window has none while it is minimised)");
+				}
 			}
 // TODO(bwrsandman): change level to trace
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
@@ -271,16 +275,30 @@ struct BgfxCallback: public bgfx::CallbackI
 			swapped = graphics::RgbaToBgra(bgra);
 			bgra = swapped;
 		}
-		else if (format != bgfx::TextureFormat::BGRA8)
+		// Each picture that the frame asked for gets the same pixels
+		const auto paths = batch.Receive(filePath);
+		if (format != bgfx::TextureFormat::RGBA8 && format != bgfx::TextureFormat::BGRA8)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Screenshot at {} is in a format that can't be written", filePath);
-			failures.Record(filePath, "the window's pixels are in a format that can't be written");
+			for (const auto& path : paths)
+			{
+				failures.Record(path, "the window's pixels are in a format that can't be written");
+			}
 			return;
 		}
+		const graphics::ScreenView screen {.width = width, .height = height, .pitch = pitch, .yflip = yflip, .bgra = bgra};
+		for (const auto& path : paths)
+		{
+			Give(path, screen);
+		}
+	}
+	/// Makes the picture in memory, or writes the PNG file, at a path from the pixels of the window
+	void Give(const std::string& filePath, const graphics::ScreenView& screen)
+	{
 		if (graphics::ScreenPictures::InMemory(filePath))
 		{
 			// Make the picture now from the pixels of bgfx, and do not copy the full frame
-			pictures.Make(filePath, {.width = width, .height = height, .pitch = pitch, .yflip = yflip, .bgra = bgra});
+			pictures.Make(filePath, screen);
 			return;
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Taking a screenshot...");
@@ -289,18 +307,20 @@ struct BgfxCallback: public bgfx::CallbackI
 		if (path.extension() != ".png")
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Not Implemented: {} screenshot ({}x{}) requested at {}",
-			                   path.extension().string(), width, height, filePath);
+			                   path.extension().string(), screen.width, screen.height, filePath);
 			failures.Record(filePath, "only .png pictures can be written");
 			return;
 		}
-		if (const auto why = graphics::WriteScreenshotPng(path, width, height, pitch, bgra, yflip); !why.empty())
+		if (const auto why =
+		        graphics::WriteScreenshotPng(path, screen.width, screen.height, screen.pitch, screen.bgra, screen.yflip);
+		    !why.empty())
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", width, height,
-			                    player_profiles::PathForLog(filePath), why);
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", screen.width,
+			                    screen.height, player_profiles::PathForLog(filePath), why);
 			failures.Record(filePath, "couldn't be written: " + why);
 			return;
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height,
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", screen.width, screen.height,
 		                   player_profiles::PathForLog(filePath));
 	}
 	// Saving a video
@@ -319,6 +339,8 @@ struct BgfxCallback: public bgfx::CallbackI
 	graphics::ScreenshotFailures failures;
 	/// The pictures that the game asked for in memory
 	graphics::ScreenPictures pictures;
+	/// The pictures of the window for each frame, read with one request
+	graphics::ScreenshotBatch batch;
 	/// The pipelines that the renderer made since it started, counted on its render thread
 	std::atomic<uint32_t> pipelinesMade {0};
 	/// The driver's compiled pipelines on disk. Only the Vulkan and Direct3D 12 renderers keep them, and only when the
@@ -1035,6 +1057,12 @@ void Renderer::Frame() noexcept
 	// The good sky's glow over the frame is the last draw of the frame before the debug windows and the pointer
 	_screenGlow->Submit(*_shaderManager, static_cast<glm::u16vec2>(detail::SceneTarget(nullptr)),
 	                    _offscreenShots->RedirectedTo());
+	// bgfx reads the window one time in a frame, thus one request gives the pixels to all the pictures of the frame
+	if (const auto sent = _bgfxCallback->batch.Send(); sent.has_value())
+	{
+		const bgfx::FrameBufferHandle mainBackbuffer = BGFX_INVALID_HANDLE;
+		bgfx::requestScreenShot(mainBackbuffer, sent->c_str());
+	}
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
 	// The game thread's encoder starts each frame at submit order 0
@@ -1184,11 +1212,9 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 	switch (const auto plan = PlanScreenshot(buffers, minimised, k_CanReadBack, size); plan.route)
 	{
 	case ScreenshotRoute::Screen:
-	{
-		const bgfx::FrameBufferHandle mainBackbuffer = BGFX_INVALID_HANDLE;
-		bgfx::requestScreenShot(mainBackbuffer, filepath.string().c_str());
+		// The end of the frame asks bgfx one time for all the pictures of the frame
+		_bgfxCallback->batch.Add(filepath.string());
 		break;
-	}
 	case ScreenshotRoute::Offscreen:
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Drawing the frame aside for {}", filepath.string());
 		_offscreenShots->Begin(filepath, size);
@@ -1214,7 +1240,19 @@ void Renderer::RequestScreenPicture(const std::string& name, graphics::ScreenPic
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenPicture");
 	_bgfxCallback->pictures.Ask(name, std::move(picturer));
-	RequestScreenshot(name);
+	// The picture waits for a frame that the game draws without the debug windows
+	_bgfxCallback->batch.Hold(name);
+}
+
+bool Renderer::ReleasePicturesForFrame() noexcept
+{
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::ReleasePicturesForFrame");
+	const auto names = _bgfxCallback->batch.Release();
+	for (const auto& name : names)
+	{
+		RequestScreenshot(name);
+	}
+	return !names.empty();
 }
 
 std::optional<std::vector<uint8_t>> Renderer::TakeScreenPicture(const std::string& name) noexcept

@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <system_error>
 #include <utility>
 
@@ -149,6 +150,54 @@ void ScreenPictures::Forget(const std::string& name)
 	const std::scoped_lock lock(_mutex);
 	_asked.erase(name);
 	_made.erase(name);
+}
+
+void ScreenshotBatch::Hold(std::string path)
+{
+	const std::scoped_lock lock(_mutex);
+	_held.push_back(std::move(path));
+}
+
+std::vector<std::string> ScreenshotBatch::Release()
+{
+	const std::scoped_lock lock(_mutex);
+	return std::exchange(_held, {});
+}
+
+void ScreenshotBatch::Add(std::string path)
+{
+	const std::scoped_lock lock(_mutex);
+	if (std::ranges::find(_frame, path) == _frame.end())
+	{
+		_frame.push_back(std::move(path));
+	}
+}
+
+std::optional<std::string> ScreenshotBatch::Send()
+{
+	const std::scoped_lock lock(_mutex);
+	if (_frame.empty())
+	{
+		return std::nullopt;
+	}
+	auto sent = _frame.front();
+	auto& group = _sent[sent];
+	group.insert(group.end(), std::make_move_iterator(_frame.begin()), std::make_move_iterator(_frame.end()));
+	_frame.clear();
+	return sent;
+}
+
+std::vector<std::string> ScreenshotBatch::Receive(const std::string& sent)
+{
+	const std::scoped_lock lock(_mutex);
+	const auto found = _sent.find(sent);
+	if (found == _sent.end())
+	{
+		return {sent};
+	}
+	auto group = std::move(found->second);
+	_sent.erase(found);
+	return group;
 }
 
 std::vector<uint8_t> RgbaToBgra(std::span<const uint8_t> rgba)

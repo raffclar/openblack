@@ -38,9 +38,13 @@ public:
 	virtual void Frame() noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come
 	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
-	/// Asks for a picture of the frame that the game makes now, kept in memory under a name. The name must start with
-	/// k_ScreenPicturePrefix. The renderer calls picturer on its own thread when it reads the frame.
+	/// Asks for a picture of a frame, kept in memory under a name. The name must start with k_ScreenPicturePrefix. The
+	/// picture waits for the next frame that the game draws without the debug windows (see ReleasePicturesForFrame).
+	/// The renderer calls picturer on its own thread when it reads the frame.
 	virtual void RequestScreenPicture(const std::string& name, ScreenPicturer picturer) noexcept = 0;
+	/// Gives the frame that the game makes now the pictures that wait for a frame. Returns true if the frame has one.
+	/// The game then draws the frame without the debug windows.
+	[[nodiscard]] virtual bool ReleasePicturesForFrame() noexcept = 0;
 	/// The picture made for a name, one time; none while it is not made
 	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept = 0;
 	/// How many draws the last frame had. A renderer that draws nothing gives 0.
