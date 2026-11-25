@@ -51,6 +51,7 @@
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -66,7 +67,9 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
 #include "EditorMath.h"
@@ -756,6 +759,8 @@ entt::entity Make(const Recipe& recipe)
 	if (entity != entt::null)
 	{
 		SetPose(entity, pose);
+		// A building of a town that comes back where it went takes the place of the plan that its town made then
+		ecs::town_planning::TakeBackPlan(entity);
 	}
 	return entity;
 }
@@ -807,6 +812,12 @@ void Remove(entt::entity entity)
 	// A dispenser goes with its bubble and swirl, a bubble with its seed
 	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().Remove(entity))
 	{
+		return;
+	}
+	// A temple goes with its entrance, its heart, its lanterns and its worship sites, as at the end of its destruction
+	if (registry.AllOf<Temple>(entity) && Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().Remove(entity);
 		return;
 	}
 	if (const auto* pit = registry.TryGet<StoragePit>(entity))

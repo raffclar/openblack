@@ -97,6 +97,27 @@ TEST(TempleLeashes, OnlyKnownLeashesHang)
 	EXPECT_FALSE(Hung(false, true));
 }
 
+TEST(TempleLeashes, TheyStopWithTheDrawOfTheirTemple)
+{
+	// A temple that stands, or that is in its destruction until 21.8 seconds, draws its leashes
+	EXPECT_EQ(StateOf(false, 0.0f), TempleState::Drawn);
+	EXPECT_EQ(StateOf(false, 30.0f), TempleState::Drawn);
+	EXPECT_EQ(StateOf(true, 21.8f), TempleState::Drawn);
+	EXPECT_EQ(StateOf(true, 21.81f), TempleState::NotDrawn);
+	EXPECT_TRUE(ShowsOn(TempleState::NoTemple));
+	EXPECT_TRUE(ShowsOn(TempleState::Drawn));
+	EXPECT_FALSE(ShowsOn(TempleState::NotDrawn));
+	EXPECT_FALSE(ShowsOn(TempleState::Gone));
+}
+
+TEST(TempleLeashes, TheyGoOnlyWithTheirTemple)
+{
+	EXPECT_TRUE(GoesWith(TempleState::Gone));
+	EXPECT_FALSE(GoesWith(TempleState::NotDrawn));
+	EXPECT_FALSE(GoesWith(TempleState::Drawn));
+	EXPECT_FALSE(GoesWith(TempleState::NoTemple));
+}
+
 TEST(TempleLeashes, TheirToolTips)
 {
 	EXPECT_EQ(ToolTipOf(LeashType::Evil), k_AggressionTip);

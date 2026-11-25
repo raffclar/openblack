@@ -51,6 +51,7 @@ public:
 		return std::nullopt;
 	}
 	void RequestScreenPicture(const std::string& /*name*/, ScreenPicturer /*picturer*/) noexcept override {}
+	[[nodiscard]] bool ReleasePicturesForFrame() noexcept override { return false; }
 	[[nodiscard]] std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& /*name*/) noexcept override
 	{
 		return std::nullopt;

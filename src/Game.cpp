@@ -1379,12 +1379,13 @@ bool Game::RunFrame() noexcept
 				Locator::rendererInterface::value().RequestDeviceRestore(graphics::device_restore::Request::Lose);
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
-			// nor in a challenge's picture
-			const bool hiddenThisFrame =
-			    _debugGuiHiddenFrame == _frameCount ||
-			    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
-			    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
-			    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+			const bool debugGuiInScreenshot = screenshotThisFrame && !_screenshotHidesDebugGui;
+			// The pictures of a challenge, of the creature's page and of a saved game go with the frame that the game
+			// draws next without the debug windows. Only that frame does not show the debug windows. The frames that wait
+			// for the pixels show them.
+			const bool pictureThisFrame =
+			    drawsFrame && !debugGuiInScreenshot && Locator::rendererInterface::value().ReleasePicturesForFrame();
+			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount || pictureThisFrame;
 			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();

@@ -645,4 +645,24 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},
 	});
+
+	all.push_back({
+	    .id = "editor.many_creatures",
+	    .name = "The editor over 100 creatures",
+	    .facet = Facet::Editor,
+	    .description = "100 creatures of four players live round four towns, and the editor opens after a second. Only "
+	                   "the first creature of the player takes pictures of the screen for the creature's page.",
+	    .expected = "The editor's windows stay on the screen with no flicker. Only the frame of a picture does not show "
+	                "them, and each picture comes back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},
+	    .crowd = Crowd {.kind = Crowd::Kind::Creatures,
+	                    .count = 100,
+	                    .seed = k_BenchmarkSeed,
+	                    .perFrame = 100,
+	                    .villagers = 4 * k_VillagersPerTown},
+	});
 }

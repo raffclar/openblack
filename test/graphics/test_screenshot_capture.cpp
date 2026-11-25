@@ -25,6 +25,7 @@
 using openblack::graphics::PlanScreenshot;
 using openblack::graphics::RgbaToBgra;
 using openblack::graphics::ScreenPictures;
+using openblack::graphics::ScreenshotBatch;
 using openblack::graphics::ScreenshotFailures;
 using openblack::graphics::ScreenshotRoute;
 using openblack::graphics::ScreenView;
@@ -192,4 +193,50 @@ TEST(ScreenshotCapture, RgbaPixelsBecomeBgra)
 	const std::vector<uint8_t> expected {3, 2, 1, 4, 30, 20, 10, 40};
 	EXPECT_EQ(RgbaToBgra(rgba), expected);
 	EXPECT_TRUE(RgbaToBgra({}).empty());
+}
+
+// Two pictures of one frame go to bgfx as one request, because bgfx ignores a second request in the same frame. The
+// pixels of the request go to both pictures.
+TEST(ScreenshotCapture, ThePicturesOfOneFrameShareOneRequest)
+{
+	ScreenshotBatch batch;
+	EXPECT_FALSE(batch.Send().has_value());
+	batch.Add("first.png");
+	batch.Add("second.png");
+	batch.Add("first.png");
+	const auto sent = batch.Send();
+	ASSERT_TRUE(sent.has_value());
+	EXPECT_EQ(*sent, "first.png");
+	EXPECT_FALSE(batch.Send().has_value());
+	EXPECT_EQ(batch.Receive("first.png"), (std::vector<std::string> {"first.png", "second.png"}));
+	// The group is given one time. A path that was not sent gets only its own pixels.
+	EXPECT_EQ(batch.Receive("first.png"), (std::vector<std::string> {"first.png"}));
+	EXPECT_EQ(batch.Receive("other.png"), (std::vector<std::string> {"other.png"}));
+}
+
+// The pictures of two frames go as two requests, each with its own pictures
+TEST(ScreenshotCapture, EachFrameSendsItsOwnPictures)
+{
+	ScreenshotBatch batch;
+	batch.Add("a.png");
+	const auto first = batch.Send();
+	batch.Add("b.png");
+	batch.Add("c.png");
+	const auto second = batch.Send();
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(batch.Receive(*second), (std::vector<std::string> {"b.png", "c.png"}));
+	EXPECT_EQ(batch.Receive(*first), (std::vector<std::string> {"a.png"}));
+}
+
+// A picture in memory waits until the game gives it a frame without the debug windows, and it goes one time
+TEST(ScreenshotCapture, AHeldPictureWaitsForItsFrame)
+{
+	ScreenshotBatch batch;
+	EXPECT_TRUE(batch.Release().empty());
+	batch.Hold("creature/1");
+	batch.Hold("creature/2");
+	EXPECT_FALSE(batch.Send().has_value());
+	EXPECT_EQ(batch.Release(), (std::vector<std::string> {"creature/1", "creature/2"}));
+	EXPECT_TRUE(batch.Release().empty());
 }

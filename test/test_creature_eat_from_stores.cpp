@@ -12,6 +12,7 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreaturePlanActions.h"
+#include "ECS/Components/Creature.h"
 
 using namespace openblack;
 using namespace openblack::creature_mind;
@@ -128,6 +129,23 @@ TEST(CreatureEatFromStores, AHandfulHoldsNoMoreThanTheThingHasInStore)
 	EXPECT_EQ(meals::HandfulAmount(0.4567f, 5000), 456u);
 	EXPECT_EQ(meals::HandfulAmount(2.0f, 300), 300u);
 	EXPECT_EQ(meals::HandfulAmount(1.0f, 0), 0u);
+}
+
+// A new handful uses the size that the body of the creature shows. A handful from a thing is 3.75 times that size,
+// and food from the sea is 1.5 times that size. In the pen of its temple a young creature shows a smaller size, so its
+// handful is smaller and holds less food.
+TEST(CreatureEatFromStores, AHandfulGoesByTheSizeThatTheCreatureShows)
+{
+	ecs::components::Creature young {.size = 0.22f};
+	EXPECT_FLOAT_EQ(meals::HandfulScale(ecs::components::ShownSize(young), meals::HandfulFrom::Thing), 0.22f * 3.75f);
+	EXPECT_FLOAT_EQ(meals::HandfulScale(ecs::components::ShownSize(young), meals::HandfulFrom::Nothing), 0.22f * 1.5f);
+	young.penSize = 0.1f;
+	const float shown = ecs::components::ShownSize(young);
+	EXPECT_FLOAT_EQ(meals::HandfulScale(shown, meals::HandfulFrom::Thing), 0.375f);
+	EXPECT_EQ(meals::HandfulAmount(shown, 5000), 100u);
+	// The size that the body shows is never less than the smallest size that the game draws
+	const ecs::components::Creature tiny {.size = 0.01f};
+	EXPECT_FLOAT_EQ(meals::HandfulScale(ecs::components::ShownSize(tiny), meals::HandfulFrom::Thing), 0.05f * 3.75f);
 }
 
 // A meal kept down takes its energy off the hunger, which stays from 0 to 1

@@ -1060,12 +1060,13 @@ TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 			EXPECT_LE(scenario.crowd->count, scenario.crowd->kind == Crowd::Kind::Creatures ? 100u : 1'000u) << scenario.id;
 		}
 	}
-	// The creatures among towns too: 100, and 8, 16, 32 and 64
-	EXPECT_EQ(crowds, benchmarks.size() + 5);
-	// Only benchmarks have crowds
+	// The creatures among towns too: 100, and 8, 16, 32 and 64, and the editor over 100 creatures
+	EXPECT_EQ(crowds, benchmarks.size() + 6);
+	// Only benchmarks have crowds, and the editor's scenario of many creatures
 	for (const auto& scenario : All())
 	{
-		EXPECT_EQ(scenario.crowd.has_value(), scenario.facet == Facet::Benchmark) << scenario.id;
+		const bool editorCrowd = scenario.id == "editor.many_creatures";
+		EXPECT_EQ(scenario.crowd.has_value(), scenario.facet == Facet::Benchmark || editorCrowd) << scenario.id;
 	}
 }
 

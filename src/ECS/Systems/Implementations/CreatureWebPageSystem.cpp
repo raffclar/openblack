@@ -176,9 +176,12 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	auto& animation = registry.Get<CreatureAnimation>(entity);
 	// The moment of the body's action counts for this turn only
 	const bool moment = std::exchange(animation.actionMoment, false);
-	// Only the player of a creature looks at it, so only the player's own creatures have pictures
+	// Only the player of a creature looks at it, so only the player's own creatures have pictures. Of these, only the
+	// primary creature takes them.
 	const auto* at = registry.TryGet<const Transform>(entity);
-	if (creature.owner != local || at == nullptr || camera == nullptr)
+	const auto primary =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(local) : std::nullopt;
+	if (creature.owner != local || !creature_web_page::TakesPicturesFor(entity, primary) || at == nullptr || camera == nullptr)
 	{
 		return;
 	}

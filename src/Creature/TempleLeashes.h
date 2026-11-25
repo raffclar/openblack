@@ -20,6 +20,7 @@
 #include <glm/vec4.hpp>
 
 #include "Enums.h"
+#include "Temple/TempleDestruction.h"
 
 /// The three leashes hanging on the temple's exterior. Each is the same collar, a ring drawn with one band of the
 /// leash texture: the spiked blade for aggression, the twisted rope for learning, the rainbow fur for compassion. Each
@@ -115,6 +116,38 @@ constexpr uint32_t k_LearningTip = 87;
 [[nodiscard]] constexpr bool Hung(bool hasCreature, bool knows)
 {
 	return hasCreature && knows;
+}
+
+/// The state of the temple that a set of leashes hangs on
+enum class TempleState : uint8_t
+{
+	/// The leashes hang at points of their own, with no temple
+	NoTemple,
+	/// The temple stands, or its destruction is not past the end of its draw
+	Drawn,
+	/// The destruction of the temple is past the end of its draw, but the temple has not gone
+	NotDrawn,
+	/// The temple went
+	Gone,
+};
+
+/// The state of a temple from its destruction. The game draws the leashes with the temple, so they stop with it after
+/// 21.8 seconds of its destruction.
+[[nodiscard]] constexpr TempleState StateOf(bool destroying, float destructionClock)
+{
+	return !destroying || temple_destruction::LanternsShown(destructionClock) ? TempleState::Drawn : TempleState::NotDrawn;
+}
+
+/// Whether the leashes show on their temple in this state
+[[nodiscard]] constexpr bool ShowsOn(TempleState temple)
+{
+	return temple == TempleState::NoTemple || temple == TempleState::Drawn;
+}
+
+/// Whether the leashes go in this state: they go with their temple
+[[nodiscard]] constexpr bool GoesWith(TempleState temple)
+{
+	return temple == TempleState::Gone;
 }
 
 } // namespace openblack::temple_leashes

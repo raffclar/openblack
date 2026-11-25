@@ -124,6 +124,12 @@ private:
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
 	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
 	void PlacePostsAtTemples();
+	/// Hangs a player's three leash posts at three points, on the temple when it is not null
+	void HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple);
+	/// The state of the temple that the post hangs on
+	[[nodiscard]] temple_leashes::TempleState TempleOf(const ecs::components::LeashPost& post) const;
+	/// Removes the posts, with their glows, whose temple went
+	void RemovePostsOfGoneTemples();
 	/// A taut rope in the hand pulls the creature to the hand
 	/// Whether the creature must walk back into the area that holds it in this turn
 	[[nodiscard]] bool ShouldWalkBack(entt::entity creature) const;

@@ -393,6 +393,24 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	});
 
 	all.push_back({
+	    .id = "editor.undo_village_centre_delete",
+	    .name = "An undo of a village centre that the editor deleted",
+	    .facet = Facet::Editor,
+	    .description = "The town of town.miracle_debug_given, with the heal and the water miracles. Open the editor "
+	                   "(F10), pick the village centre and push Delete. The town plans the centre again. Then push "
+	                   "Ctrl+Z, and after that Ctrl+Y.",
+	    .expected = "After the undo, one village centre stands with its two stone hands, and the town has no plan at "
+	                "the place. The redo removes the centre and its hands again, and the town plans it "
+	                "again. Before, the plan stayed after the undo, and its builders put up a second centre there.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+
+	all.push_back({
 	    .id = "town.icon_seeds_paused",
 	    .name = "A pause with seeds over the stone hands",
 	    .facet = Facet::Miracles,

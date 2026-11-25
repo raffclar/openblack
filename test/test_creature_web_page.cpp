@@ -445,3 +445,13 @@ TEST(CreatureWebPage, TheKissMovesOnByTheMillisecondsOfTheTurn)
 	EXPECT_EQ(creature_layers::AdvanceBody(kiss, 10.0f, 805, 10.0f).kind, creature_layers::BodyAction::Kind::Stand);
 	EXPECT_EQ(creature_layers::AdvanceBody(kiss, 10.0f, 806, 10.0f).kind, creature_layers::BodyAction::Kind::Once);
 }
+
+// Only the primary creature of the player takes the pictures for the page: the first creature that the player got.
+// The other creatures of the player, as a crowd from the editor, take none.
+TEST(CreatureWebPage, OnlyThePrimaryCreatureTakesPictures)
+{
+	using Id = uint32_t;
+	EXPECT_TRUE(creature_web_page::TakesPicturesFor<Id>(7, 7));
+	EXPECT_FALSE(creature_web_page::TakesPicturesFor<Id>(8, 7));
+	EXPECT_FALSE(creature_web_page::TakesPicturesFor<Id>(7, std::nullopt));
+}
