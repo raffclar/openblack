@@ -75,6 +75,8 @@ const logElement = element('log');
 // do that for each line, because the main thread of the page also shows the game's frames.
 const k_LogLines = 20000;
 const logLines = [];
+// The trace of the game files that the game reads, with the page parameter recordAssetTrace (see startAssetTrace)
+let assetTrace = null;
 let logShown = 0;
 let logUpdateDue = false;
 
@@ -108,6 +110,7 @@ function log(text) {
     gameCrashed(text.slice(k_CrashReportTag.length).split('/').pop());
   }
   logLines.push(text);
+  assetTrace?.log(text);
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
     // The box gets all its text again at the next update
@@ -779,6 +782,8 @@ function showAssetMap(index, programBytes) {
 async function useSiteGameFiles() {
   const fetchFile = (address, options) => fetch(address, options);
   const answer = await fetchAssetIndex(fetchFile);
+  // The tiers of the game files give the order of the downloads. With no tiers, the page uses its rules.
+  const tiers = answer.granted ? await fetchAssetTiers(fetchFile, log) : null;
   if (!answer.granted) {
     log(`The site gives no game files to this account (status ${answer.status}): ${answer.reason || 'no reason'}.`);
     return false;
@@ -822,11 +827,11 @@ async function useSiteGameFiles() {
   try {
     const { entries, store, blockSize, phases } = await streamAssets(answer.index, {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
-      wanted: isGameFile, progress: show, all, startPhases: false,
+      wanted: isGameFile, progress: show, all, startPhases: false, tiers,
       share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
       log, watch: (event, key, detail) => assetMap.handle(event, key, detail),
     });
-    siteFiles = { store, blockSize, phases };
+    siteFiles = { store, blockSize, phases, tiers };
     getAll();
     log(`The page downloaded ${last.files} game files and blocks (${megabytes(last.bytes)}). The browser kept the ` +
       'other files.');
@@ -1046,6 +1051,36 @@ function gameFolder(list) {
 
 // The game files that a game thread read and the page got from the site, for the log
 const obtainedGameFiles = new Set();
+
+/**
+ * Starts the trace of the game files that the game reads (launcher-asset-trace.js), for the tool
+ * tools/web-asset-tiers. The value of the page parameter recordAssetTrace is the name of the scenario.
+ * Nothing starts with no parameter. A button over the game saves the trace as a JSON file, and
+ * globalThis.openblackAssetTrace.text() gives its text to a test tool.
+ */
+function startAssetTrace(parameters, files, version) {
+  if (!parameters.has('recordAssetTrace')) {
+    return undefined;
+  }
+  const scenario = parameters.get('recordAssetTrace') || 'unnamed';
+  assetTrace = new AssetTraceRecorder(files, () => performance.now());
+  const text = () => `${JSON.stringify(assetTrace.trace({ scenario, build: version?.text ?? '' }), null, 1)}\n`;
+  const save = () => download(`asset-trace_${scenario}_${fileTime()}.json`, text());
+  globalThis.openblackAssetTrace = { text, save, reads: () => assetTrace.reads.length, phase: () => assetTrace.phase };
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = 'Save the asset trace';
+  button.id = 'asset-trace-save';
+  Object.assign(button.style, { position: 'fixed', right: '16px', bottom: '16px', zIndex: '10' });
+  button.addEventListener('click', (event) => {
+    save();
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
+  document.body.append(button);
+  log(`The page records the trace of the game files for the scenario ${scenario}.`);
+  return (file, offset, length) => assetTrace.read(file, offset, length);
+}
 // The reads of the game threads that wait for the site now, each with its start time and if it can stop the screen
 const gameFileWaits = new Set();
 // The number of frames that the game sent to the page as images, as its loading screens do
@@ -1062,7 +1097,7 @@ const k_AssetPhasesLatestMs = 30000;
  * the game will probably read next.
  */
 async function obtainGameFile(number, offset, length) {
-  const { store } = siteFiles;
+  const { store, tiers } = siteFiles;
   const file = store.files[number];
   if (!obtainedGameFiles.has(number)) {
     obtainedGameFiles.add(number);
@@ -1076,7 +1111,7 @@ async function obtainGameFile(number, offset, length) {
   } finally {
     gameFileWaits.delete(wait);
   }
-  store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256) }));
+  store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256), tiers }));
 }
 
 /**
@@ -1176,6 +1211,10 @@ async function start(online = false) {
   log(`Renderer: ${diagnostics.renderer}.`);
   describeAdapter(renderer.backend);
   const version = await buildVersion;
+  const noteGameRead = startAssetTrace(parameters,
+    chosen.map((entry) => ({ path: entry.path, size: entry.size ?? entry.file.size })), version);
+  // The page stays at the end of a run that records the trace of the game files, so that the trace is not lost
+  staysAtEnd ||= Boolean(noteGameRead);
   element('chooser').hidden = true;
   element('game').hidden = false;
   element('build-badge').hidden = false;
@@ -1231,7 +1270,7 @@ async function start(online = false) {
     onRuntimeInitialized: () => beginAssetPhases(),
     openblackWeb: {
       folder: gameFolder(list), storage, version: version.file, showFrame, setPresent, requests, displayFrames, gameFrames,
-      obtainGameFile: siteFiles ? obtainGameFile : undefined,
+      obtainGameFile: siteFiles ? obtainGameFile : undefined, noteGameRead,
     },
     onExit: (code) => {
       log(`The game stopped with the code ${code}.`);

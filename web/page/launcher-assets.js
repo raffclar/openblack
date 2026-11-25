@@ -12,6 +12,10 @@
 // the order that the game reads them, while the logos and the pre-intro film play. When the game reads a file that the
 // page does not have, the game waits, and the page gets that file first. After the phases, the page gets the files that
 // the game will probably read next, one at a time. A player can also get all the files before the start.
+//
+// The file asset-tiers.json of the page gives the phase of the game in which the game first reads each file. The tool
+// tools/web-asset-tiers makes it from the traces of the game (launcher-asset-trace.js). With no correct file, the page
+// uses the rules below, and gets all the files of the start before the game starts.
 'use strict';
 
 // The address of the list of the game files, and the start of the address of each file
@@ -41,68 +45,47 @@ const k_AssetPrefetchDownloads = 1;
 
 // The voice banks of the creature species. The web game reads the samples of a bank only when a creature of its species
 // is in the world (src/Simulation/WorldStart.cpp, k_SpeciesVoiceBanks in src/Creature/CreatureAudio.h).
-const k_AssetVoiceBankRule = /^audio\/sfx\/creature\/b(ape|bear|cow|greek|horse|rhino|sheep|tiger|tort|wolf)\.sad$/;
+const k_AssetVoiceBankRules = [
+  /^audio\/sfx\/creature\/b(ape|bear|cow|greek|horse|rhino|sheep|tiger|tort|wolf)\.sad$/,
+];
+// With no tiers file: the files that the start of the game does not read: the landscapes of the other lands and of the
+// network maps, the network maps, the files of the old citadel, the animations and light maps of the miracles, and the
+// voice banks of the species. The game reads the other files on the way to the first land: the films, the other sound
+// banks, the meshes, the textures and the scripts.
+const k_AssetLaterRules = [
+  /^data\/landscape\/(land[2-5t]|construct|mpm_|twogods|threegods|fourgods)[^/]*$/,
+  /^data\/landscape\/multi_player\//,
+  /^online maps\//,
+  /^data\/citadel\/engine_old\//,
+  /^data\/spells\/(anims|lightmaps)\//,
+  ...k_AssetVoiceBankRules,
+];
+// With no tiers file: the files that the page gets first after the start, because the first land can read them in its
+// play, in this order: the animations and the light maps of the miracles, then the voice banks of the species. A
+// creature can come into the world at any time, and its first sound must not wait for the site.
+const k_AssetSoonRules = [
+  /^data\/spells\//,
+  ...k_AssetVoiceBankRules,
+];
+// With no tiers file: the music banks. The start of the game reads only the list of the parts at the start of each
+// bank, and the music reads the parts of one bank while it plays. Thus the page gets only the first block of each bank
+// before the start.
+const k_AssetHeaderRules = [
+  /^audio\/music\/.*\.sad$/,
+];
 // The number of blocks after a block that the game reads, which the page gets next, so that the music plays on
 const k_AssetReadAheadBlocks = 2;
 
-// The phases of the start of the game, in the order that the game reads their files. The game starts when the page
-// has the files of the boot phase. The page then gets the files of the pre-intro, startup and land-load phases in this
-// order while the logos, the pre-intro film and the name box play. It gets the land-soon files after them, and the
-// later files only when the game reads them.
+// The phases of the start of the game, in the order that the game reads their files (the phases of the tiers file).
+// The game starts when the page has the files of the boot phase. The page then gets the files of the pre-intro,
+// startup and land-load phases in this order while the logos, the pre-intro film and the name box play. It gets the
+// land-soon files after them, and the later files only when the game reads them. A phase of the tiers file with another
+// name is a later phase.
 const k_AssetPhases = ['boot', 'pre-intro', 'startup', 'land-load', 'land-soon', 'later'];
 const k_AssetPhaseBoot = 0;
 const k_AssetPhaseLandLoad = 3;
 const k_AssetPhaseSoon = 4;
 const k_AssetPhaseLater = 5;
-// The phase of a file of the list that no rule gives
-const k_AssetPhaseDefault = 2;
-// The phase of each game file, by the first rule that agrees with its path in lower case. The rules come from the read
-// order of a new game to Land 1 (web-stream-research-1). A tiers file (parseAssetTiers) can replace them. A file can
-// come in a phase that is too late or too early: the game then waits for it at its first read, or the page gets it
-// before the game needs it. Both change only the time of the load.
-const k_AssetPhaseRules = [
-  // Boot: the scripts and the fonts of the front end, and the logo film
-  { phase: k_AssetPhaseBoot, rule: /^country\.txt$/ },
-  { phase: k_AssetPhaseBoot, rule: /^scripts\/(map|land1|infoscript2|infoscriptpatch2|infoscriptmultiplayer2)\.txt$/ },
-  { phase: k_AssetPhaseBoot, rule: /^scripts\/country\.lhw$/ },
-  { phase: k_AssetPhaseBoot, rule: /^data\/(j0\.met|j0\.fnt|logo\.bik|textures\/front_end_buttonsa?\.raw)$/ },
-  // Pre-intro: the film that a new player sees before the startup
-  { phase: 1, rule: /^data\/pre_intro\.bik$/ },
-  // Later: the landscapes of the other lands and of the network maps, the network maps, the files of the old citadel,
-  // and the files that the game does not read on the way to Land 1 and in its play, such as the low-detail meshes of
-  // the citadel
-  { phase: k_AssetPhaseLater, rule: /^data\/landscape\/(land[2-5t]|construct|mpm_|twogods|threegods|fourgods)[^/]*$/ },
-  { phase: k_AssetPhaseLater, rule: /^data\/landscape\/multi_player\// },
-  { phase: k_AssetPhaseLater, rule: /^online maps\// },
-  { phase: k_AssetPhaseLater, rule: /^data\/citadel\/engine_old\// },
-  { phase: k_AssetPhaseLater, rule: /^data\/citadel\/engine\/[^/]*lo_l3d\.zzz$/ },
-  { phase: k_AssetPhaseLater, rule: /^scripts\/html\// },
-  { phase: k_AssetPhaseLater, rule: /^data\/immersion\// },
-  { phase: k_AssetPhaseLater, rule: /\.bak[^/]*$/ },
-  // Land soon: the files that the first land can read in its play: the animations and the light maps of the miracles,
-  // then the voice banks of the species. A creature can come into the world at any time, and its first sound must not
-  // wait for the site.
-  { phase: k_AssetPhaseSoon, rule: /^data\/spells\/(anims|lightmaps)\// },
-  { phase: k_AssetPhaseSoon, rule: k_AssetVoiceBankRule },
-  // Startup: the tips film first, because the loading screen of the startup plays it
-  { phase: 2, rule: /^data\/tips\.bik$/ },
-  // Land load: the first land, its zones, the intro film, the spell films and the files of the intro and the dances
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/landscape\/land1\.[^/]*$/ },
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/zones\/land1[^/]*$/ },
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/intro\.bik$/ },
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/spells\// },
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/misc\/(eyes|intro)\// },
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/handdemo\// },
-  { phase: k_AssetPhaseLandLoad, rule: /^scripts\/(dance|quests)\// },
-  { phase: k_AssetPhaseLandLoad, rule: /^data\/[^/]*\.dan$/ },
-];
-// The first blocks of the files that the page gets in blocks: the music of the pre-intro, then the list of the parts at
-// the start of each music bank. The page gets the other blocks when the game reads them. A rule with first goes before
-// the files of its phase: the music of the pre-intro starts with the film, and must not wait for the site.
-const k_AssetPhaseBlockRules = [
-  { phase: 1, rule: /^audio\/music\/intro\/trailer\.sad$/, count: 3, first: true },
-  { phase: 2, rule: /^audio\/music\/.*\.sad$/, count: 1, first: false },
-];
 // A file below this size goes in a lane of the small files, because its time is mostly the time of its request
 const k_AssetSmallFile = 256 * 1024;
 // The number of small files that the page gets at the same time before the start and in the phases after it. The
@@ -110,8 +93,6 @@ const k_AssetSmallFile = 256 * 1024;
 const k_AssetSmallDownloads = 16;
 // The number of the other files and blocks of the phases that the page gets at the same time
 const k_AssetPhaseDownloads = 4;
-// The version of the tiers file that the page reads
-const k_AssetTiersFormat = 1;
 // The order of the queues of the store (AssetStore): a smaller rank goes first
 const k_AssetQueueRanks = { now: 0, phase: 1, later: 2 };
 // The time in milliseconds that a read of the game waits for the site, with no new frame on the screen, before the page
@@ -122,6 +103,12 @@ const k_AssetWaitPanelMs = 1000;
 const k_AssetMusicRule = /^audio\/music\//;
 
 const k_Sha256Pattern = /^[0-9a-f]{64}$/;
+
+// The address of the tiers file of the page, and the format of the tiers file that the page reads
+const k_AssetTiersAddress = 'asset-tiers.json';
+const k_AssetTiersFormat = 1;
+// The name of the phase of the files that the first land reads in its play
+const k_AssetSoonPhase = 'land-soon';
 
 /**
  * True when the path of a game file is safe in the game folder: a relative path with "/" between its parts, with no
@@ -386,61 +373,14 @@ async function fetchAsset(fetchFile, digest, file, received) {
 }
 
 /**
- * The phase of a game file and its order in the phase, by the rules: { phase, order }. The order is the number of the
- * first rule that agrees with the path, so that the files of an earlier rule come first in their phase.
- */
-function assetPhaseOf(path) {
-  const lower = path.toLowerCase();
-  const found = k_AssetPhaseRules.findIndex(({ rule }) => rule.test(lower));
-  return found < 0
-    ? { phase: k_AssetPhaseDefault, order: k_AssetPhaseRules.length }
-    : { phase: k_AssetPhaseRules[found].phase, order: found };
-}
-
-/**
- * The phase and the order of a whole game file: from the tiers file when there is one, or else from the rules. A file
- * that the tiers file does not give is a later file.
- */
-function assetTierOf(path, tiers = null) {
-  if (tiers === null) {
-    return assetPhaseOf(path);
-  }
-  return tiers.files.get(path.toLowerCase()) ?? { phase: k_AssetPhaseLater, order: 0 };
-}
-
-/**
- * The blocks that the page gets in a phase, of a game file that the list gives in blocks: { phase, first, count,
- * order }, or no value when the page gets the file whole in its phase.
- */
-function assetBlockTierOf(path, tiers = null) {
-  const lower = path.toLowerCase();
-  if (tiers !== null) {
-    return tiers.blocks.get(lower) ?? null;
-  }
-  const found = k_AssetPhaseBlockRules.find(({ rule }) => rule.test(lower));
-  if (!found) {
-    return null;
-  }
-  // A rule with first goes before the files of its phase, and the other rules after them
-  return { phase: found.phase, first: 0, count: found.count, order: found.first ? -1 : k_AssetPhaseRules.length + 1 };
-}
-
-/** True when the start of the game reads the file at this path: a file of a phase to the land load */
-function isStartAsset(path, tiers = null) {
-  return assetTierOf(path, tiers).phase <= k_AssetPhaseLandLoad;
-}
-
-/** True for a whole number from zero that JavaScript keeps with no error */
-function isCount(value) {
-  return Number.isSafeInteger(value) && value >= 0;
-}
-
-/**
- * The tiers of the game files in the text of a tiers file, which replace the rules (k_AssetPhaseRules and
- * k_AssetPhaseBlockRules). The file has the format 1, the names of the phases (k_AssetPhases), files: the phase and
- * the order in its phase of each path, and blocks: the phase, the first block and the number of blocks of each path
- * that the page gets in blocks. Gives { files, blocks }, two maps by the path in lower case. A path that is not in the
- * list of the game files changes nothing. Throws an error when the tiers file is not correct.
+ * The tiers of the game files in the text of the tiers file. Gives { phases, startPhases, blockSize, files, soon, lands }:
+ * - phases: the names of the phases, in order; startPhases: the number of phases that come before the start,
+ * - blockSize: the size of a block in the tiers file,
+ * - files: a Map from the lower-case path to { phase, order, blocks }, where blocks is null for a file that the game
+ *   reads whole, or a list of [phase, first block, number of blocks],
+ * - soon: the lower-case paths of the files that the first land reads in its play, in the order of their first read,
+ * - lands: a Map from the lower-case name of a land or a map to the lower-case paths that it reads, in order.
+ * The page ignores a path that is not in the list of the game files. Throws an error when the file is not correct.
  */
 function parseAssetTiers(text) {
   let tiers;
@@ -452,57 +392,134 @@ function parseAssetTiers(text) {
   if (tiers === null || typeof tiers !== 'object' || tiers.format !== k_AssetTiersFormat) {
     throw new Error(`the tiers of the game files do not have the format ${k_AssetTiersFormat}`);
   }
-  if (!Array.isArray(tiers.phases) || tiers.phases.join() !== k_AssetPhases.join()) {
-    throw new Error(`the tiers of the game files do not have the phases ${k_AssetPhases.join(', ')}`);
+  const { phases } = tiers;
+  if (!Array.isArray(phases) || phases.length === 0 || !phases.every((name) => typeof name === 'string')) {
+    throw new Error('the tiers of the game files have no phases');
   }
-  const isPhase = (value) => Number.isInteger(value) && value >= 0 && value < k_AssetPhases.length;
-  const map = (listed, read) => {
-    const result = new Map();
-    if (listed === undefined) {
-      return result;
+  const startPhases = tiers.start_phases;
+  if (!Number.isSafeInteger(startPhases) || startPhases < 0 || startPhases > phases.length) {
+    throw new Error(`the tiers of the game files have ${tiers.start_phases} phases before the start`);
+  }
+  const isPhase = (value) => Number.isSafeInteger(value) && value >= 0 && value < phases.length;
+  const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
+  const blockSize = tiers.block_size;
+  if (!Number.isSafeInteger(blockSize) || blockSize <= 0 || blockSize > k_AssetMostBlockSize) {
+    throw new Error(`the tiers of the game files have the block size ${tiers.block_size}`);
+  }
+  const listed = tiers.files;
+  if (listed === null || typeof listed !== 'object' || Array.isArray(listed) ||
+    Object.keys(listed).length > k_AssetMostFiles) {
+    throw new Error('the tiers of the game files have no correct files');
+  }
+  const files = new Map();
+  for (const [path, entry] of Object.entries(listed)) {
+    if (!isSafeAssetPath(path) || path !== path.toLowerCase() || entry === null || typeof entry !== 'object' ||
+      !isPhase(entry.phase) || !isCount(entry.order)) {
+      throw new Error(`the tiers of the game files have no correct phase for ${JSON.stringify(path)}`);
     }
-    if (listed === null || typeof listed !== 'object' || Array.isArray(listed)) {
-      throw new Error('the tiers of the game files have a list that is not an object');
+    const blocks = entry.blocks ?? null;
+    if (blocks !== null && !(Array.isArray(blocks) && blocks.every((run) => Array.isArray(run) && run.length === 3 &&
+      isPhase(run[0]) && isCount(run[1]) && isCount(run[2]) && run[2] > 0))) {
+      throw new Error(`the tiers of the game files have no correct blocks for ${path}`);
     }
-    for (const [path, entry] of Object.entries(listed)) {
-      const value = entry !== null && typeof entry === 'object' ? read(entry) : null;
-      if (!isSafeAssetPath(path) || value === null) {
-        throw new Error(`the tiers of the game files have no correct entry for ${JSON.stringify(path)}`);
-      }
-      result.set(path.toLowerCase(), value);
+    files.set(path, { phase: entry.phase, order: entry.order, blocks });
+  }
+  const soonPhase = phases.indexOf(k_AssetSoonPhase);
+  const soon = [...files].filter(([, entry]) => entry.phase === soonPhase)
+    .sort(([, a], [, b]) => a.order - b.order).map(([path]) => path);
+  const listedLands = tiers.lands ?? {};
+  if (listedLands === null || typeof listedLands !== 'object' || Array.isArray(listedLands)) {
+    throw new Error('the tiers of the game files have no correct lands');
+  }
+  const lands = new Map();
+  for (const [name, paths] of Object.entries(listedLands)) {
+    if (!Array.isArray(paths) || !paths.every((path) => isSafeAssetPath(path) && path === path.toLowerCase())) {
+      throw new Error(`the tiers of the game files have no correct paths for ${JSON.stringify(name)}`);
     }
-    return result;
-  };
-  const files = map(tiers.files, (entry) => (isPhase(entry.phase) && isCount(entry.order ?? 0)
-    ? { phase: entry.phase, order: entry.order ?? 0 }
-    : null));
-  const blocks = map(tiers.blocks, (entry) => (isPhase(entry.phase) && isCount(entry.first ?? 0) &&
-    Number.isSafeInteger(entry.count) && entry.count > 0 && Number.isSafeInteger(entry.order ?? 0)
-    ? { phase: entry.phase, first: entry.first ?? 0, count: entry.count, order: entry.order ?? 0 }
-    : null));
-  return { files, blocks };
+    lands.set(name.toLowerCase(), [...paths]);
+  }
+  return { phases, startPhases, blockSize, files, soon, lands };
+}
+
+/**
+ * Gets the tiers file of the page. Gives the tiers, or no value when the page has no correct tiers file. The page then
+ * uses its rules. The function log gets the reason.
+ */
+async function fetchAssetTiers(fetchFile, log = () => {}) {
+  try {
+    const response = await fetchFile(k_AssetTiersAddress, { cache: 'no-cache', credentials: 'same-origin' });
+    if (!response.ok) {
+      log(`The page has no tiers of the game files (status ${response.status}). It uses its rules.`);
+      return null;
+    }
+    return parseAssetTiers(await response.text());
+  } catch (error) {
+    log(`The page cannot read the tiers of the game files: ${error.message || error}. It uses its rules.`);
+    return null;
+  }
+}
+
+/**
+ * True when the start of the game reads the file at this path, so that the page gets it before the start. With the
+ * tiers, the file must have a phase before the start.
+ */
+function isStartAsset(path, tiers = null) {
+  const lower = path.toLowerCase();
+  if (tiers) {
+    const tier = tiers.files.get(lower);
+    return tier !== undefined && tier.phase < tiers.startPhases;
+  }
+  return !k_AssetLaterRules.some((rule) => rule.test(lower));
+}
+
+/** The phase of the page (k_AssetPhases) of a phase of the tiers file, by its name */
+function assetPhaseOf(tiers, phase) {
+  const found = k_AssetPhases.indexOf(tiers.phases[phase]);
+  return found < 0 ? k_AssetPhaseLater : found;
 }
 
 /**
  * What the page gets in each phase (k_AssetPhases), in the order to get it: for each phase a list of { number, block },
- * with block null for a whole file. The files are the files of the list in the order of their numbers. The tiers are
- * the result of parseAssetTiers, or no value for the rules. A file that the list gives in blocks with blocks in a phase
- * gets only these blocks in it. The other blocks of the file come when the game reads them.
+ * with block null for a whole file. The files are the files of the list in the order of their numbers, blockSize the
+ * size of their blocks, and tiers the result of parseAssetTiers.
+ * - With the tiers, each file goes in its phase, in the order of the tiers. For a file that the list gives in blocks,
+ *   with blocks in the tiers, each run of blocks goes in its own phase. The other blocks come when the game reads them.
+ *   A file that the tiers do not give is a later file.
+ * - With no tiers, the boot phase has all the files of the start and the first block of each music bank, and the
+ *   land-soon phase has the files that the first land can read in its play (k_AssetSoonRules).
  */
-function planAssetTiers(files, tiers = null) {
+function planAssetTiers(files, tiers = null, blockSize = 0) {
   const phases = k_AssetPhases.map(() => []);
-  files.forEach((file, number) => {
-    const blocks = file.blocks ? assetBlockTierOf(file.path, tiers) : null;
-    if (blocks !== null) {
-      const end = Math.min(file.blocks.length, blocks.first + blocks.count);
-      for (let block = blocks.first; block < end; block += 1) {
-        phases[blocks.phase].push({ number, block, order: blocks.order });
+  if (tiers === null) {
+    files.forEach((file, number) => {
+      const lower = file.path.toLowerCase();
+      if (!isStartAsset(lower)) {
+        const soon = k_AssetSoonRules.findIndex((rule) => rule.test(lower));
+        phases[soon < 0 ? k_AssetPhaseLater : k_AssetPhaseSoon].push({ number, block: null, order: soon });
+      } else if (file.blocks && k_AssetHeaderRules.some((rule) => rule.test(lower))) {
+        phases[k_AssetPhaseBoot].push({ number, block: 0, order: 0 });
+      } else {
+        phases[k_AssetPhaseBoot].push({ number, block: null, order: 0 });
       }
-      return;
-    }
-    const { phase, order } = assetTierOf(file.path, tiers);
-    phases[phase].push({ number, block: null, order });
-  });
+    });
+  } else {
+    files.forEach((file, number) => {
+      const tier = tiers.files.get(file.path.toLowerCase());
+      if (tier === undefined) {
+        phases[k_AssetPhaseLater].push({ number, block: null, order: 0 });
+        return;
+      }
+      if (!file.blocks || tier.blocks === null || blockSize !== tiers.blockSize) {
+        phases[assetPhaseOf(tiers, tier.phase)].push({ number, block: null, order: tier.order });
+        return;
+      }
+      for (const [phase, first, count] of tier.blocks) {
+        for (let block = first; block < first + count && block < file.blocks.length; block += 1) {
+          phases[assetPhaseOf(tiers, phase)].push({ number, block, order: tier.order });
+        }
+      }
+    });
+  }
   return phases.map((items) => items
     .sort((a, b) => a.order - b.order || a.number - b.number || (a.block ?? 0) - (b.block ?? 0))
     .map(({ number, block }) => ({ number, block })));
@@ -512,26 +529,40 @@ function planAssetTiers(files, tiers = null) {
  * The numbers of the files that the page gets for later, in the order to get them, when the game read the file at the
  * path just now. The argument has: the files of the list in the order of their numbers, with a path and a sha256 each,
  * a function that is true for the SHA-256 of each file that the page has or gets now, and the tiers (see
- * planAssetTiers).
- * - After the game read the landscape of a land: the landscape and the footpaths of the next land.
- * - After the game read a file of a network map: the other files of the same map.
+ * parseAssetTiers).
+ * - After the game read the landscape of a land: the landscape and the footpaths of the next land, and the files that
+ *   the tiers give for the next land.
+ * - After the game read a file of a network map: the other files of the same map, and the files that the tiers give
+ *   for the map.
  */
 function planAssetPrefetch(files, { path, have = () => false, tiers = null }) {
   const numbers = [];
   const seen = new Set();
+  const addNumber = (number) => {
+    const file = files[number];
+    if (!seen.has(file.sha256) && !have(file.sha256)) {
+      seen.add(file.sha256);
+      numbers.push(number);
+    }
+  };
   const add = (test) => {
     files.forEach((file, number) => {
-      if (!seen.has(file.sha256) && !have(file.sha256) && test(file.path.toLowerCase())) {
-        seen.add(file.sha256);
-        numbers.push(number);
+      if (test(file.path.toLowerCase())) {
+        addNumber(number);
       }
     });
+  };
+  // The files of a list of the tiers, in the order of the list
+  const addTiers = (paths) => {
+    const numberOf = new Map(files.map((file, number) => [file.path.toLowerCase(), number]));
+    paths.map((other) => numberOf.get(other)).filter((number) => number !== undefined).forEach(addNumber);
   };
   const lower = path.toLowerCase();
   const land = /^data\/landscape\/land([1-4])\.lnd$/.exec(lower);
   if (land) {
     const next = Number(land[1]) + 1;
     add((other) => other === `data/landscape/land${next}.lnd` || other === `data/landscape/land${next}.fot`);
+    addTiers(tiers?.lands.get(`land${next}`) ?? []);
     return numbers;
   }
   const map = /^(online maps\/|data\/landscape\/(multi_player\/)?)([^/]+?)\.[^./]+$/.exec(lower);
@@ -541,6 +572,7 @@ function planAssetPrefetch(files, { path, have = () => false, tiers = null }) {
       const stem = /([^/]+?)\.[^./]+$/.exec(other);
       return stem !== null && stem[1] === name && !isStartAsset(other, tiers);
     });
+    addTiers(tiers?.lands.get(name) ?? []);
   }
   return numbers;
 }
@@ -994,7 +1026,7 @@ async function keepAssets(index, options) {
  * game files for the game, with file null for each file that the page does not have whole yet, the store that gets
  * the other files and blocks, and the phases (planAssetTiers). Without the option all, the store then gets the files of
  * the next phases in their order, while the game starts and plays. The options are those of keepAssets, and also all,
- * share, log and watch (see AssetStore), tiers (see planAssetTiers), and startPhases: false when the caller starts the
+ * share, log and watch (see AssetStore), tiers (see parseAssetTiers), and startPhases: false when the caller starts the
  * phases itself with store.queuePhases(phases), for example after the program of the game arrived.
  */
 async function streamAssets(index, {
@@ -1010,7 +1042,7 @@ async function streamAssets(index, {
   for (const name of plan.remove) {
     await folder.removeEntry(name, { recursive: true });
   }
-  const phases = planAssetTiers(files, tiers);
+  const phases = planAssetTiers(files, tiers, blockSize);
   const boot = phases[k_AssetPhaseBoot];
   const startShas = new Set(boot.filter(({ block }) => block === null).map(({ number }) => files[number].sha256));
   const download = all ? plan.download : plan.download.filter((file) => startShas.has(file.sha256));
@@ -1141,10 +1173,10 @@ if (typeof module !== 'undefined') {
   module.exports = {
     isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
     refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
-    assetPhaseOf, assetTierOf, assetBlockTierOf, parseAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
+    assetPhaseOf, parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
     assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
-    k_AssetIndexAddress, k_AssetCacheFolder, k_AssetPhases, k_AssetSmallFile, k_AssetSmallDownloads,
+    k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPhases, k_AssetSmallFile, k_AssetSmallDownloads,
     k_AssetPhaseDownloads, k_AssetDownloads,
   };
 }

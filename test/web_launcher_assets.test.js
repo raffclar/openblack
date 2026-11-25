@@ -5,11 +5,11 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const {
   isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
-  refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
-  assetPhaseOf, parseAssetTiers, planAssetTiers, planAssetPrefetch, assetBlockBounds, assetBlockRange,
+  refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets: streamWithTiers, isStartAsset,
+  parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetBlockBounds, assetBlockRange,
   parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, AssetStore,
-  k_AssetIndexAddress, k_AssetCacheFolder, k_AssetPhases, k_AssetSmallFile, k_AssetSmallDownloads,
-  k_AssetPhaseDownloads, k_AssetDownloads,
+  k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPhases, k_AssetSmallFile,
+  k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads,
 } = require('../web/page/launcher-assets.js');
 
 let count = 0;
@@ -348,6 +348,34 @@ const streamedText = (files = k_Streamed, blocked = ['Audio/Music/align/Good.sad
   });
 const numberOf = (files, path) => files.findIndex((file) => file.path === path);
 
+// A tiers file for the streamed files: the meshes and the first block of the music at the startup, land 1 and the intro
+// film at the land load, the heal miracle in the play of land 1. Land 2 is a later land.
+const tiersText = (extra = {}) => JSON.stringify({
+  format: 1,
+  made_from: { start: ['traces/land1.json'], later: ['traces/land2.json'] },
+  phases: ['boot', 'pre-intro', 'startup', 'land-load', 'land-soon', 'later', 'background'],
+  start_phases: 4,
+  block_size: k_BlockSize,
+  files: {
+    'scripts/infoscript2.txt': { phase: 0, order: 0 },
+    'data/logo.bik': { phase: 0, order: 1 },
+    'data/pre_intro.bik': { phase: 1, order: 0 },
+    'data/allmeshes.g3d': { phase: 2, order: 0 },
+    'audio/music/align/good.sad': { phase: 2, order: 1, blocks: [[2, 0, 1]] },
+    'data/landscape/land1.lnd': { phase: 3, order: 0 },
+    'data/intro.bik': { phase: 3, order: 1 },
+    'data/spells/anims/heal.anm': { phase: 4, order: 0 },
+    'data/landscape/land2.fot': { phase: 5, order: 0 },
+    'data/citadel/engine/mainlo_l3d.zzz': { phase: 6, order: 0 },
+    'data/not/in/the/list.txt': { phase: 0, order: 0 },
+  },
+  lands: { land2: ['data/landscape/land2.fot', 'data/landscape/land2.lnd'] },
+  ...extra,
+});
+const k_TestTiers = parseAssetTiers(tiersText());
+// The page streams the files with the tiers of the test, but a test can give other tiers or no tiers
+const streamAssets = (index, options) => streamWithTiers(index, { tiers: k_TestTiers, ...options });
+
 check('the second version of the list gives the blocks of a file, and the first version still reads', () => {
   const index = parseAssetIndex(streamedText());
   assert.equal(index.blockSize, k_BlockSize);
@@ -400,7 +428,7 @@ check('the plan keeps the blocks of a file that the page does not keep whole', (
   assert.deepEqual([...plan.ready], [film.sha256]);
 });
 
-check('the start reads the files of the phases to the land load, and only the first block of each music bank', () => {
+check('with no tiers file the game starts with all the files of the start and the first block of each music bank', () => {
   for (const path of ['Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad', 'Data/Landscape/Land1.lnd',
     'Data/Citadel/engine/main.cam', 'Scripts/Land2.txt']) {
     assert.equal(isStartAsset(path), true, path);
@@ -411,94 +439,97 @@ check('the start reads the files of the phases to the land load, and only the fi
     assert.equal(isStartAsset(path), false, path);
   }
   const { files } = parseAssetIndex(streamedText());
-  const phases = planAssetTiers(files);
+  const phases = planAssetTiers(files, null, k_BlockSize);
   const paths = (items) => items.map(({ number, block }) => (block === null ? files[number].path : `${files[number].path} ${block}`));
-  assert.deepEqual(phases.map(paths), [[], [],
-    ['Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad 0'],
-    ['Data/Landscape/Land1.lnd', 'Data/INTRO.bik'],
+  assert.deepEqual(phases.map(paths), [
+    ['Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad 0', 'Data/INTRO.bik', 'Data/Landscape/Land1.lnd'], [], [], [],
     ['Data/Spells/Anims/heal.anm'],
     ['Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']]);
 });
 
-// The files of a new game to Land 1 in the order of the list of the site, with the phase that the rules give each
-const k_Land1Phases = {
-  'Audio/Dialogue/HelpSprites.sad': 'startup',
-  'Country.txt': 'boot',
-  'Data/AllMeshes.g3d': 'startup',
-  'Data/Citadel/engine/creaturelo_l3d.zzz': 'later',
-  'Data/Citadel/engine/creature_l3d.zzz': 'startup',
-  'Data/CTR/ape.ctr': 'startup',
-  'Data/INTRO.bik': 'land-load',
-  'Data/j0.fnt': 'boot',
-  'Data/Landscape/Land1.lnd': 'land-load',
-  'Data/Landscape/Land2.lnd': 'later',
-  'Data/logo.bik': 'boot',
-  'Data/pre_intro.bik': 'pre-intro',
-  'Data/Spells/fall/fall.bik': 'land-load',
-  'Data/Spells/LightMaps/a.raw': 'land-soon',
-  'Data/Textures/Front_end_buttons.raw': 'boot',
-  'Data/tips.bik': 'startup',
-  'Data/Zones/land1zone1.exc': 'land-load',
-  'Online Maps/mpm_2p_1.map': 'later',
-  'Scripts/html/banner.gif': 'later',
-  'Scripts/InfoScript2.txt': 'boot',
-  'Scripts/Land1.txt': 'boot',
-  'Scripts/Land2.txt': 'startup',
-};
-
-check('the rules give each file the phase of the start in which the game first reads it', () => {
-  for (const [path, phase] of Object.entries(k_Land1Phases)) {
-    assert.equal(k_AssetPhases[assetPhaseOf(path).phase], phase, path);
+check('the tiers file gives the phase of each file, the files of the first land and the files of each land', () => {
+  const tiers = parseAssetTiers(tiersText());
+  assert.equal(tiers.startPhases, 4);
+  assert.equal(tiers.files.get('data/landscape/land1.lnd').phase, 3);
+  assert.equal(tiers.files.get('data/allmeshes.g3d').blocks, null);
+  assert.deepEqual(tiers.soon, ['data/spells/anims/heal.anm']);
+  assert.deepEqual(tiers.lands.get('land2'), ['data/landscape/land2.fot', 'data/landscape/land2.lnd']);
+  const good = JSON.parse(tiersText());
+  for (const wrong of [
+    { ...good, format: 2 },
+    { ...good, start_phases: 12 },
+    { ...good, block_size: 0 },
+    { ...good, files: { 'Data/Upper.txt': { phase: 0, order: 0 } } },
+    { ...good, files: { '../a.txt': { phase: 0, order: 0 } } },
+    { ...good, files: { 'a.txt': { phase: 7, order: 0 } } },
+    { ...good, files: { 'a.txt': { phase: 0, order: 0, blocks: [[0, 0, 0]] } } },
+    { ...good, lands: { land2: ['Data/Upper.txt'] } },
+  ]) {
+    assert.throws(() => parseAssetTiers(JSON.stringify(wrong)), Error, JSON.stringify(wrong));
   }
-  // The tips film comes first in the startup, before the files that no rule gives
-  assert.ok(assetPhaseOf('Data/tips.bik').order < assetPhaseOf('Data/AllMeshes.g3d').order);
-  // The voice banks of the species and the low-detail meshes are not files of the start
-  assert.equal(isStartAsset('Audio/SFX/Creature/btiger.sad'), false);
-  assert.equal(isStartAsset('Data/Citadel/engine/mainfloorlo_l3d.zzz'), false);
-  assert.equal(isStartAsset('Data/Citadel/engine/mainfloor_l3d.zzz'), true);
+  assert.throws(() => parseAssetTiers('not json'), /not JSON/);
 });
 
-check('the music of the pre-intro goes before its film, and the other music banks give only their first block', () => {
-  const text = Object.fromEntries(['Data/pre_intro.bik', 'Audio/Music/intro/trailer.sad', 'Audio/Music/align/Good.sad']
-    .map((path) => [path, `${path} has enough bytes for some blocks`]));
-  const { files } = parseAssetIndex(streamedText(text, Object.keys(text)));
-  const phases = planAssetTiers(files);
-  const trailer = numberOf(files, 'Audio/Music/intro/trailer.sad');
-  assert.deepEqual(phases[1], [{ number: trailer, block: 0 }, { number: trailer, block: 1 },
-    { number: trailer, block: 2 }, { number: numberOf(files, 'Data/pre_intro.bik'), block: null }]);
-  assert.deepEqual(phases[2], [{ number: numberOf(files, 'Audio/Music/align/Good.sad'), block: 0 }]);
+check('the page uses its rules when it has no correct tiers file', async () => {
+  const logged = [];
+  const answer = (status, text) => async (address) => {
+    assert.equal(address, k_AssetTiersAddress);
+    return fakeResponse(status, text);
+  };
+  assert.equal(await fetchAssetTiers(answer(404, ''), (line) => logged.push(line)), null);
+  assert.equal(await fetchAssetTiers(answer(200, '{"format": 9}'), (line) => logged.push(line)), null);
+  assert.equal(await fetchAssetTiers(async () => {
+    throw new Error('no network');
+  }, (line) => logged.push(line)), null);
+  assert.equal(logged.length, 3);
+  assert.match(logged[0], /status 404/);
+  assert.equal((await fetchAssetTiers(answer(200, tiersText()))).startPhases, 4);
 });
 
-check('a tiers file replaces the rules, and a file that it does not give is a later file', () => {
-  const tiers = parseAssetTiers(JSON.stringify({
-    format: 1, phases: k_AssetPhases,
-    files: { 'data/landscape/land1.lnd': { phase: 0, order: 2 }, 'Data/AllMeshes.g3d': { phase: 0, order: 1 },
-      'scripts/not in the list.txt': { phase: 2, order: 0 } },
-    blocks: { 'audio/music/align/good.sad': { phase: 1, first: 1, count: 2 } },
-  }));
+check('the tiers give each file and each run of blocks its phase, and a file that they do not give is later', () => {
   const { files } = parseAssetIndex(streamedText());
-  const phases = planAssetTiers(files, tiers);
-  const music = numberOf(files, 'Audio/Music/align/Good.sad');
-  assert.deepEqual(phases[0], [{ number: numberOf(files, 'Data/AllMeshes.g3d'), block: null },
-    { number: numberOf(files, 'Data/Landscape/Land1.lnd'), block: null }]);
-  assert.deepEqual(phases[1], [{ number: music, block: 1 }, { number: music, block: 2 }]);
-  assert.equal(phases[2].length + phases[3].length + phases[4].length, 0);
-  assert.equal(phases[5].length, 5);
-  assert.equal(isStartAsset('Data/Spells/Anims/heal.anm', tiers), false);
-  assert.equal(isStartAsset('DATA/LANDSCAPE/LAND1.LND', tiers), true);
+  const tiers = parseAssetTiers(tiersText({ files: {
+    'data/allmeshes.g3d': { phase: 2, order: 1 },
+    'data/landscape/land1.lnd': { phase: 2, order: 0 },
+    'audio/music/align/good.sad': { phase: 2, order: 2, blocks: [[2, 0, 1], [3, 2, 1], [4, 3, 2]] },
+    'data/intro.bik': { phase: 6, order: 0 },
+  } }));
+  for (const path of ['Data/AllMeshes.g3d', 'DATA/LANDSCAPE/Land1.lnd', 'Audio/Music/align/Good.sad']) {
+    assert.equal(isStartAsset(path, tiers), true, path);
+  }
+  for (const path of ['Data/INTRO.bik', 'Data/Landscape/land2.fot', 'Data/Spells/Anims/heal.anm']) {
+    assert.equal(isStartAsset(path, tiers), false, path);
+  }
+  const phases = planAssetTiers(files, tiers, k_BlockSize);
+  const paths = (items) => items.map(({ number, block }) => (block === null ? files[number].path : `${files[number].path} ${block}`));
+  // The background phase of the tiers file is a later phase of the page
+  assert.deepEqual(phases.map(paths), [[], [],
+    ['Data/Landscape/Land1.lnd', 'Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad 0'],
+    ['Audio/Music/align/Good.sad 2'],
+    ['Audio/Music/align/Good.sad 3', 'Audio/Music/align/Good.sad 4'],
+    ['Data/INTRO.bik', 'Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot', 'Data/Spells/Anims/heal.anm',
+      'Online Maps/mpm_2p_1.map']]);
+  // The list has blocks of another size: the page gets the whole file
+  assert.deepEqual(paths(planAssetTiers(files, tiers, 8)[2]),
+    ['Data/Landscape/Land1.lnd', 'Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad']);
 });
 
-check('the page refuses a tiers file that is not correct', () => {
-  const tiers = (extra) => JSON.stringify({ format: 1, phases: k_AssetPhases, files: {}, ...extra });
-  assert.throws(() => parseAssetTiers('{'), /not JSON/);
-  assert.throws(() => parseAssetTiers(tiers({ format: 2 })), /format 1/);
-  assert.throws(() => parseAssetTiers(tiers({ phases: ['boot'] })), /phases/);
-  assert.throws(() => parseAssetTiers(tiers({ files: { 'a.txt': { phase: 6 } } })), /a\.txt/);
-  assert.throws(() => parseAssetTiers(tiers({ files: { '../a.txt': { phase: 1 } } })), /a\.txt/);
-  assert.throws(() => parseAssetTiers(tiers({ files: [] })), /not an object/);
-  assert.throws(() => parseAssetTiers(tiers({ blocks: { 'a.sad': { phase: 1, count: 0 } } })), /a\.sad/);
-  const empty = parseAssetTiers(tiers({ files: undefined }));
-  assert.equal(empty.files.size + empty.blocks.size, 0);
+check('the tiers file of the page starts the game with the boot files and never gets the low-detail meshes first', () => {
+  const tiers = parseAssetTiers(require('node:fs').readFileSync(`${__dirname}/../web/page/asset-tiers.json`, 'utf8'));
+  const phaseOf = (path) => {
+    const tier = tiers.files.get(path);
+    return tier === undefined ? 'later' : tiers.phases[tier.phase];
+  };
+  for (const path of ['country.txt', 'scripts/infoscript2.txt', 'data/logo.bik', 'data/j0.fnt']) {
+    assert.equal(phaseOf(path), 'boot', path);
+  }
+  assert.equal(phaseOf('data/pre_intro.bik'), 'pre-intro');
+  assert.equal(phaseOf('data/landscape/land1.lnd'), 'land-load');
+  for (const path of ['data/citadel/engine/creaturelo_l3d.zzz', 'data/landscape/land2.lnd', 'scripts/html/banner.gif']) {
+    assert.equal(isStartAsset(path, tiers), false, path);
+  }
+  const boot = [...tiers.files.values()].filter((tier) => tier.phase === 0);
+  assert.ok(boot.length > 0 && boot.length < 20, `${boot.length} boot files`);
 });
 
 check('a read that waits for the site shows the map only when the screen has no new frame for a second', () => {
@@ -520,6 +551,17 @@ check('the plan for later gets the next land, and the files of a network map', (
     ['Data/Landscape/land2.fot']);
   assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/Landscape/Land5.lnd' })), []);
   assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/AllMeshes.g3d' })), []);
+});
+
+check('with the tiers the plan for later gets the files of the next land of the tiers', () => {
+  const { files } = parseAssetIndex(streamedText());
+  const paths = (numbers) => numbers.map((number) => files[number].path);
+  const tiers = parseAssetTiers(tiersText({ lands: { land2: ['data/landscape/land2.fot', 'online maps/mpm_2p_1.map'] } }));
+  assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/Landscape/Land1.lnd', tiers })),
+    ['Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']);
+  const have = (sha256) => sha256 === sha('land two');
+  assert.deepEqual(paths(planAssetPrefetch(files, { path: 'Data/Landscape/Land1.lnd', have, tiers })),
+    ['Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']);
 });
 
 // A site for the second version of the list, and the store of the page with what it gave to the game threads
@@ -657,7 +699,7 @@ check('the page asks the browser to keep the storage, but not when the browser k
   assert.equal(await askToKeepStorage({}), null);
 });
 
-check('the voice banks of the species come after the start, after the files of the miracles', () => {
+check('with no tiers file the voice banks of the species come after the start, after the miracles', () => {
   const files = parseAssetIndex(indexText({
     'Audio/SFX/Creature/btiger.sad': 'tiger',
     'Audio/SFX/Creature/creature.sad': 'every creature',
@@ -672,7 +714,7 @@ check('the voice banks of the species come after the start, after the files of t
   assert.equal(isStartAsset('Audio/Dialogue/HelpSprites.sad'), true);
   const phases = planAssetTiers(files);
   const paths = (items) => items.map(({ number }) => files[number].path);
-  assert.deepEqual(paths(phases[2]), ['Audio/SFX/Creature/creature.sad', 'Audio/SFX/Game/InGame.sad']);
+  assert.deepEqual(paths(phases[0]), ['Audio/SFX/Creature/creature.sad', 'Audio/SFX/Game/InGame.sad']);
   assert.deepEqual(paths(phases[4]),
     ['Data/Spells/Anims/heal.anm', 'Audio/SFX/Creature/btiger.sad', 'Audio/SFX/Creature/BCOW.sad']);
 });
