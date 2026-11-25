@@ -41,6 +41,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
@@ -320,6 +321,9 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	                                     Locator::reactionSystem::value().GetReactions(), Reaction::ReactToMagicShieldDestroyed,
 	                                     [](const auto& active) { return active.source.type; }))
 	                               : 0;
+	size_t hungPosts = 0;
+	registry.Each<const ecs::components::LeashPost>(
+	    [&hungPosts](const ecs::components::LeashPost& post) { hungPosts += post.hung ? 1 : 0; });
 	return {
 	    {"placed", registry.Size<Transform>()},
 	    {"creatures", registry.Size<Creature>()},
@@ -336,6 +340,8 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"fading domes", fadingDomes},
 	    {"standing shield reactions", standingReactions},
 	    {"shield fall reactions", fallReactions},
+	    {"leash posts", registry.Size<ecs::components::LeashPost>()},
+	    {"hung leash posts", hungPosts},
 	};
 }
 

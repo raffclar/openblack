@@ -361,6 +361,58 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	all.push_back(templeGlows("leash.temple_glows_night", "The glows round the temple's leashes at night", 23.0f));
 
 	all.push_back({
+	    .id = "leash.temple_gone",
+	    .name = "The leashes go with the destroyed temple",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes and your temple stands in front of the camera, its leash posts in "
+	                   "view. The learning leash is picked at its post, so the hand carries it. Then the temple starts its "
+	                   "destruction, as when its heart loses the last of its life. The game is a skirmish, so the "
+	                   "loss of the temple does not start the end of the game.",
+	    .expected = "The aggression and compassion leashes tumble on their posts, and the hand carries the learning leash, "
+	                "for all of the destruction. Just before the temple goes, after 21.8 seconds, the leashes, their glows "
+	                "and the leash in the hand stop with the heart and its lanterns. They do not come back after the temple "
+	                "goes.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .skirmish = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Leash(0, LeashType::Evil, 0.5f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
+	    .checks = {{.label = "the three leashes hang on the temple before its destruction",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "hung leash posts",
+	                .afterTurns = 40,
+	                .byTurn = 48,
+	                .atLeast = 3.0},
+	               {.label = "the leashes still hang at the middle of the destruction",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "hung leash posts",
+	                .afterTurns = 200,
+	                .atLeast = 3.0},
+	               {.label = "the leashes stop with the draw of the temple, before it goes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "hung leash posts",
+	                .afterTurns = 268,
+	                .byTurn = 290,
+	                .atMost = 0.0},
+	               {.label = "the leashes and their glows go with the temple",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "leash posts",
+	                .afterTurns = 275,
+	                .byTurn = 320,
+	                .atMost = 0.0},
+	               {.label = "no leash comes back after the temple goes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "leash posts",
+	                .afterTurns = 400,
+	                .atMost = 0.0}},
+	});
+
+	all.push_back({
 	    .id = "leash.l_key_picks_post",
 	    .name = "The leash key picks the leash at the temple",
 	    .facet = Facet::Leash,

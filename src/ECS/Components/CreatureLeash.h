@@ -134,6 +134,8 @@ struct LeashPost
 	bool hung {false};
 	/// The glow of smoke about it
 	entt::entity glow {entt::null};
+	/// The temple that it hangs on. It goes with that temple. It is null for a leash that hangs at points of its own.
+	entt::entity temple {entt::null};
 };
 
 } // namespace openblack::ecs::components
