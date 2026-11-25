@@ -46,11 +46,7 @@ EM_JS(char*, openblack_user_folder_list, (), {
 
 // A file that the site streams is not in the folder until the game first reads it. A large file can come in blocks of
 // the same size, of which the folder has only some. The read gives -2 when the folder does not have all its bytes yet.
-// When the page records the trace of the game files, the thread tells the page about each read (see web/page/pre.js).
 EM_JS(double, openblack_user_folder_read, (uint32_t file, uint8_t* buffer, double length, double offset), {
-	if (globalThis.openblackNoteGameRead) {
-		globalThis.openblackNoteGameRead(file, offset, length);
-	}
 	try {
 		const folder = globalThis.openblackWeb.folder;
 		const blob = folder.files[file];
