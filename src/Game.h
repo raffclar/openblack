@@ -42,6 +42,7 @@
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/TestbedScenarioChecks.h"
 #endif
+#include "ECS/DrawReadWatch.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -246,6 +247,9 @@ struct Arguments
 	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
 	/// MainThreadQueue). Off by default.
 	TurnApiCheck turnApiCheck {};
+	/// For developers: what the check does when the draw reads the registries of the world, not the drawn copy (see
+	/// ecs::DrawReadWatch). Off by default.
+	ecs::DrawReadCheck drawReadCheck {};
 	/// When the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row
 	/// 153). By default only on the map for 32 gods. Developers can make it always or never.
 	turn_beside_draw::Mode turnBesideDraw {turn_beside_draw::Mode::ByLand};
@@ -617,6 +621,9 @@ private:
 	void SaveHelpRecord();
 	/// The log gets each place where turn code used the graphics, the renderer or the audio directly, when the check is on
 	void ReportTurnApiCheck() const;
+	/// The draw starts or stops: the watch of the draw's reads starts or stops on both registries
+	void WatchDrawReads(bool drawing);
+	void ReportDrawReadCheck() const;
 	/// The turns of the next frame start on another thread, beside the end of the draw of this frame, when nothing that
 	/// the end of the frame does changes what they read. Gives true when they started.
 	bool StartTurnsBesideDraw();
@@ -1002,6 +1009,8 @@ private:
 	std::optional<uint32_t> _deviceLossFrame;
 	/// What the check of the turn's calls does
 	TurnApiCheck _turnApiCheck {};
+	/// Counts the reads of the registries that the draw makes (see ecs::DrawReadWatch)
+	ecs::DrawReadWatch _drawReadWatch;
 	/// When the turns of the next frame play beside the draw of this frame (deviation row 153)
 	turn_beside_draw::Mode _turnBesideDraw {turn_beside_draw::Mode::ByLand};
 	/// The inspector gave its answers before this frame, while the tool held the game, so the frame does not ask it again

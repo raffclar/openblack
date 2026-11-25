@@ -688,16 +688,13 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 	}
 
 	// Then each storm's lightning glows on the ground around where it struck, while its flash shows
-	drawDesc.entities.Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
-		if (storm.dead || !storm.flash.active)
-		{
-			return;
-		}
-		const auto strength = land_colour_stamps::Strength(lightning::GlowStrength(storm.flash));
+	for (const auto& flash : drawDesc.frame->effects.lightningFlashes)
+	{
+		const auto strength = land_colour_stamps::Strength(lightning::GlowStrength(flash));
 		stamp(*_lightningGlowTexture, land_colour_stamps::k_LightningSide,
-		      land_colour_stamps::CentredCorner(storm.flash.position, land_colour_stamps::k_LightningSide), strength,
+		      land_colour_stamps::CentredCorner(flash.position, land_colour_stamps::k_LightningSide), strength,
 		      land_colour_stamps::Combine::Add);
-	});
+	}
 }
 
 void Renderer::KeepLightOfFrameBefore() const

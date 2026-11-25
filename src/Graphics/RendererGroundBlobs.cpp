@@ -461,9 +461,13 @@ void Renderer::DrawFarVillagerSmudges(const DrawSceneDesc& desc) const
 	                zsort::Depth(renderCtx.farVillagers.front().position, desc.camera->GetOrigin()));
 }
 
-void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
+void Renderer::CollectKnockReadout(DrawnEffects& effects, const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::abodeKnockSystem::has_value() || !Locator::infoConstants::has_value())
+	auto& vertices = effects.knockVertices;
+	auto& rows = effects.knockRows;
+	vertices.clear();
+	rows.clear();
+	if (!Locator::abodeKnockSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
@@ -481,13 +485,6 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	struct Vertex
-	{
-		glm::vec3 position;
-		glm::vec2 uv;
-		uint32_t colour;
-	};
-	std::vector<Vertex> vertices;
 	// The little person is the second picture of the bottom row of the sheet's eight by eight
 	constexpr float k_Cell = 1.0f / 8.0f;
 	constexpr glm::vec2 k_Person {1.0f * k_Cell, 7.0f * k_Cell};
@@ -504,13 +501,6 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	// Each house of the town shows its read-out when the renderer draws the house. Only the houses that this frame draws
 	// show one, in the order of the draw, and each takes its own place among what blends. A house with one of its
 	// people in a hand shows its teal marker in place of the read-out, in every town.
-	struct Row
-	{
-		uint32_t firstVertex;
-		uint32_t vertexCount;
-		uint32_t depth;
-	};
-	std::vector<Row> rows;
 	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
 	for (const auto& object : drawn)
 	{
@@ -556,8 +546,22 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 			rows.push_back({.firstVertex = first, .vertexCount = rowCount, .depth = zsort::Depth(point, origin)});
 		}
 	}
+}
+
+void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main)
+	{
+		return;
+	}
+	using Vertex = DrawnEffects::Vertex;
+	const auto& vertices = desc.frame->effects.knockVertices;
+	const auto& rows = desc.frame->effects.knockRows;
+	static constexpr auto k_TextureId = entt::hashed_string("raw/misc0");
+	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/misc0a");
+	const auto& textures = Locator::resources::value().GetTextures();
 	const auto count = static_cast<uint32_t>(vertices.size());
-	const auto quads = rows.empty() ? 0u : std::ranges::max(rows, {}, &Row::vertexCount).vertexCount / 4;
+	const auto quads = rows.empty() ? 0u : std::ranges::max(rows, {}, &DrawnEffects::KnockRow::vertexCount).vertexCount / 4;
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)

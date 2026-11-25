@@ -123,6 +123,23 @@ public:
 	void FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept final;
 	/// Copies what the draws of the weather, of the water's rings and of the magic shields read
 	void CollectWeatherAndWater(DrawnEffects& effects, float turnFraction) const;
+	/// Takes the blocks of rain and the quarters of snow that the main view shows, and copies their streaks and flakes.
+	/// The systems count what the fill takes as drawn.
+	void CollectRainAndSnow(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// Copies the smokes of the chimneys, the mists, the clouds of the sky, the borders of influence, the flashes of
+	/// lightning, the walls under the vortices and the eyes of the villagers in high detail
+	void CollectMistsAndSmoke(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// Copies the mesh of the object of each glow shell of the particles' frames
+	static void CollectShellMeshes(DrawnEffects& effects, const ecs::Registry& registry);
+	/// Copies the shoals of the fish farms and of the fish puzzles, and the floats of the puzzles' nets
+	void CollectFish(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// Copies the globes of the miracles, the new miracles over the chests and the seeds of the icons
+	void CollectSeeds(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// Copies the columns of light over the village centres and the temples, the beams of the scrolls and the pulses of
+	/// the icons
+	void CollectLightColumns(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// Makes the read-outs over the houses of a knocked town for the main view
+	void CollectKnockReadout(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
 	[[nodiscard]] bool WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
@@ -1205,8 +1222,6 @@ private:
 	};
 	mutable std::vector<TownBeliefSymbolDraw> _townBeliefSymbolDraws;
 	/// The village centres of the pass, in the order of their columns, and their abodes, kept for their memory
-	mutable std::vector<entt::entity> _townColumnCentres;
-	mutable std::vector<const ecs::components::Abode*> _townColumnAbodes;
 	/// The commands of the symbols of the pass. Each counts from the start of the sprite order of the pass.
 	mutable std::vector<particles::draw::Command> _townBeliefSymbolCommands;
 	/// The places of the sprites of the symbols of the pass in the layout, in the order drawn

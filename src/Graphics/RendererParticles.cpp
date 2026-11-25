@@ -643,29 +643,51 @@ const VolumeGlowShell* Renderer::GlowShellOf(entt::id_type meshId, uint32_t subM
 	return _glowShells.emplace(key, std::move(shell)).first->second.get();
 }
 
+void Renderer::CollectShellMeshes(DrawnEffects& effects, const ecs::Registry& registry)
+{
+	const auto name = [&registry](particles::draw::Frame& frame) {
+		for (auto& shell : frame.shells)
+		{
+			const auto* mesh = registry.TryGet<const ecs::components::Mesh>(shell.object);
+			shell.mesh = mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
+			shell.meshCopied = true;
+		}
+	};
+	name(effects.particles);
+	for (auto& belief : std::span(effects.townBeliefs).first(effects.townBeliefCount))
+	{
+		name(belief.frame);
+	}
+}
+
 void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::draw::ShellDraw& shell, uint32_t depth) const
 {
-	if (!Locator::entitiesRegistry::has_value() || !Locator::rendereringSystem::has_value())
+	if (desc.frame == nullptr || desc.frame->models == nullptr)
 	{
 		return;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* meshComponent = registry.TryGet<const ecs::components::Mesh>(shell.object);
+	// The fill copied the mesh of the object of each shell of its frames. A frame that the draw makes has no copy.
+	auto meshId = shell.mesh;
+	if (!shell.meshCopied && Locator::entitiesRegistry::has_value())
+	{
+		const auto* meshComponent = Locator::entitiesRegistry::value().TryGet<const ecs::components::Mesh>(shell.object);
+		meshId = meshComponent != nullptr ? std::optional(meshComponent->id) : std::nullopt;
+	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& textures = Locator::resources::value().GetTextures();
-	if (meshComponent == nullptr || !meshes.Contains(meshComponent->id) || !textures.Contains(shell.texture))
+	if (!meshId.has_value() || !meshes.Contains(*meshId) || !textures.Contains(shell.texture))
 	{
 		return;
 	}
 	// The object as it is drawn this frame: none while it isn't
-	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+	const auto& drawn = desc.frame->models->drawnObjects;
 	const auto placed = std::ranges::find_if(
 	    drawn, [&shell](const auto& thing) { return thing.entity == shell.object && !thing.mesh.has_value(); });
 	if (placed == drawn.end())
 	{
 		return;
 	}
-	SubmitGlowShell(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), meshComponent->id, placed->model, shell,
+	SubmitGlowShell(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), *meshId, placed->model, shell,
 	                desc.camera->GetProjectionMatrix(), IsMirrorScene(desc.viewId), depth);
 }
 

@@ -171,6 +171,10 @@ struct ShellDraw
 	/// 0xRRGGBB: the colour added after the texture on each corner on the model, also where the shell does not glow. The
 	/// particles' shells add their atom's.
 	uint32_t specularRgb {0};
+	/// The mesh of the object, when the renderer copied it before the draw. When the object has no mesh, the shell does
+	/// not show.
+	std::optional<entt::id_type> mesh;
+	bool meshCopied {false};
 };
 
 /// A frame of a light map stamped on the land, centred on a point 10 units past its particle along x and z

@@ -300,6 +300,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
 		("sentry-test-trap", "Developers: after the start, stop the game with a trap of the processor (in the web game, a trap of the WebAssembly code), to test the crash reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
+		("draw-read-check", "Developers: find the reads of the registries of the world in the draw of the scene and of the film. The draw must read only the drawn copy. report: the log gets each kind of read and its count as the game ends. fail: the first such read stops the game.", cxxopts::value<std::string>())
 		("turn-beside-draw", "Developers: on: the turns of the next frame play on another thread beside the end of the draw of this frame, on all lands (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later. off: the turns always play in their frame. auto (the default): beside the draw on the map for 32 gods only. Give the value after a \"=\" or as the next word. With no value, the switch is on.", cxxopts::value<std::string>()->default_value("auto")->implicit_value("on"));
 #endif
 	options.add_options("Developer")
@@ -689,6 +690,22 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			else if (check != "off")
 			{
 				throw cxxopts::exceptions::parsing("--turn-api-check is off, report or fail");
+			}
+		}
+		if (result.count("draw-read-check") != 0)
+		{
+			const auto check = result["draw-read-check"].as<std::string>();
+			if (check == "report")
+			{
+				args.drawReadCheck = openblack::ecs::DrawReadCheck::Report;
+			}
+			else if (check == "fail")
+			{
+				args.drawReadCheck = openblack::ecs::DrawReadCheck::Fail;
+			}
+			else if (check != "off")
+			{
+				throw cxxopts::exceptions::parsing("--draw-read-check is off, report or fail");
 			}
 		}
 		if (const auto mode = openblack::turn_beside_draw::ModeOf(result["turn-beside-draw"].as<std::string>());

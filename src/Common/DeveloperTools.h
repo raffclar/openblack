@@ -440,6 +440,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sentry-test-error"},
     DeveloperOption {.name = "sentry-test-trap"},
     DeveloperOption {.name = "turn-api-check", .takesValue = true},
+    DeveloperOption {.name = "draw-read-check", .takesValue = true},
     DeveloperOption {.name = "turn-beside-draw"},
     DeveloperOption {.name = "sim-record", .takesValue = true},
     DeveloperOption {.name = "sim-record-every", .takesValue = true},
