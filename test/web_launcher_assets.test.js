@@ -527,9 +527,17 @@ check('the tiers file of the page starts the game with the boot files and never 
   for (const path of ['data/citadel/engine/creaturelo_l3d.zzz', 'data/landscape/land2.lnd', 'scripts/html/banner.gif']) {
     assert.equal(isStartAsset(path, tiers), false, path);
   }
-  // The voice banks of the species come in the land-soon phase, also when no trace read them
+  // A bank of sound effects comes whole, also when the tiers give it in blocks. Only a music bank comes in blocks.
+  const banks = { 'Audio/SFX/Creature/btiger.sad': 'the tiger, in some blocks', 'Audio/Music/align/good.sad': 'the good music' };
+  const bankFiles = parseAssetIndex(streamedText(banks, Object.keys(banks))).files;
+  const bankTiers = parseAssetTiers(tiersText({ files: {
+    'audio/sfx/creature/btiger.sad': { phase: 2, order: 0, blocks: [[2, 0, 1]] },
+    'audio/music/align/good.sad': { phase: 2, order: 1, blocks: [[2, 0, 1]] },
+  } }));
+  assert.deepEqual(planAssetTiers(bankFiles, bankTiers, k_BlockSize)[2].map(({ block }) => block), [null, 0]);
+  // A voice bank of a species that no trace read comes in the land-soon phase
   const files = parseAssetIndex(indexText({ 'Audio/SFX/Creature/btiger.sad': 'tiger', 'Data/Landscape/Land2.lnd': 'two' })).files;
-  assert.deepEqual(planAssetTiers(files, tiers).map((items) => items.length), [0, 0, 0, 0, 1, 1]);
+  assert.deepEqual(planAssetTiers(files, k_TestTiers).map((items) => items.length), [0, 0, 0, 0, 1, 1]);
   const boot = [...tiers.files.values()].filter((tier) => tier.phase === 0);
   assert.ok(boot.length > 0 && boot.length < 20, `${boot.length} boot files`);
 });

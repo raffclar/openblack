@@ -483,7 +483,8 @@ function assetPhaseOf(tiers, phase) {
  * with block null for a whole file. The files are the files of the list in the order of their numbers, blockSize the
  * size of their blocks, and tiers the result of parseAssetTiers.
  * - With the tiers, each file goes in its phase, in the order of the tiers. For a file that the list gives in blocks,
- *   with blocks in the tiers, each run of blocks goes in its own phase. The other blocks come when the game reads them.
+ *   with blocks in the tiers, each run of blocks of a music bank goes in its own phase. The other blocks come when the
+ *   game reads them. Each other file comes whole.
  *   A file that the tiers do not give is a later file, but a file of k_AssetSoonRules is a land-soon file after the
  *   others, so that the first sound of each species never waits for the site.
  * - With no tiers, the boot phase has all the files of the start and the first block of each music bank, and the
@@ -513,7 +514,11 @@ function planAssetTiers(files, tiers = null, blockSize = 0) {
         phases[soon < 0 ? k_AssetPhaseLater : k_AssetPhaseSoon].push({ number, block: null, order: k_AssetMostFiles + soon });
         return;
       }
-      if (!file.blocks || tier.blocks === null || blockSize !== tiers.blockSize) {
+      // Only the music banks come in blocks. The page gets each other bank whole in its phase, so that no sample of
+      // the dialogue or of the sound effects waits for the site when it first plays.
+      const inBlocks = file.blocks && tier.blocks !== null && blockSize === tiers.blockSize &&
+        k_AssetHeaderRules.some((rule) => rule.test(file.path.toLowerCase()));
+      if (!inBlocks) {
         phases[assetPhaseOf(tiers, tier.phase)].push({ number, block: null, order: tier.order });
         return;
       }
