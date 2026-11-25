@@ -31,6 +31,30 @@
   <section id="site-files" hidden>
     <h2>Game files</h2>
     <p id="site-files-progress">The page asks the site for the game files.</p>
+    <!-- The map of the game files: each part of the game is a square with an area that agrees with its bytes, and each
+         file is a smaller square in the colour of its state. While the game plays, this is a panel over the game. -->
+    <div id="asset-map" hidden>
+      <canvas id="asset-map-canvas" role="img" aria-label="The map of the game files and their states"></canvas>
+      <div class="asset-map-side">
+        <ul class="asset-map-legend">
+          <li><span class="swatch" data-state="present"></span>In this browser <b id="asset-state-present"></b></li>
+          <li><span class="swatch" data-state="downloading"></span>Downloading now <b id="asset-state-downloading"></b></li>
+          <li><span class="swatch" data-state="urgent"></span>Queue: needed now <b id="asset-state-urgent"></b></li>
+          <li><span class="swatch" data-state="prefetch"></span>Queue: for later <b id="asset-state-prefetch"></b></li>
+          <li><span class="swatch" data-state="lazy"></span>Not needed yet <b id="asset-state-lazy"></b></li>
+          <li><span class="swatch" data-state="failed"></span>Failed <b id="asset-state-failed"></b></li>
+        </ul>
+        <dl class="asset-map-totals">
+          <div><dt>In this browser</dt><dd id="asset-total-present"></dd></div>
+          <div><dt>Arrived in this visit</dt><dd id="asset-total-received"></dd></div>
+          <div><dt>On the network</dt><dd id="asset-total-wire"></dd></div>
+          <div><dt>In the queues</dt><dd id="asset-total-remaining"></dd></div>
+          <div><dt>Speed</dt><dd id="asset-total-speed"></dd></div>
+          <div><dt>Time left</dt><dd id="asset-total-left"></dd></div>
+        </dl>
+        <p id="asset-map-info" class="asset-map-info" aria-live="polite"></p>
+      </div>
+    </div>
     <!-- Without this choice, the page gets only the files for the start, and the game gets each other file when it
          first reads it. With it, the page gets all the files, and the browser keeps the choice for the next visit. -->
     <label><input id="site-files-all" type="checkbox"> Download all the game files now, so that the game never waits
@@ -76,6 +100,8 @@
      below the strip, so the strip covers no control of the game. -->
 <aside id="build-badge" hidden>
   <a class="build-link" target="_blank" rel="noopener">unknown</a>
+  <button id="assets-toggle" type="button" hidden aria-expanded="false" title="Show the map of the game files">
+    <canvas id="asset-mini" aria-hidden="true"></canvas><span id="asset-mini-text">Files</span></button>
   <button id="join-online" type="button">Join Online Game</button>
   <button id="copy-diagnostics" type="button" title="Copy the diagnostics of the connection for a bug report">Copy diagnostics</button>
   <button id="log-toggle" type="button">Log</button>
@@ -87,6 +113,7 @@
 <script src="launcher-reports.js"></script>
 <script src="launcher-assets.js"></script>
 <script src="launcher-asset-trace.js"></script>
+<script src="launcher-map.js"></script>
 <script src="launcher-cloud.js"></script>
 <script src="launcher.js"></script>
 </body>

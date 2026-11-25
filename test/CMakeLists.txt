@@ -2213,6 +2213,10 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_asset_trace.test.js
   )
+  add_test(NAME test_web_launcher_map
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_map.test.js
+  )
   add_test(NAME test_web_launcher_buttons
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_buttons.test.js
