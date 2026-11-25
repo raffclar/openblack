@@ -464,11 +464,16 @@ async function fetchAssetBlock(fetchFile, digest, file, blockSize, block) {
  * - blockSize: the size of the blocks of the list,
  * - kept: the kept File objects, by their names,
  * - share: a function that gets (number, block, file) for each file (block null) and each block that the page gets,
- * - log: a function that gets a line for the game log.
+ * - log: a function that gets a line for the game log,
+ * - watch: a function that gets (event, key, detail) for each change of a download (see safeWatch). It only
+ *   observes: it does not change the order of the downloads.
  */
 class AssetStore {
-  constructor(files, { fetchFile, digest, folder, blockSize = 0, kept = new Map(), share = () => {}, log = () => {} }) {
+  constructor(files, {
+    fetchFile, digest, folder, blockSize = 0, kept = new Map(), share = () => {}, log = () => {}, watch = () => {},
+  }) {
     Object.assign(this, { files, fetchFile, digest, folder, blockSize, kept, share, log });
+    this.watch = safeWatch(watch);
     this.jobs = new Map();
     this.waiting = { now: [], later: [] };
     this.running = { now: 0, later: 0 };
@@ -557,6 +562,7 @@ class AssetStore {
         this.waiting.later = this.waiting.later.filter((other) => other !== job);
         job.priority = 'now';
         this.waiting.now.push(job);
+        this.watch('queued', key, 'now');
         this.pump();
       }
       return job.promise;
@@ -568,6 +574,7 @@ class AssetStore {
     });
     this.jobs.set(key, job);
     this.waiting[priority].push(job);
+    this.watch('queued', key, priority);
     this.pump();
     return job.promise;
   }
@@ -581,6 +588,7 @@ class AssetStore {
       (async () => {
         for (let attempt = 1; ; attempt += 1) {
           try {
+            this.watch('started', job.key);
             return await job.run();
           } catch (error) {
             if (attempt >= k_AssetAttempts) {
@@ -588,7 +596,13 @@ class AssetStore {
             }
           }
         }
-      })().then(job.resolve, job.reject).finally(() => {
+      })().then((value) => {
+        this.watch('done', job.key);
+        job.resolve(value);
+      }, (error) => {
+        this.watch('failed', job.key);
+        job.reject(error);
+      }).finally(() => {
         this.jobs.delete(job.key);
         this.running[lane] -= 1;
         this.pump();
@@ -615,7 +629,8 @@ class AssetStore {
 
   async getWhole(number) {
     const file = this.files[number];
-    const bytes = await fetchAsset(this.fetchFile, this.digest, file, () => {});
+    const key = `file ${file.sha256}`;
+    const bytes = await fetchAsset(this.fetchFile, this.digest, file, (count) => this.watch('bytes', key, count));
     const kept = await this.write(file.sha256, bytes);
     this.received.files += 1;
     this.received.bytes += bytes.byteLength;
@@ -661,6 +676,7 @@ class AssetStore {
         return;
       }
       const kept = await this.write(file.sha256, bytes);
+      this.watch('present', `file ${file.sha256}`);
       for (const user of this.users.get(file.sha256)) {
         this.share(user, null, kept);
       }
@@ -668,6 +684,26 @@ class AssetStore {
       this.joining.delete(file.sha256);
     }
   }
+}
+
+/**
+ * A function that gives each change of a download to watch, and ignores an error of watch, so that the map of the
+ * downloads can never stop a download. The events are, each with the key "file <sha256>" or "block <sha256>":
+ * - present: the page keeps the file or the block,
+ * - queued: the file or the block waits in a queue, with the detail 'now' (the game or the start needs it) or 'later',
+ * - started: an attempt to get it starts,
+ * - bytes: a part of the body arrived, with the detail the number of bytes,
+ * - done: the page got it and kept it,
+ * - failed: the last attempt failed.
+ */
+function safeWatch(watch) {
+  return (event, key, detail) => {
+    try {
+      watch(event, key, detail);
+    } catch {
+      // The map of the downloads only observes them
+    }
+  };
 }
 
 /** The size of each file in the folder of kept files, by its name */
@@ -720,11 +756,13 @@ async function keepAssets(index, options) {
  * Makes sure that the private storage of the site keeps the game files of the list that the start of the game reads,
  * or all the game files with the option all. Gives the entries { path, size, file, blocks } of the game files for the
  * game, with file null for each file that the page does not have whole yet, and the store that gets the other files
- * and blocks. The options are those of keepAssets, and also all, share and log (see AssetStore).
+ * and blocks. The options are those of keepAssets, and also all, share, log and watch (see AssetStore).
  */
 async function streamAssets(index, {
   fetchFile, digest, root, wanted = () => true, progress = () => {}, all = false, share = () => {}, log = () => {},
+  watch = () => {},
 }) {
+  const observe = safeWatch(watch);
   const files = index.files.filter((file) => wanted(file.path));
   const blockSize = index.blockSize ?? 0;
   const folder = await root.getDirectoryHandle(k_AssetCacheFolder, { create: true });
@@ -745,6 +783,11 @@ async function streamAssets(index, {
       blockNames.add(name);
       return wantedBlock;
     });
+  // The map of the downloads shows the kept files and blocks, then the files and blocks that the start needs
+  plan.ready.forEach((sha256) => observe('present', `file ${sha256}`));
+  plan.blocks.forEach((sha256) => observe('present', `block ${sha256}`));
+  download.forEach((file) => observe('queued', `file ${file.sha256}`, 'now'));
+  startBlocks.forEach(({ file, block }) => observe('queued', `block ${file.blocks[block]}`, 'now'));
   const blockBytes = ({ file, block }) => {
     const bounds = assetBlockBounds(file, blockSize, block);
     return bounds.end - bounds.start;
@@ -760,19 +803,23 @@ async function streamAssets(index, {
   const queue = [...download];
   const getNext = async () => {
     for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
+      const key = `file ${file.sha256}`;
       let bytes;
       for (let attempt = 1; ; attempt += 1) {
         let got = 0;
+        observe('started', key);
         try {
           bytes = await fetchAsset(fetchFile, digest, file, (count) => {
             got += count;
             state.bytes += count;
+            observe('bytes', key, count);
             progress({ ...state });
           });
           break;
         } catch (error) {
           state.bytes -= got;
           if (attempt >= k_AssetAttempts) {
+            observe('failed', key);
             throw error;
           }
         }
@@ -780,6 +827,7 @@ async function streamAssets(index, {
       const writable = await (await folder.getFileHandle(file.sha256, { create: true })).createWritable();
       await writable.write(bytes);
       await writable.close();
+      observe('done', key);
       state.files += 1;
       progress({ ...state });
     }
@@ -787,13 +835,16 @@ async function streamAssets(index, {
   const blockQueue = [...startBlocks];
   const getNextBlock = async () => {
     for (let next = blockQueue.shift(); next !== undefined; next = blockQueue.shift()) {
+      const key = `block ${next.file.blocks[next.block]}`;
       let bytes;
       for (let attempt = 1; ; attempt += 1) {
+        observe('started', key);
         try {
           bytes = await fetchAssetBlock(fetchFile, digest, next.file, blockSize, next.block);
           break;
         } catch (error) {
           if (attempt >= k_AssetAttempts) {
+            observe('failed', key);
             throw error;
           }
         }
@@ -802,6 +853,7 @@ async function streamAssets(index, {
       const writable = await handle.createWritable();
       await writable.write(bytes);
       await writable.close();
+      observe('done', key);
       state.bytes += bytes.byteLength;
       state.files += 1;
       progress({ ...state });
@@ -828,7 +880,7 @@ async function streamAssets(index, {
       }
     }
   }
-  const store = new AssetStore(files, { fetchFile, digest, folder, blockSize, kept, share, log });
+  const store = new AssetStore(files, { fetchFile, digest, folder, blockSize, kept, share, log, watch });
   const entries = files.map((file, number) => ({
     path: file.path, size: file.size, file: store.fileOf(number), blocks: file.blocks ? store.blocksOf(number) : null,
   }));

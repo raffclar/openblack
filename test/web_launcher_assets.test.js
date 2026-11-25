@@ -458,6 +458,40 @@ check('before the start the page gets only the start files and the first block o
   assert.deepEqual(bank.blocks.slice(1), [null, null, null, null, null, null]);
 });
 
+check('the map of the downloads sees the start files fill and the second visit keeps them', async () => {
+  const { AssetMapModel, buildAssetMap } = require('../web/page/launcher-map.js');
+  const root = new FakeFolder();
+  const site = fakeSite(k_Streamed, { index: streamedText() });
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  const visit = async () => {
+    const model = new AssetMapModel(buildAssetMap(index.files, { blockSize: index.blockSize }));
+    const events = [];
+    const result = await streamAssets(index, {
+      fetchFile: site.fetchFile, digest, root,
+      watch: (event, key, detail) => {
+        events.push(event);
+        model.handle(event, key, detail);
+      },
+    });
+    return { model, events, ...result };
+  };
+  const first = await visit();
+  const state = (model, path) => model.stateOf(model.map.groups.flatMap((group) => group.items)
+    .find((item) => item.path === path));
+  assert.equal(state(first.model, 'Data/Landscape/Land1.lnd'), 'present');
+  assert.equal(state(first.model, 'Data/Landscape/Land2.lnd'), 'lazy');
+  assert.equal(first.model.totals().received, 6 + 14 + 8 + 4);
+  assert.ok(first.events.includes('queued') && first.events.includes('bytes') && first.events.includes('done'));
+  // The game reads the next land: the store gives its download to the same map
+  await first.store.obtain(numberOf(index.files, 'Data/Landscape/Land2.lnd'));
+  assert.equal(state(first.model, 'Data/Landscape/Land2.lnd'), 'present');
+  const second = await visit();
+  assert.deepEqual([...new Set(second.events)], ['present']);
+  assert.equal(state(second.model, 'Data/Landscape/Land1.lnd'), 'present');
+  assert.deepEqual(second.model.partsOf(second.model.map.groups.find((group) => group.id === 'music').items[0])
+    .map((part) => part.state), ['present', 'lazy', 'lazy', 'lazy', 'lazy', 'lazy', 'lazy']);
+});
+
 check('a list with hashed addresses gives each file at its address by SHA-256', () => {
   const files = { 'Data/AllMeshes.g3d': 'meshes', 'Online Maps/mpm_2p_1.map': 'two gods' };
   const hashed = parseAssetIndex(indexText(files, { format: 2, hashed_addresses: true })).files;
