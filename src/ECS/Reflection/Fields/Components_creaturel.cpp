@@ -48,7 +48,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	    .Field<&components::LeashPost::point>("point")
 	    .Field<&components::LeashPost::look>("look")
 	    .Field<&components::LeashPost::hung>("hung")
-	    .Field<&components::LeashPost::glow>("glow");
+	    .Field<&components::LeashPost::glow>("glow")
+	    .Field<&components::LeashPost::temple>("temple");
 	Reflect<components::CreatureLeashRope>(context)
 	    .Field<&components::CreatureLeashRope::rope>("rope")
 	    .Field<&components::CreatureLeashRope::started>("started")

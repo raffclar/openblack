@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <limits>
 #include <numbers>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -1469,6 +1470,11 @@ std::optional<entt::entity> LeashSystem::PlayersCreature(PlayerNames player) con
 
 void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points)
 {
+	HangPosts(owner, points, entt::null);
+}
+
+void LeashSystem::HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	// A player has one set of posts
 	std::vector<entt::entity> old;
@@ -1506,7 +1512,8 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 		                .owner = owner,
 		                .selected = false,
 		                .point = points.at(i),
-		                .look = temple_leashes::Start(draws)};
+		                .look = temple_leashes::Start(draws),
+		                .temple = temple};
 		if (hasSmoke)
 		{
 			post.glow = registry.Create();
@@ -1526,11 +1533,54 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 	_postsPlaced = true;
 }
 
+temple_leashes::TempleState LeashSystem::TempleOf(const LeashPost& post) const
+{
+	using temple_leashes::TempleState;
+	if (post.temple == entt::null)
+	{
+		return TempleState::NoTemple;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* temple = registry.Valid(post.temple) ? registry.TryGet<const Temple>(post.temple) : nullptr;
+	if (temple == nullptr)
+	{
+		return TempleState::Gone;
+	}
+	return temple_leashes::StateOf(temple->destroying, temple->destructionClock);
+}
+
+void LeashSystem::RemovePostsOfGoneTemples()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> gone;
+	registry.Each<const LeashPost>([this, &gone](entt::entity entity, const LeashPost& post) {
+		if (temple_leashes::GoesWith(TempleOf(post)))
+		{
+			gone.push_back(entity);
+			gone.push_back(post.glow);
+		}
+	});
+	if (gone.empty())
+	{
+		return;
+	}
+	for (const auto entity : gone)
+	{
+		if (entity != entt::null && registry.Valid(entity))
+		{
+			registry.Destroy(entity);
+		}
+	}
+	registry.SetDirty();
+}
+
 void LeashSystem::UpdatePosts(float seconds)
 {
 	Locator::entitiesRegistry::value().Each<LeashPost>([this, seconds](LeashPost& post) {
 		const auto creature = PlayersCreature(post.owner);
-		post.hung = temple_leashes::Hung(creature.has_value(), creature.has_value() && Knows(*creature, post.type));
+		// The leashes show only while the temple that they hang on shows
+		post.hung = temple_leashes::Hung(creature.has_value(), creature.has_value() && Knows(*creature, post.type)) &&
+		            temple_leashes::ShowsOn(TempleOf(post));
 		if (!post.hung)
 		{
 			return;
@@ -1635,10 +1685,10 @@ void LeashSystem::PlacePostsAtTemples()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	std::vector<std::pair<PlayerNames, std::array<glm::vec3, 3>>> found;
+	std::vector<std::tuple<PlayerNames, std::array<glm::vec3, 3>, entt::entity>> found;
 	bool anyTemple = false;
-	registry.Each<const Temple, const Transform, const Mesh>([&](const Temple& temple, const Transform& transform,
-	                                                             const Mesh& mesh) {
+	registry.Each<const Temple, const Transform, const Mesh>([&](entt::entity entity, const Temple& temple,
+	                                                             const Transform& transform, const Mesh& mesh) {
 		anyTemple = true;
 		if (!meshes.Contains(mesh.id))
 		{
@@ -1657,15 +1707,15 @@ void LeashSystem::PlacePostsAtTemples()
 		{
 			at.at(i) = glm::vec3(model * points.at(i)[3]);
 		}
-		found.emplace_back(temple.owner, at);
+		found.emplace_back(temple.owner, at, entity);
 	});
 	if (!anyTemple)
 	{
 		return;
 	}
-	for (const auto& [owner, points] : found)
+	for (const auto& [owner, points, temple] : found)
 	{
-		PlacePosts(owner, points);
+		HangPosts(owner, points, temple);
 	}
 	_postsPlaced = true;
 }
@@ -1863,6 +1913,8 @@ void LeashSystem::Reset()
 
 void LeashSystem::BeginTurn()
 {
+	// The leashes on a temple go with it, by any path: its destruction, the editor, or the load of a game
+	RemovePostsOfGoneTemples();
 	if (_postsPlaced)
 	{
 		return;
