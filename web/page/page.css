@@ -1,24 +1,70 @@
+/* The colours of the site bw.zanidrak.com (the Nord palette): dark ("Polar Night") by default, and light ("Snow
+   Storm") when the player chose the light theme on the site (launcher-map.js sets data-theme). */
 :root {
   color-scheme: dark;
-  --background: #101010;
-  --text: #d8d4c8;
-  --muted: #9a958a;
-  --accent: #c8a04a;
-  --good: #7fbf6a;
-  --bad: #e07060;
-  --panel: #1c1b19;
+  --background: #2e3440;
+  --text: #eceff4;
+  --muted: #d8dee9;
+  --accent: #88c0d0;
+  --accent-strong: #81a1c1;
+  --good: #a3be8c;
+  --bad: #bf616a;
+  --panel: #3b4252;
+  --raised: #434c5e;
+  --line: #4c566a;
+  --font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  /* The colours of the map of the game files, for each state of a file */
+  --map-present: #a3be8c;
+  --map-downloading: #88c0d0;
+  --map-urgent: #a59474;
+  --map-prefetch: #5e81ac;
+  --map-failed: #bf616a;
+  --map-lazy: #434c5e;
+  --map-frame: #4c566a;
+  --map-label: #d8dee9;
+  --map-hover: #eceff4;
+  --map-back: #3b4252;
   /* The height of the strip above the game while the game plays. The badge lives in it. */
   --badge-bar: 22px;
 }
-body { margin: 0; background: var(--background); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #eceff4;
+  --text: #2e3440;
+  --muted: #4c566a;
+  --accent: #5e81ac;
+  --accent-strong: #81a1c1;
+  --good: #5d7a45;
+  --bad: #a5404a;
+  --panel: #ffffff;
+  --raised: #e5e9f0;
+  --line: #d8dee9;
+  --map-present: #8fb573;
+  --map-downloading: #5e81ac;
+  --map-urgent: #e3c88e;
+  --map-prefetch: #a9bfd6;
+  --map-failed: #c4626b;
+  --map-lazy: #e5e9f0;
+  --map-frame: #c2c9d6;
+  --map-label: #2e3440;
+  --map-hover: #2e3440;
+  --map-back: #ffffff;
+}
+body { margin: 0; background: var(--background); color: var(--text);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
-h1 { color: var(--accent); margin-top: 0; }
+h1 { color: var(--accent); margin-top: 0; font-family: var(--font-display); letter-spacing: 0.02em; }
+h2 { font-family: var(--font-display); margin: 0; }
 .privacy { color: var(--muted); }
 section { margin: 16px 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 button, .file-button {
-  background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
   padding: 8px 14px; font: inherit; cursor: pointer;
 }
+button:hover:not(:disabled), .file-button:hover { background: var(--raised); }
+#play, #play-online { background: var(--accent); color: var(--background); border-color: var(--accent); font-weight: 600; }
+#play:hover:not(:disabled), #play-online:hover:not(:disabled) { background: var(--accent-strong); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button:disabled { opacity: 0.5; cursor: default; }
 .file-button input { display: none; }
 .play-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -66,3 +112,41 @@ body.playing.log-open #log { max-height: 40vh; }
   font: 12px/1.2 system-ui, sans-serif; color: var(--muted); }
 #build-badge button { padding: 0 6px; font: inherit; border-color: var(--muted); border-radius: 3px; }
 #build-badge button:hover, #build-badge button:focus-visible { border-color: var(--accent); }
+
+/* The map of the game files. The canvas takes the width of the page; the legend, the totals and the text of the square
+   under the pointer go below it. */
+#asset-map { align-self: stretch; display: flex; flex-direction: column; gap: 12px; }
+#asset-map-canvas { display: block; width: 100%; height: clamp(200px, 44vw, 320px); border-radius: 16px;
+  border: 1px solid var(--line); background: var(--map-back); box-sizing: border-box; touch-action: manipulation; }
+.asset-map-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.asset-map-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.asset-map-legend li { display: flex; align-items: center; gap: 8px; }
+.asset-map-legend b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.swatch[data-state="present"] { background: var(--map-present); }
+.swatch[data-state="downloading"] { background: var(--map-downloading); }
+.swatch[data-state="urgent"] { background: var(--map-urgent); }
+.swatch[data-state="prefetch"] { background: var(--map-prefetch); }
+.swatch[data-state="lazy"] { background: var(--map-lazy); outline: 1px solid var(--map-frame); }
+.swatch[data-state="failed"] { background: var(--map-failed); }
+.asset-map-totals { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px;
+  font-size: 13px; }
+.asset-map-totals dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.asset-map-totals dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.asset-map-info { grid-column: 1 / -1; margin: 0; min-height: 3.2em; padding: 8px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--panel); font-size: 13px; display: flex; flex-direction: column;
+  overflow-wrap: anywhere; }
+.asset-map-info strong { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.asset-map-title { font-weight: 600; }
+@media (max-width: 560px) {
+  .asset-map-side { grid-template-columns: minmax(0, 1fr); }
+}
+/* The small map in the strip above the game. It opens and closes the map as a panel over the game. */
+#assets-toggle { display: inline-flex; align-items: center; gap: 6px; }
+#asset-mini { width: 64px; height: 12px; display: block; border-radius: 2px; }
+body.playing #asset-map { position: fixed; top: calc(var(--badge-bar) + 8px); right: 8px; z-index: 3;
+  width: min(560px, calc(100% - 16px)); max-height: calc(100% - var(--badge-bar) - 16px); overflow: auto;
+  box-sizing: border-box; padding: 12px; border-radius: 16px; border: 1px solid var(--line);
+  background: var(--background); }
+body.playing #asset-map-canvas { height: 220px; }
+body.playing:not(.assets-open) #asset-map { display: none; }
