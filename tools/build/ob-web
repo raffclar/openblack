@@ -18,6 +18,9 @@
 #   ob-web dir       [options]                   (prints the folder of the page)
 #   ob-web env       [options]                   (prints the tools and folders ob-web found)
 #
+# Configure also writes compile_commands.json in the build folder. The tidy gate (tools/githooks/tidy_gate.py) reads it
+# to check the files of src/Web, which only the web build compiles.
+#
 # The worktree is the git worktree of the current folder, the build folder is E:/openblack/builds/<worktree>-web and
 # the config is Release (or $OB_WEB_CONFIG). Before each configure and build, ob-web stops when the disk of the build
 # folder has less than 20 GB free.
@@ -129,7 +132,7 @@ cmd_configure() {
 	"$CMAKE" -S "$WT" -B "$B" --preset emscripten-vcpkg \
 		"-DCMAKE_MAKE_PROGRAM=$NINJA" \
 		"-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" \
-		"-DVCPKG_HOST_TRIPLET=x64-windows" \
+		"-DVCPKG_HOST_TRIPLET=x64-windows" 		"-DCMAKE_EXPORT_COMPILE_COMMANDS=ON" \
 		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$B/vcpkg-buildtrees;--x-packages-root=$B/vcpkg-packages" \
 		"${REST[@]}"
 }

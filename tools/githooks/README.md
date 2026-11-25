@@ -43,12 +43,18 @@ The hook needs clang-tidy 17 and a `compile_commands.json`. It looks for each in
 |---|---|
 | clang-tidy 17 folder | Environment variable `OB_CLANG_TIDY_DIR`. Git setting `openblack.clangTidyDir`. Value `tools.clangTidy17Dir` in `.claude/openblack.local.json`. `clang-tidy-17` or `clang-tidy` on `PATH`. |
 | Build folder | Environment variable `OB_TIDY_BUILD_DIR`. Git setting `openblack.tidyBuildDir`. Value `tools.tidyBuildDir` in `.claude/openblack.local.json`. The folder `<paths.builds>/<name of the work tree>`. |
+| Web build folder (for `src/Web`) | Environment variable `OB_TIDY_WEB_BUILD_DIR`. Git setting `openblack.tidyWebBuildDir`. Value `tools.tidyWebBuildDir` in `.claude/openblack.local.json`. The folder `<paths.builds>/<name of the work tree>-web` (the default of `ob-web`). |
 | MSVC folder (Windows) | Environment variable `OB_TIDY_MSVC_DIR`. Git setting `openblack.tidyMsvcDir`. Value `tools.tidyMsvcDir`. Else the newest MSVC 14.40 or 14.41 on the machine. |
 
 Only version 17 of clang-tidy is used. To get it, run `python -m pip install --target <folder> clang-tidy==17.0.1`.
 The folder with `clang-tidy` inside it (on Windows, `<folder>/clang_tidy/data/bin`) is the value to set.
 
 The build folder must come from a CMake configure of the same work tree. Configure again after you add a source file.
+
+The files of `src/Web` build only in the web build (Emscripten), so the desktop database has no command for them. The check
+runs them with the `compile_commands.json` of the web build: `ob-web configure` writes it. The check takes the target
+flags from the Emscripten compiler (`em++ --cflags`). If that web database is not found, a change to a file of `src/Web`
+is treated like a missing compile database (the hook passes with one line, the car fails).
 
 If clang-tidy 17 or the compile database is not found, the hook prints one line and passes. If one file takes more than
 120 seconds, the hook prints the file name and passes. The merge-train car runs the same check with `--strict`: there,
