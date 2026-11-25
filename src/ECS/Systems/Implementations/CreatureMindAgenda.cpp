@@ -726,19 +726,18 @@ void PutOnTheMap(entt::entity food)
 }
 
 /// The food a creature fishing brings out of the sea: a handful at its feet of a thousand for each unit of its size,
-/// drawn half as big again as the creature, belonging to the nearest town. Nothing comes out of a fish farm.
+/// drawn half as big again as the creature, belonging to the nearest town. Nothing comes out of a fish farm. The size is
+/// the size that the body of the creature shows.
 std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity creature)
 {
-	constexpr float k_FoodPerSize = 1000.0f;
-	constexpr float k_ScalePerSize = 1.5f;
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (transform == nullptr)
 	{
 		return std::nullopt;
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
-	const float size = body != nullptr ? body->size : 1.0f;
-	const auto amount = static_cast<int32_t>(size * k_FoodPerSize);
+	const float size = body != nullptr ? ShownSize(*body) : 1.0f;
+	const auto amount = static_cast<int32_t>(size * creature_meals::k_HandfulPerSize);
 	const auto food = ecs::archetypes::PotArchetype::Create(transform->position, 0.0f, PotInfo::WheatInHand, amount,
 	                                                        NearestTown(registry, transform->position));
 	if (food == entt::null)
@@ -747,7 +746,7 @@ std::optional<entt::entity> FoodFromTheSea(ecs::Registry& registry, entt::entity
 	}
 	if (auto* foodTransform = registry.TryGet<Transform>(food))
 	{
-		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
+		foodTransform->scale = glm::vec3(creature_meals::HandfulScale(size, creature_meals::HandfulFrom::Nothing));
 	}
 	PutOnTheMap(food);
 	return food;
@@ -765,18 +764,17 @@ ResourceType ResourceTypeOf(PotInfo kind)
 /// The food that a creature takes from a thing (a pile, the food pile of a storage pit, a field or a tree). It is a
 /// handful of wheat or fruit, of 1000 for each unit of the size of the creature, but not more than the store of food of
 /// the thing. Its scale is 3.75 times the size of the creature, and it belongs to the nearest town. A field and a tree
-/// have no store of food, thus their handful holds no food.
+/// have no store of food, thus their handful holds no food. The size is the size that the body of the creature shows.
 std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity creature, entt::entity pile,
                                          creature_mind::ObjectOrder::Handful handful)
 {
-	constexpr float k_ScalePerSize = 3.75f;
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (transform == nullptr || !registry.Valid(pile) || !Locator::resourceStoreSystem::has_value())
 	{
 		return std::nullopt;
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
-	const float size = body != nullptr ? body->size : 1.0f;
+	const float size = body != nullptr ? ShownSize(*body) : 1.0f;
 	const auto kind = creature_town_help::HandfulPot(handful);
 	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceTypeOf(kind));
 	const auto amount = creature_meals::HandfulAmount(size, held);
@@ -804,7 +802,7 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	pot.town = NearestTown(registry, transform->position);
 	if (auto* foodTransform = registry.TryGet<Transform>(food))
 	{
-		foodTransform->scale = glm::vec3(size * k_ScalePerSize);
+		foodTransform->scale = glm::vec3(creature_meals::HandfulScale(size, creature_meals::HandfulFrom::Thing));
 	}
 	PutOnTheMap(food);
 	return food;

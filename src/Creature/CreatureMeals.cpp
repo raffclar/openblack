@@ -34,6 +34,11 @@ uint32_t creature_meals::HandfulAmount(float size, uint32_t thingHolds)
 	return std::min(wanted, thingHolds);
 }
 
+float creature_meals::HandfulScale(float size, HandfulFrom from)
+{
+	return size * (from == HandfulFrom::Thing ? k_ThingHandfulScalePerSize : k_NothingHandfulScalePerSize);
+}
+
 float creature_meals::HungerAfterMeal(float hunger, float energy)
 {
 	return std::clamp(hunger - energy, 0.0f, 1.0f);
