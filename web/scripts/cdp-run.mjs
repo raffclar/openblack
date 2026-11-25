@@ -309,6 +309,8 @@ async function clickOn(selector) {
   for (let i = 0; i < 6000 && !box; ++i) {
     box = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)});
       if (!e || e.disabled || e.hidden || e.offsetParent === null) return null;
+      // A button below the end of the window (the map of the game files is tall) comes into the window first
+      e.scrollIntoView({ block: 'center', inline: 'nearest' });
       const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
     if (!box) {
       await sleep(100);
