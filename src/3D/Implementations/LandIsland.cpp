@@ -34,6 +34,7 @@
 #include "3D/BlockTexture.h"
 #include "3D/LandBlock.h"
 #include "3D/LandData.h"
+#include "3D/LandHeights.h"
 #include "3D/LandNormal.h"
 #include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
@@ -61,12 +62,9 @@ const float LandIslandInterface::k_CellSize = 10.0f;
 namespace
 {
 constexpr int32_t k_MapSize = 0x200;
-// The 1/256 of the game's integer altitude interpolation
-constexpr float k_AltitudeFraction = 1.0f / 256.0f;
 // Land at or below this altitude is at sea level. The game draws it at height 0, and GetAltitude treats it the same
-// in cells no higher than k_SeaLevelClampAltitude, unless asked for the land's own altitudes.
-constexpr uint8_t k_SeaLevelAltitude = 3;
-constexpr uint8_t k_SeaLevelClampAltitude = 4;
+// in cells no higher than land_heights::k_SeaLevelClampAltitude, unless asked for the land's own altitudes.
+constexpr uint8_t k_SeaLevelAltitude = land_heights::k_SeaLevelAltitude;
 } // namespace
 
 int32_t LandIslandInterface::ToMapCoords(float unit)
@@ -104,6 +102,7 @@ void LandIslandInterface::SetHeightField(const landgen::HeightCurve& curve, std:
 	_heightCurve = curve;
 	_heightUnits = std::move(units);
 	_builtHeightUnits = _heightUnits;
+	NoteHeightChange();
 	_highestUnits = _heightUnits.empty() ? uint16_t {255}
 	                                     : std::max(curve.WholeUnitsOf(landgen::k_TopAltitude), std::ranges::max(_heightUnits));
 }
@@ -126,6 +125,7 @@ void LandIslandInterface::SetFieldAltitude(int32_t x, int32_t z, uint8_t altitud
 	}
 	_heightUnits[(static_cast<size_t>(x) * k_MapCornersPerSide) + static_cast<size_t>(z)] =
 	    _heightCurve.WholeUnitsOf(static_cast<float>(altitude));
+	NoteHeightChange();
 }
 
 bool LandIslandInterface::IsUnderLake(glm::u16vec2 coordinates) const
@@ -216,48 +216,15 @@ float LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevel
 
 	// Neighbours within the block's 17x17 cell array: +1 is z + 1, +17 is x + 1
 	// The height of each corner in units: its altitude on a land of the story
-	const int32_t u00 = HeightUnitsOf(cell[0], cellX, cellZ);
-	const auto clamp = seaLevelFlat && u00 <= k_SeaLevelClampAltitude;
-	const auto altitude = [clamp](int32_t units) -> int32_t { return clamp && units <= k_SeaLevelAltitude ? 0 : units; };
-	const auto a00 = altitude(u00);
-	const auto a01 = altitude(HeightUnitsOf(cell[1], cellX, cellZ + 1));
-	const auto a10 = altitude(HeightUnitsOf(cell[17], cellX + 1, cellZ));
-	const auto a11 = altitude(HeightUnitsOf(cell[18], cellX + 1, cellZ + 1));
-
-	const auto fractionX = static_cast<uint32_t>(mapX) & 0xFFFF;
-	const auto fractionZ = static_cast<uint32_t>(mapZ) & 0xFFFF;
-
-	// Complete the plane of the triangle the point is in. Cells split from x + 1 to z + 1 rather than corner to corner.
-	int32_t v00 = a00;
-	int32_t v01 = a01;
-	int32_t v10 = a10;
-	int32_t v11 = a11;
-	if (cell[0].properties.split != 0)
-	{
-		if (fractionZ > 0xFFFF - fractionX)
-		{
-			v00 = a10 - a11 + a01;
-		}
-		else
-		{
-			v11 = a10 - a00 + a01;
-		}
-	}
-	else if (fractionX > fractionZ)
-	{
-		v01 = a00 - a10 + a11;
-	}
-	else
-	{
-		v10 = a00 - a01 + a11;
-	}
-
-	const auto z8 = static_cast<int32_t>(fractionZ >> 8);
-	const auto x8 = static_cast<int32_t>(fractionX >> 8);
-	const auto edgeX0 = ((v01 - v00) * z8) + (v00 << 8);
-	const auto edgeX1 = ((v11 - v10) * z8) + (v10 << 8);
-	const auto height = (((edgeX1 - edgeX0) * x8) >> 8) + edgeX0;
-	return static_cast<float>(height) * k_HeightUnit * k_AltitudeFraction;
+	const land_heights::CellCorners corners {
+	    .u00 = HeightUnitsOf(cell[0], cellX, cellZ),
+	    .u01 = HeightUnitsOf(cell[1], cellX, cellZ + 1),
+	    .u10 = HeightUnitsOf(cell[17], cellX + 1, cellZ),
+	    .u11 = HeightUnitsOf(cell[18], cellX + 1, cellZ + 1),
+	    .split = cell[0].properties.split != 0,
+	};
+	return land_heights::AltitudeInCell(static_cast<uint32_t>(mapX) & 0xFFFF, static_cast<uint32_t>(mapZ) & 0xFFFF, corners,
+	                                    seaLevelFlat);
 }
 
 float LandIslandInterface::GetScriptLandHeight(glm::vec3 position) const
@@ -777,6 +744,7 @@ bool LandIsland::SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitu
 	{
 		return false;
 	}
+	NoteHeightChange();
 	// The height field of a generated land follows the new altitude through its curve
 	const auto corner = _landBlocks[block].GetBlockPosition() * static_cast<int>(k_CellCount) + glm::ivec2(x, z);
 	SetFieldAltitude(corner.x, corner.y, altitude);
@@ -815,6 +783,7 @@ size_t LandIsland::RestoreBuiltAltitudes()
 		if (field[i] != BuiltHeightField()[i])
 		{
 			field[i] = BuiltHeightField()[i];
+			NoteHeightChange();
 			_changedCorners.Add(
 			    glm::ivec2(static_cast<int>(i / k_MapCornersPerSide), static_cast<int>(i % k_MapCornersPerSide)));
 		}

@@ -12,11 +12,17 @@
 #include <cstdint>
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <vector>
 
+#include <entt/core/fwd.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
+#include "3D/Light.h"
 #include "3D/OrientedText.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleFog.h"
@@ -34,6 +40,7 @@ class Registry;
 namespace openblack::graphics
 {
 class Texture2D;
+struct BeamMesh;
 
 /// What the passes read of the temple. The steps of the frame fill it on the game's thread, only while the player is
 /// in the temple. Outside the temple, all of it stays at its empty values.
@@ -64,11 +71,44 @@ struct DrawnTemple
 	std::vector<TempleCaveSeed> caveSeeds;
 	/// The turn of each joint of the doors of the main room
 	TempleDoors::Joints doorJoints {};
-	/// The things of the rooms. Only the steps of the frame change them. The passes of the mists, the light shafts and
-	/// the exit glow read them while they draw.
-	const ecs::Registry* rooms {nullptr};
+
+	/// A mist of a room that the temple draws
+	struct Mist
+	{
+		std::shared_ptr<const BeamMesh> dome;
+		glm::vec2 uvOffset {0.0f};
+		glm::vec4 colour {1.0f};
+		glm::vec3 position {0.0f};
+		glm::vec3 scale {1.0f};
+	};
+	/// The cone of a spot light of a room
+	struct Cone
+	{
+		LightCone cone;
+		TempleRoom room {TempleRoom::Unknown};
+	};
+	/// The model of a room, which has the lights that its windows shed
+	struct RoomModel
+	{
+		entt::id_type mesh {0};
+		TempleRoom room {TempleRoom::Unknown};
+		glm::mat4 model {1.0f};
+	};
+	/// The mists of the rooms that the temple draws, in the order of the things of the rooms
+	std::vector<Mist> mists;
+	/// The cones of the spot lights of all the rooms, in the order of the things of the rooms
+	std::vector<Cone> cones;
+	/// The models of the rooms, in the order of the things of the rooms
+	std::vector<RoomModel> roomModels;
+	/// The place of the main room, where the exit glow shows
+	glm::mat4 mainRoomModel {1.0f};
 
 	[[nodiscard]] bool IsRoomDrawn(TempleRoom room) const { return roomsDrawn.at(static_cast<size_t>(room)); }
+	/// Copies the mists, the cones of the spot lights and the models of the rooms from the things of the rooms. Set
+	/// `roomsDrawn` first: the copy keeps only the mists of the rooms that the temple draws.
+	void CopyRoomParts(const ecs::Registry& rooms);
+	/// Removes the copies of the things of the rooms
+	void ClearRoomParts();
 };
 
 } // namespace openblack::graphics

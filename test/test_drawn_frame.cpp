@@ -15,8 +15,15 @@
 #include <gtest/gtest.h>
 
 #include "Camera/Camera.h"
+#include "ECS/Components/LightBeam.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/MistDome.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "Graphics/DrawnFrame.h"
+#include "Visual/LightBeams.h"
 
 using namespace openblack;
 
@@ -154,4 +161,45 @@ TEST(DrawnFrame, TheDrawnHandIsTheLeftHandOfThePlayerOfThisComputer)
 	hands.own = {entt::entity {7}, entt::entity {8}};
 	EXPECT_EQ(hands.Drawn(), entt::entity {7});
 	EXPECT_FALSE(hands.waterGlowCentre.has_value());
+}
+
+TEST(DrawnFrame, TheTempleCopyKeepsTheRoomPartsThatThePassesRead)
+{
+	using namespace ecs::components;
+	ecs::Registry rooms;
+	const auto part = [&rooms](TempleRoom room, TempleInteriorMesh mesh, glm::vec3 position) {
+		const auto entity = rooms.Create();
+		rooms.Assign<TempleInteriorPart>(entity, room, mesh);
+		rooms.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		return entity;
+	};
+	const auto dome = std::make_shared<const graphics::BeamMesh>();
+	// A mist in a drawn room, a mist in a room that is not drawn, and a mist with no dome
+	rooms.Assign<MistDome>(part(TempleRoom::Main, TempleInteriorMesh::Other, {1.0f, 0.0f, 0.0f}), dome);
+	rooms.Assign<MistDome>(part(TempleRoom::Options, TempleInteriorMesh::Other, {2.0f, 0.0f, 0.0f}), dome);
+	rooms.Assign<MistDome>(part(TempleRoom::Main, TempleInteriorMesh::Other, {3.0f, 0.0f, 0.0f}));
+	// The cones of two rooms
+	rooms.Assign<LightBeam>(part(TempleRoom::Main, TempleInteriorMesh::Other, {}));
+	rooms.Assign<LightBeam>(part(TempleRoom::Options, TempleInteriorMesh::Other, {}));
+	// The model of the main room, and the floor, which is not a room's model
+	rooms.Assign<Mesh>(part(TempleRoom::Main, TempleInteriorMesh::Room, {5.0f, 6.0f, 7.0f}), entt::id_type {42}, int8_t {0},
+	                   int8_t {0});
+	rooms.Assign<Mesh>(part(TempleRoom::Main, TempleInteriorMesh::Floor, {}), entt::id_type {43}, int8_t {0}, int8_t {0});
+
+	graphics::DrawnTemple temple;
+	temple.roomsDrawn.at(static_cast<size_t>(TempleRoom::Main)) = true;
+	temple.CopyRoomParts(rooms);
+	ASSERT_EQ(temple.mists.size(), 1);
+	EXPECT_EQ(temple.mists[0].dome, dome);
+	EXPECT_EQ(temple.mists[0].position, glm::vec3(1.0f, 0.0f, 0.0f));
+	ASSERT_EQ(temple.cones.size(), 2);
+	ASSERT_EQ(temple.roomModels.size(), 1);
+	EXPECT_EQ(temple.roomModels[0].mesh, entt::id_type {42});
+	EXPECT_EQ(temple.mainRoomModel[3], glm::vec4(5.0f, 6.0f, 7.0f, 1.0f));
+
+	temple.ClearRoomParts();
+	EXPECT_TRUE(temple.mists.empty());
+	EXPECT_TRUE(temple.cones.empty());
+	EXPECT_TRUE(temple.roomModels.empty());
+	EXPECT_EQ(temple.mainRoomModel, glm::mat4(1.0f));
 }

@@ -155,7 +155,7 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 {
 	using ecs::components::CreatureLeash;
 	const auto& leashes = desc.frame->effects.leashes;
-	if (leashes.empty() || !Locator::terrainSystem::has_value())
+	if (leashes.empty() || !desc.frame->land.extent.has_value())
 	{
 		return;
 	}
@@ -165,10 +165,11 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	const auto& island = Locator::terrainSystem::value();
-	const auto ground = [&island](glm::vec2 point) { return island.GetHeightAt(point); };
+	// The shadows lie on the heights of the land as the frame shows them
+	const auto& heights = desc.frame->land.heights;
+	const auto ground = [&heights](glm::vec2 point) { return heights.HeightAt(point); };
 	const auto eye = desc.camera->GetOrigin();
-	const auto extent = island.GetExtent();
+	const auto extent = *desc.frame->land.extent;
 	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const glm::vec4 u_landLight {_landLightTexture.has_value() ? 1.0f : 0.0f, LandLightScale(desc.viewId), 0.0f, 0.0f};
 	const auto translucent = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));

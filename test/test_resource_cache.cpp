@@ -373,3 +373,49 @@ TEST(LoadQueue, RunsEveryJobAndCanDropThoseNotStarted)
 	EXPECT_EQ(runs, 50);
 	EXPECT_GE(LoadQueue::DefaultThreadCount(), 1);
 }
+
+TEST(ResourceCache, ABlockOfTheLoadsFindsOnlyTheLoadedResources)
+{
+	FakeCache cache;
+	std::atomic<int> runs = 0;
+	cache.Register(k_First, Counted(1, runs));
+	cache.Register(k_Second, Counted(2, runs));
+	ASSERT_NE(cache.Find(k_Second), nullptr);
+	ASSERT_EQ(runs, 1);
+
+	cache.BlockLoads(true);
+	// Two blocks: the loads stay blocked until both end
+	cache.BlockLoads(true);
+	EXPECT_FALSE(cache.Contains(k_First));
+	EXPECT_EQ(cache.Find(k_First), nullptr);
+	EXPECT_FALSE(cache.Handle(k_First));
+	EXPECT_TRUE(cache.Contains(k_Second));
+	EXPECT_EQ(cache.Find(k_Second)->value, 2);
+	EXPECT_EQ(runs, 1);
+	cache.BlockLoads(false);
+	EXPECT_EQ(cache.Find(k_First), nullptr);
+	cache.BlockLoads(false);
+
+	EXPECT_TRUE(cache.Contains(k_First));
+	ASSERT_NE(cache.Find(k_First), nullptr);
+	EXPECT_EQ(cache.Find(k_First)->value, 1);
+	EXPECT_EQ(runs, 2);
+}
+
+TEST(ResourceCache, LoadPendingLoadsAllButTheHeldResources)
+{
+	FakeCache cache;
+	std::atomic<int> runs = 0;
+	cache.Register(k_First, Counted(1, runs));
+	cache.Register(k_Second, Counted(2, runs));
+	cache.Register(k_Third, Counted(3, runs));
+	ASSERT_TRUE(cache.Hold(k_Third));
+
+	EXPECT_EQ(cache.LoadPending(), 2);
+	EXPECT_EQ(runs, 2);
+	EXPECT_TRUE(cache.IsLoaded(k_First));
+	EXPECT_TRUE(cache.IsLoaded(k_Second));
+	EXPECT_FALSE(cache.IsLoaded(k_Third));
+	EXPECT_EQ(cache.PendingCount(), cache.HeldCount());
+	EXPECT_EQ(cache.LoadPending(), 0);
+}

@@ -41,11 +41,11 @@ using namespace openblack::graphics;
 void Renderer::DrawShieldDomes(const DrawSceneDesc& desc) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
-	if ((desc.viewId != RenderPass::Main && !reflection) || !Locator::magicShieldSystem::has_value())
+	if ((desc.viewId != RenderPass::Main && !reflection) || !desc.frame->effects.shieldsShown)
 	{
 		return;
 	}
-	auto domes = Locator::magicShieldSystem::value().GetDomes(desc.frame->clock.turnFraction);
+	auto domes = desc.frame->effects.shieldDomes;
 	// A warm-up draws a dome at no size, as the first dome draws
 	if (_warmingUp)
 	{

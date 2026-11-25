@@ -176,7 +176,7 @@ DrawnFrame::Sky SkyOf()
 /// frame to frame.
 void FillTemple(graphics::DrawnTemple& drawn, bool active)
 {
-	drawn.rooms = nullptr;
+	drawn.ClearRoomParts();
 	drawn.text.clear();
 	drawn.map.clear();
 	drawn.mapMarkers.clear();
@@ -212,7 +212,7 @@ void FillTemple(graphics::DrawnTemple& drawn, bool active)
 	drawn.caveTrophies.assign(temple.GetCaveTrophies().begin(), temple.GetCaveTrophies().end());
 	drawn.caveSeeds.assign(temple.GetCaveSeeds().begin(), temple.GetCaveSeeds().end());
 	drawn.doorJoints = temple.GetDoors().GetJoints();
-	drawn.rooms = &temple.GetRooms();
+	drawn.CopyRoomParts(temple.GetRooms());
 }
 
 DrawnFrame::Hands HandsOf()
@@ -270,6 +270,14 @@ void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uin
 	frame.land.island = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
 	frame.land.extent = frame.land.island != nullptr ? std::optional(frame.land.island->GetExtent()) : std::nullopt;
 	frame.land.highestHeight = frame.land.island != nullptr ? frame.land.island->HighestHeight() : 0.0f;
+	if (frame.land.island != nullptr)
+	{
+		frame.land.heights.Follow(*frame.land.island);
+	}
+	else
+	{
+		frame.land.heights.Clear();
+	}
 	frame.land.reflected = config.detail.landReflection;
 	frame.land.coarse = config.detail.coarseLand;
 	frame.land.groundMarks.clear();

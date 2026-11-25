@@ -104,6 +104,11 @@ public:
 	[[nodiscard]] virtual size_t LoadingCount() const = 0;
 	/// Stops loading on the loading threads: drops what hasn't started and waits for what has
 	virtual void StopLoading() = 0;
+	/// Starts or ends a block of the loads. While a block did not end, each cache finds only its loaded resources and
+	/// loads none (see ResourceManager::BlockLoads).
+	virtual void BlockLoads(bool blocked) = 0;
+	/// Loads each registered resource that is not loaded yet and that is not held. Returns how many it loaded.
+	virtual size_t LoadPending() = 0;
 	/// The videos playing, by their paths; each is let go when it ends
 	virtual VideoManager& GetVideos() = 0;
 	/// The two advisors, by help::spirits::ModelId
