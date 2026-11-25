@@ -47,8 +47,8 @@ public:
 	virtual void WritePage(entt::entity creature) = 0;
 	/// Waits until the files of the pages and the pictures are on the disk
 	virtual void FlushWrites() = 0;
-	/// Whether a picture of the screen is asked for and not back yet. The game had no debug windows, so the frames for a
-	/// picture leave them out.
+	/// Whether a picture of the screen is asked for and not back yet. The frame of the picture does not show the debug
+	/// windows, because the game had no debug windows.
 	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;
 	/// Each frame, after the renderer reads the frame: each picture that is back is written to its file
 	virtual void CollectPictures(const Screens& screens) = 0;

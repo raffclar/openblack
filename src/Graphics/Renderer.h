@@ -155,6 +155,7 @@ public:
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
 	void RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept final;
+	[[nodiscard]] bool ReleasePicturesForFrame() noexcept final;
 	[[nodiscard]] std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept final;
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }

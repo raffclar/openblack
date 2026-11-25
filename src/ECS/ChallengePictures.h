@@ -91,8 +91,8 @@ struct Files
 /// The files of the challenge pictures in the profile, through the save game system. Without the system, none.
 [[nodiscard]] Files ProfileFiles();
 
-/// Whether a picture of the screen is asked for and not back yet: the game had no debug windows, so they are left out
-/// of the frames a picture may be taken of
+/// Whether a picture of the screen is asked for and not back yet. The frame of the picture does not show the debug
+/// windows, because the game had no debug windows.
 [[nodiscard]] bool AnyWaiting(const Registry& registry);
 
 /// Brings every record's picture up to date with the screens that are back: one given up leaves the old picture. Each

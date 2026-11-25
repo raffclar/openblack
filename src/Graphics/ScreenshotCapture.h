@@ -109,6 +109,32 @@ private:
 	std::unordered_map<std::string, std::vector<uint8_t>> _made;
 };
 
+/// The pictures of the window that the game asks for in one frame, read with one request to bgfx. bgfx reads the window
+/// one time in each frame and ignores a second request in the same frame without a note. Thus the pictures of a frame
+/// use the path of the first picture, and the renderer gives the pixels to each path of the group.
+class ScreenshotBatch
+{
+public:
+	/// Keeps a picture in memory that waits for a frame without the debug windows
+	void Hold(std::string path);
+	/// The pictures that wait for a frame, one time
+	[[nodiscard]] std::vector<std::string> Release();
+	/// Adds a picture of the frame that the game makes now
+	void Add(std::string path);
+	/// The path to send to bgfx for the frame that ends, with all the paths of the frame kept under it. None if the
+	/// frame has no picture.
+	[[nodiscard]] std::optional<std::string> Send();
+	/// The paths that get the pixels that bgfx reads for a sent path, one time. A path that was not sent gets only its
+	/// own pixels.
+	[[nodiscard]] std::vector<std::string> Receive(const std::string& sent);
+
+private:
+	std::mutex _mutex;
+	std::vector<std::string> _held;
+	std::vector<std::string> _frame;
+	std::unordered_map<std::string, std::vector<std::string>> _sent;
+};
+
 /// RGBA8 pixels made into BGRA8 pixels: the red and blue of each pixel change places
 [[nodiscard]] std::vector<uint8_t> RgbaToBgra(std::span<const uint8_t> rgba);
 
