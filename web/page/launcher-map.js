@@ -425,20 +425,6 @@ function describeAssetCell(cell, model) {
   return { group: cell.group.name, title: item.path, lines };
 }
 
-/**
- * Uses the light theme of the site when the player chose it on the site. The site keeps the choice as "theme" in the
- * storage of the browser. The argument storage is a function that gives the storage, because a read of it can fail.
- */
-function applySiteTheme(root, storage) {
-  try {
-    if (storage()?.getItem('theme') === 'light') {
-      root.dataset.theme = 'light';
-    }
-  } catch {
-    // The browser keeps no storage for the page: the page keeps the dark theme of the site
-  }
-}
-
 // ------------------------------------------------------------------------------------------------ the view (DOM)
 
 /** The colours of the map, from the custom properties of the page (page.css) */
@@ -686,13 +672,9 @@ function watchAssetWire(model, wanted, onEntry = () => {}) {
   return () => observer.disconnect();
 }
 
-if (typeof document !== 'undefined') {
-  applySiteTheme(document.documentElement, () => globalThis.localStorage);
-}
-
 if (typeof module !== 'undefined') {
   module.exports = {
     k_AssetMapGroups, k_AssetMapStates, k_AssetMapStateNames, assetGroupOf, buildAssetMap, squarify, layoutAssetMap,
-    assetCellAt, formatAssetBytes, formatAssetTime, AssetMapModel, describeAssetCell, applySiteTheme,
+    assetCellAt, formatAssetBytes, formatAssetTime, AssetMapModel, describeAssetCell,
   };
 }

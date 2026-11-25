@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const {
   assetGroupOf, buildAssetMap, squarify, layoutAssetMap, assetCellAt, formatAssetBytes, formatAssetTime, AssetMapModel,
-  describeAssetCell, applySiteTheme,
+  describeAssetCell,
 } = require('../web/page/launcher-map.js');
 const { AssetStore } = require('../web/page/launcher-assets.js');
 
@@ -208,20 +208,6 @@ check('the bytes and the times for the player', () => {
   assert.equal(formatAssetTime(3900), '1 h 5 min');
   assert.equal(formatAssetTime(null), '-');
   assert.equal(formatAssetTime(Infinity), '-');
-});
-
-check('the page uses the light theme only when the player chose it on the site', () => {
-  const root = { dataset: {} };
-  applySiteTheme(root, () => ({ getItem: () => 'light' }));
-  assert.equal(root.dataset.theme, 'light');
-  const dark = { dataset: {} };
-  applySiteTheme(dark, () => ({ getItem: () => null }));
-  assert.equal(dark.dataset.theme, undefined);
-  // A browser that refuses the storage keeps the dark theme
-  applySiteTheme(dark, () => {
-    throw new Error('refused');
-  });
-  assert.equal(dark.dataset.theme, undefined);
 });
 
 check('the store gives each change of a download to watch, and an error of watch stops no download', async () => {
