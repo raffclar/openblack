@@ -738,6 +738,77 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+	// The town of town.centre_destroyed, its village centre on fire with little life left
+	const auto burningTown = [](bool inScript, float life) {
+		auto objects = Town();
+		objects.front().life = life;
+		objects.front().alight = true;
+		objects.front().inScript = inScript;
+		return objects;
+	};
+	all.push_back({
+	    .id = "town.centre_burnt",
+	    .name = "A village centre with stone hands burnt down by fire",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.centre_destroyed. The village centre has a fiftieth of its life and "
+	                   "burns. The worship site is built at once.",
+	    .expected = "While the village centre burns, its two stone hands and their seeds show. When the fire takes the "
+	                "last of its life, a ghost of the centre flickers out. The centre, its two stone hands, their seeds and "
+	                "their effects, its totem and the heal and water icons at the worship site go at once.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x + 6.0f, 18.0f, k_Centre.y - 34.0f},
+	                .look = {k_Centre.x, 5.0f, k_Centre.y}},
+	    .objects = burningTown(false, 0.02f),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "town.centre_burnt_in_script",
+	    .name = "A village centre with stone hands that a script holds, burnt by fire",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.centre_burnt, but a script holds the village centre.",
+	    .expected = "When the fire takes the last of its life, a ghost of the centre flickers out and its fire stops. The "
+	                "centre stays with no life. Its stone hands, their seeds and their effects do not show. The heal and "
+	                "water icons at the worship site stay.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x + 6.0f, 18.0f, k_Centre.y - 34.0f},
+	                .look = {k_Centre.x, 5.0f, k_Centre.y}},
+	    .objects = burningTown(true, 0.02f),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	// The town of town.centre_destroyed, its village centre with no life left
+	const auto noLifeTown = [] {
+		auto objects = Town();
+		objects.front().life = 0.0f;
+		return objects;
+	};
+	all.push_back({
+	    .id = "town.centre_burning_no_life",
+	    .name = "A village centre with stone hands that burns on with no life left",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.centre_destroyed, but the village centre has no life left, as after a "
+	                   "blow or a beam. The worship site is built at once. Then the centre catches fire at its "
+	                   "fiercest.",
+	    .expected = "The fire burns on but does not hurt the centre, because it has no life. The fire does not burn the "
+	                "centre down and no ghost shows. The centre stays as a site for repair, built to nothing, so its "
+	                "building does not show. Its stone hands do not show. The heal and water icons at the worship site "
+	                "stay.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = noLifeTown(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 3.0f, .value = 2, .object = 0}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
 	all.push_back({
 	    .id = "miracles.icon_charge_far_off",
 	    .name = "The pulse of a charging icon seen from far off",
