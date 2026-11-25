@@ -122,10 +122,20 @@ namespace
 constexpr uint8_t k_BackBuffers = 3;
 } // namespace
 
-RenderPass Renderer::TranslucentView(RenderPass scene)
+bool Renderer::DrawsTemple() const noexcept
+{
+	// A draw before the fill of the frame reads the temple itself
+	if (_drawnFrame == nullptr)
+	{
+		return Locator::temple::has_value() && Locator::temple::value().Active();
+	}
+	return _drawnFrame->templeActive;
+}
+
+RenderPass Renderer::TranslucentView(RenderPass scene) const
 {
 	// In the temple the scene's own pass draws everything in the order it comes
-	return Locator::temple::has_value() && Locator::temple::value().Active() ? scene : TranslucentPassOf(scene);
+	return DrawsTemple() ? scene : TranslucentPassOf(scene);
 }
 
 struct BgfxCallback: public bgfx::CallbackI
@@ -661,7 +671,7 @@ graphics::ShaderManager* Renderer::GetShaderManager() const noexcept
 	return _shaderManager.get();
 }
 
-bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
+bool Renderer::WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::WarmUpScene");
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
@@ -695,6 +705,7 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 	const auto window = WarmUpPartWindow(part, warm_up::k_DrawsPerPart);
 	const bool parted = _shaderManager->OpenDrawWindow(window.first, window.count, k_PartedViews);
 	_warmingUp = true;
+	FillDrawnEffects(frame, drawDesc);
 	DrawScene(drawDesc);
 	_warmingUp = false;
 	_warmUpInFrame = true;
@@ -703,9 +714,16 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 	       WarmUpPartsLeft(part, *draws, warm_up::k_DrawsPerPart);
 }
 
-void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
+void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::FillDrawnEffects");
+	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::DrawnEffectsFill);
+	auto& effects = frame.effects;
+	_drawnFrame = &frame;
+	// The light of the models and the glow of the hand, which the passes read
+	frame.modelLight = GetModelLight();
+	CollectHands(frame);
+	CollectSunGlare(frame, drawDesc);
 	// The draw only reads the world. Thus side threads find the changed footprints and test the casters of the shadows
 	// while the draw continues, and the passes that paint them take the results.
 	if (drawDesc.drawIsland)
@@ -744,6 +762,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	UploadHandSkins();
 	UploadPosedBones(drawDesc);
+	// What the creatures' pass reads of the creatures, with the copies of their bones that the texture holds
+	CollectDrawnCreatures(frame, drawDesc);
 	// The workers make the moving shadows on the land while the passes below draw
 	StartGroundShadows(drawDesc);
 	{
@@ -752,7 +772,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		_snowAlphaTexture = textures.Find(snow_cover::k_AlphaTextureId.value());
 	}
 	// The light maps and shadows of the frame that ended stamp the land in this frame
-	_landStamps.swap(_particleFrame.lightStamps);
+	_landStamps.swap(effects.particles.lightStamps);
 	// The land's light of the frame that ended, before this frame makes its own
 	KeepLightOfFrameBefore();
 	DrawLandLuminosityPass(drawDesc);
@@ -762,10 +782,29 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		drawDesc.landShaded();
 	}
 	// What the particle effects draw, once for the land's colours and every pass
-	CollectParticles();
+	CollectParticles(effects);
+	// What the other effects draw, from the world as the frame shows it
+	CollectGroundBlobs(effects, drawDesc);
+	CollectCreatureFootprints(effects, drawDesc);
+	CollectLeashes(effects, drawDesc);
+	CollectTempleLooks(effects, drawDesc);
+	CollectSprites(frame, drawDesc);
+	_effectsFilled = true;
+}
+
+void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
+{
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
+	// The steps of the frame fill the effects of the drawn copy before each draw
+	if (!_effectsFilled)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "The frame drew the scene with no fill of its effects");
+	}
+	_effectsFilled = false;
+	_drawnFrame = drawDesc.frame;
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
-	UpdateLandLight();
+	UpdateLandLight(*drawDesc.frame);
 	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
 	// The pass above took the result of the side thread that tests the casters
@@ -794,7 +833,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		{
 			DrawSceneDesc drawPassDesc = drawDesc;
 
-			const auto& frameBuffer = Locator::oceanSystem::value().GetReflectionFramebuffer();
+			const auto& frameBuffer = *drawDesc.frame->sea.reflection;
 			auto reflectionCamera = drawDesc.camera->Reflect();
 
 			drawPassDesc.viewId = graphics::RenderPass::Reflection;
@@ -834,12 +873,10 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "The models of the drawn copy changed while the frame drew them");
 	}
 	// The good sky's glow goes over the frames that draw the land, not over the temple's inside
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = drawDesc.frame->templeActive;
 	if (!_warmingUp && !inTemple && drawDesc.viewId == RenderPass::Main)
 	{
-		const auto frameRealTime =
-		    Locator::time::has_value() ? Locator::time::value().GetFrameRealTime() : std::chrono::milliseconds {0};
-		_screenGlow->Want(_screenGlowStrength, frameRealTime);
+		_screenGlow->Want(_screenGlowStrength, drawDesc.frame->clock.frameRealTime);
 	}
 }
 
@@ -920,6 +957,8 @@ void Renderer::Frame() noexcept
 	// set after every draw of the frame, as the loading screen sets its view too.
 	const bool warmUp = std::exchange(_warmUpInFrame, false);
 	_landCaps.clear();
+	// The next frame fills its own drawn copy. The draws before that fill read the world itself.
+	_drawnFrame = nullptr;
 	if (warmUp)
 	{
 		const auto cover = static_cast<bgfx::ViewId>(warm_up::k_CoverView);

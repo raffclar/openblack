@@ -11,22 +11,34 @@
 
 #include <cstdint>
 
+#include <array>
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include "3D/AllMeshes.h"
+#include "3D/Extent.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "Enums.h"
+#include "Graphics/DrawnCreatures.h"
+#include "Graphics/DrawnEffects.h"
+#include "Graphics/DrawnSprites.h"
+#include "Graphics/DrawnTemple.h"
 
 namespace openblack
 {
 class Camera;
+class LandIslandInterface;
 } // namespace openblack
 
 namespace openblack::ecs::systems
@@ -36,6 +48,8 @@ struct RenderContext;
 
 namespace openblack::graphics
 {
+class FrameBuffer;
+class Mesh;
 
 /// What the frame draws, as the steps of the frame left it before the draw. The steps of the frame fill it on the game's
 /// thread. The passes of the land and of the models read only this, not the world, so the world can change while they
@@ -112,14 +126,70 @@ struct DrawnFrame
 		float skyLand {0.0f};
 		/// The sky as the game counts it: from 2 at night through 1 at dusk to 0 by day
 		float skyType {0.0f};
+		/// The time of day that the windows of the houses show, and whether it is night for them, when the game has a
+		/// clock of the sky
+		std::optional<float> windowTime;
+		bool windowNight {false};
+		/// For each sample of the sun's glare, whether the land or the sea hides it from the camera. The renderer fills
+		/// it with the effects, only when the frame draws the glare.
+		std::array<bool, 5> glareLandHides {};
 	};
 
 	/// What the land's pass reads, other than the land's blocks
 	struct Land
 	{
 		std::vector<ecs::systems::VortexSystemInterface::GroundMark> groundMarks;
+		/// The lowest and the highest corners of the land on the map, when the game has a land
+		std::optional<Extent2> extent;
 		bool reflected {true};
 		bool coarse {false};
+		/// The height of the highest land that a corner can have
+		float highestHeight {0.0f};
+		/// The land's blocks: their meshes, textures and pages. Only the game's thread changes them, between the draws
+		/// (see LandIslandInterface::CommitAltitudeChanges). The turn can change the heights of the corners. Thus a pass
+		/// that reads the heights reads them while no turn runs.
+		const LandIslandInterface* island {nullptr};
+	};
+
+	/// What the passes read of the hands of this computer
+	struct Hands
+	{
+		/// The player of this computer
+		PlayerNames ownPlayer {PlayerNames::PLAYER_ONE};
+		/// The left hand and the right hand of the player of this computer
+		std::array<entt::entity, 2> own {entt::null, entt::null};
+		/// The colour that the flash of a known gesture adds to the light of the drawn hand, from 0 to 1 for each channel
+		glm::vec3 glow {0.0f};
+		/// The place on the water under the drawn hand, when the hand is near the low land. The hand's glow on the water
+		/// shows there at night.
+		std::optional<glm::vec2> waterGlowCentre;
+		/// The alignment of the player of this computer, from -1, evil, to 1, good
+		float ownAlignment {0.0f};
+
+		/// The hand that the frame draws: the left hand of the player of this computer
+		[[nodiscard]] entt::entity Drawn() const { return own[0]; }
+	};
+
+	/// The game's clock as the frame shows it
+	struct Clock
+	{
+		/// How far the game is from the last turn to the next, from 0 to 1
+		float turnFraction {0.0f};
+		/// How long the frame took on the game's clock, which stops while the game is paused, and on the real clock
+		std::chrono::milliseconds frameGameTime {0};
+		std::chrono::milliseconds frameRealTime {0};
+		/// How long the game ran
+		std::chrono::milliseconds elapsed {0};
+	};
+
+	/// What the passes of the water read of the sea. These are things of the graphics device, which the sea makes at
+	/// its start and which the world does not change.
+	struct Sea
+	{
+		/// The target that the sea's reflection draws into
+		const FrameBuffer* reflection {nullptr};
+		const Mesh* mesh {nullptr};
+		entt::id_type texture {0};
 	};
 
 	/// The game's camera as the frame shows it. The copy has no camera model and does not move.
@@ -130,6 +200,14 @@ struct DrawnFrame
 	bool templeActive {false};
 	Sky sky;
 	Land land;
+	/// What the passes read of the temple, while the player is in it
+	DrawnTemple temple;
+	Hands hands;
+	Sea sea;
+	Clock clock;
+	/// The light of the models of the frame: the sun by day, or the light that the hand carries at night. The renderer
+	/// fills it with the effects.
+	glm::vec4 modelLight {0.0f};
 	/// The instances and the lists of draws of the frame. The steps of the frame make them, and only they change them.
 	const ecs::systems::RenderContext* models {nullptr};
 	/// How many times the steps of the frame had changed `models` when the frame filled this
@@ -140,6 +218,12 @@ struct DrawnFrame
 	std::vector<EntityLook> drawnEntityLooks;
 	/// The bones of all the looks
 	std::vector<glm::mat4> bones;
+	/// What the effects draw. The renderer fills it after the rest, only in a frame that draws the world.
+	DrawnEffects effects;
+	/// What the creatures' pass draws. The renderer fills it with the effects.
+	DrawnCreatures creatures;
+	/// The sprites that the frame shows, in the order of the draw. The renderer fills them with the effects.
+	std::vector<DrawnSprite> sprites;
 
 	[[nodiscard]] std::span<const glm::mat4> BonesOf(BoneRun run) const
 	{

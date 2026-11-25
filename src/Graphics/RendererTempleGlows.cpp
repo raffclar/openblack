@@ -24,6 +24,7 @@
 #include "3D/AllMeshes.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
@@ -34,6 +35,7 @@
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/TempleExitGlow.h"
@@ -53,12 +55,12 @@ using namespace openblack::graphics;
 
 void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 {
-	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (IsMirrorScene(desc.viewId) || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& temple = Locator::temple::value();
-	const auto seconds = temple.GetWayOutSeconds();
+	const auto& temple = desc.frame->temple;
+	const auto seconds = temple.wayOutSeconds;
 	if (!seconds.has_value() || !temple.IsRoomDrawn(TempleRoom::Main))
 	{
 		return;
@@ -70,7 +72,7 @@ void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 	}
 	using namespace ecs::components;
 	// The rooms and their cones are things of the temple's rooms
-	const auto& registry = Locator::temple::value().GetRooms();
+	const auto& registry = *desc.frame->temple.rooms;
 	// The sheet is in the main room's space. Its texture drifts with the room's spot lights' textures, a step for each
 	// of the room's cones.
 	glm::mat4 model {1.0f};
@@ -135,21 +137,40 @@ void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 
-void Renderer::DrawTempleCreedShells(const DrawSceneDesc& desc) const
+void Renderer::CollectTempleLooks(DrawnEffects& effects, const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || (Locator::temple::has_value() && Locator::temple::value().Active()))
-	{
-		return;
-	}
 	namespace heart_look = temple_heart_look;
 	namespace volume_glow = particles::volume_glow;
 	using namespace ecs::components;
+	effects.creedShells.clear();
+	effects.leashCollars.clear();
+	const auto& registry = Locator::entitiesRegistry::value();
+	// The collar of each leash post that has a size, among the sprites of each view
+	if (desc.drawSprites)
+	{
+		registry.Each<const LeashPost, const Transform>([&effects](const LeashPost& post, const Transform& transform) {
+			if (transform.scale == glm::vec3(0.0f))
+			{
+				return;
+			}
+			effects.leashCollars.push_back({
+			    .position = transform.position,
+			    .model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale),
+			    .scroll = post.look.scroll,
+			    .type = post.type,
+			});
+		});
+	}
+	// The shells over the hearts, with the models of the main view, outside the temple
+	if (desc.viewId != RenderPass::Main || !desc.drawEntities ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
 	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
 	const auto name = std::string("raw/") + std::string(volume_glow::k_Textures.at(heart_look::k_ShellTexture));
 	const auto texture = entt::hashed_string(name.c_str()).value();
 	const auto alpha = entt::hashed_string((name + "a").c_str()).value();
-	const auto eye = desc.camera->GetOrigin();
-	const auto& registry = Locator::entitiesRegistry::value();
 	registry.Each<const Temple, const Transform>([&](const Temple& temple, const Transform& transform) {
 		if (!heart_look::ShellShown(temple.destroying, temple.destructionClock))
 		{
@@ -170,9 +191,25 @@ void Renderer::DrawTempleCreedShells(const DrawSceneDesc& desc) const
 		    .specularRgb = heart_look::k_ShellSpecular,
 		};
 		// Centred on the heart, the same size on each axis and not turned
-		const auto model =
-		    glm::translate(transform.position) * glm::scale(glm::vec3(heart_look::ShellScale(temple.destructionClock)));
-		SubmitGlowShell(static_cast<uint16_t>(TranslucentView(desc.viewId)), resources::HashIdentifier(MeshId::Creed), model,
-		                shell, desc.camera->GetProjectionMatrix(), false, zsort::Depth(transform.position, eye));
+		effects.creedShells.push_back({
+		    .shell = shell,
+		    .position = transform.position,
+		    .model =
+		        glm::translate(transform.position) * glm::scale(glm::vec3(heart_look::ShellScale(temple.destructionClock))),
+		});
 	});
+}
+
+void Renderer::DrawTempleCreedShells(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || desc.frame->templeActive)
+	{
+		return;
+	}
+	const auto eye = desc.camera->GetOrigin();
+	for (const auto& [shell, position, model] : desc.frame->effects.creedShells)
+	{
+		SubmitGlowShell(static_cast<uint16_t>(TranslucentView(desc.viewId)), resources::HashIdentifier(MeshId::Creed), model,
+		                shell, desc.camera->GetProjectionMatrix(), false, zsort::Depth(position, eye));
+	}
 }

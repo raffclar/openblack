@@ -28,6 +28,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ZSort.h"
@@ -106,10 +107,55 @@ float LandLightScale(RenderPass viewId)
 }
 } // namespace
 
+void Renderer::CollectLeashes(DrawnEffects& effects, const DrawSceneDesc& desc) const
+{
+	using ecs::components::CreatureLeash;
+	effects.leashes.clear();
+	if (!desc.drawEntities || !Locator::terrainSystem::has_value() ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	// Cinema bars a script brought in hide the ropes, unless the scripts show the leashes
+	const bool scriptShows = !Locator::leashSystem::has_value() || Locator::leashSystem::value().IsDrawn();
+	const bool scriptCinema = Locator::cinematicDirectorSystem::has_value() &&
+	                          Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
+	                          Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
+	desc.entities.Each<const CreatureLeash>([&](entt::entity creature, const CreatureLeash& leashes) {
+		const auto* drawn = desc.entities.TryGet<const ecs::components::CreatureLeashRope>(creature);
+		if (!leashes.worn.has_value() || drawn == nullptr || !drawn->started)
+		{
+			return;
+		}
+		const auto& worn = *leashes.worn;
+		const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(creature);
+		const leash_rope::Showing showing {
+		    .scriptShows = scriptShows,
+		    .scriptCinema = scriptCinema,
+		    .local = worn.holder == OwnPlayer(),
+		    .handHidden = !desc.drawHand,
+		    .handHoldsTiedRope = drawn->held.has_value(),
+		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,
+		};
+		if (leash_rope::Shown(showing))
+		{
+			effects.leashes.push_back(drawn->rope);
+		}
+		// The hand holding the rope of the tied leash: the rope is drawn as two, from the collar and from what it is tied to
+		// to the hand
+		if (leash_rope::HeldRopesShown(showing))
+		{
+			effects.leashes.push_back(drawn->held->toCollar);
+			effects.leashes.push_back(drawn->held->toTied);
+		}
+	});
+}
+
 void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 {
 	using ecs::components::CreatureLeash;
-	if (!Locator::terrainSystem::has_value() || (Locator::temple::has_value() && Locator::temple::value().Active()))
+	const auto& leashes = desc.frame->effects.leashes;
+	if (leashes.empty() || !Locator::terrainSystem::has_value())
 	{
 		return;
 	}
@@ -141,11 +187,6 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 		}
 	};
 
-	// Cinema bars a script brought in hide the ropes, unless the scripts show the leashes
-	const bool scriptShows = !Locator::leashSystem::has_value() || Locator::leashSystem::value().IsDrawn();
-	const bool scriptCinema = Locator::cinematicDirectorSystem::has_value() &&
-	                          Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
-	                          Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
 	// A rope: its shadow first, flat on the land in the main view only, the reflection having no land to lie on; then the
 	// rope, lit by the land, blended by the texture's alpha among the translucent things
 	const auto draw = [&](const leash_rope::Rope& leash) {
@@ -180,32 +221,5 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 		}
 	};
 
-	desc.entities.Each<const CreatureLeash>([&](entt::entity creature, const CreatureLeash& leashes) {
-		const auto* drawn = desc.entities.TryGet<const ecs::components::CreatureLeashRope>(creature);
-		if (!leashes.worn.has_value() || drawn == nullptr || !drawn->started)
-		{
-			return;
-		}
-		const auto& worn = *leashes.worn;
-		const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(creature);
-		const leash_rope::Showing showing {
-		    .scriptShows = scriptShows,
-		    .scriptCinema = scriptCinema,
-		    .local = worn.holder == OwnPlayer(),
-		    .handHidden = !desc.drawHand,
-		    .handHoldsTiedRope = drawn->held.has_value(),
-		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,
-		};
-		if (leash_rope::Shown(showing))
-		{
-			draw(drawn->rope);
-		}
-		// The hand holding the rope of the tied leash: the rope is drawn as two, from the collar and from what it is tied to
-		// to the hand
-		if (leash_rope::HeldRopesShown(showing))
-		{
-			draw(drawn->held->toCollar);
-			draw(drawn->held->toTied);
-		}
-	});
+	std::ranges::for_each(leashes, draw);
 }

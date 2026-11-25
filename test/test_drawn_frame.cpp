@@ -83,3 +83,75 @@ TEST(DrawnFrame, TheModelsChangedOnlyWhenTheCountOfChangesMoved)
 	EXPECT_FALSE(frame.ModelsChanged(5));
 	EXPECT_TRUE(frame.ModelsChanged(6));
 }
+
+TEST(DrawnFrame, TheEffectsGiveOnlyTheSymbolsOfBeliefOfThisFrame)
+{
+	graphics::DrawnFrame frame;
+	auto& effects = frame.effects;
+	// The frames of earlier frames keep their memory, but the draw does not read them
+	effects.townBeliefs.resize(3);
+	effects.townBeliefs[0].centre = entt::entity {7};
+	effects.townBeliefs[1].centre = entt::entity {9};
+	effects.townBeliefCount = 2;
+	const auto shown = effects.TownBeliefs();
+	ASSERT_EQ(shown.size(), 2U);
+	EXPECT_EQ(shown[0].centre, entt::entity {7});
+	EXPECT_EQ(shown[1].centre, entt::entity {9});
+	effects.townBeliefCount = 0;
+	EXPECT_TRUE(effects.TownBeliefs().empty());
+}
+
+TEST(DrawnFrame, ASpriteShowsOnlyInTheViewsThatTheFillGaveIt)
+{
+	graphics::DrawnSprite sprite;
+	EXPECT_TRUE(sprite.ShownIn(false));
+	EXPECT_TRUE(sprite.ShownIn(true));
+	// A glow of a temple room that the temple does not draw whole shows only in the floor of the main room
+	sprite.inMainView = false;
+	EXPECT_FALSE(sprite.ShownIn(false));
+	EXPECT_TRUE(sprite.ShownIn(true));
+	sprite.inMainView = true;
+	sprite.inReflection = false;
+	EXPECT_TRUE(sprite.ShownIn(false));
+	EXPECT_FALSE(sprite.ShownIn(true));
+}
+
+TEST(DrawnFrame, TheSeaMirrorsACreatureOnlyFromTheSituationThatTheFillKept)
+{
+	graphics::DrawnCreatures::Creature creature;
+	// A creature with no situation, as a copy or a frame with no land, is not mirrored
+	EXPECT_FALSE(creature.MirroredAt(0.0f));
+	creature.mirror = graphics::creature_reflection::Situation {
+	    .primaryCreature = true,
+	    .onBlock = true,
+	    .blockInView = true,
+	    .blockDistance = 0.0f,
+	    .height = 0.0f,
+	    .fizz = 0.0f,
+	};
+	// The draw gives the height over the water of each mirror
+	EXPECT_TRUE(creature.MirroredAt(0.0f));
+	EXPECT_FALSE(creature.MirroredAt(graphics::creature_reflection::k_HighestStand));
+	creature.mirror->primaryCreature = false;
+	EXPECT_FALSE(creature.MirroredAt(0.0f));
+}
+
+TEST(DrawnFrame, TheTempleCopyDrawsOnlyTheRoomsThatTheFillMarked)
+{
+	graphics::DrawnTemple temple;
+	EXPECT_FALSE(temple.IsRoomDrawn(TempleRoom::Main));
+	temple.roomsDrawn.at(static_cast<size_t>(TempleRoom::CreatureCave)) = true;
+	EXPECT_TRUE(temple.IsRoomDrawn(TempleRoom::CreatureCave));
+	EXPECT_FALSE(temple.IsRoomDrawn(TempleRoom::Main));
+	EXPECT_EQ(graphics::DrawnTemple::k_RoomCount, static_cast<size_t>(TempleRoom::Unknown) + 1);
+}
+
+TEST(DrawnFrame, TheDrawnHandIsTheLeftHandOfThePlayerOfThisComputer)
+{
+	graphics::DrawnFrame::Hands hands;
+	EXPECT_EQ(hands.Drawn(), entt::entity {entt::null});
+	EXPECT_EQ(hands.ownPlayer, PlayerNames::PLAYER_ONE);
+	hands.own = {entt::entity {7}, entt::entity {8}};
+	EXPECT_EQ(hands.Drawn(), entt::entity {7});
+	EXPECT_FALSE(hands.waterGlowCentre.has_value());
+}

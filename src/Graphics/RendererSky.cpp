@@ -16,6 +16,8 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <tuple>
+#include <type_traits>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -249,22 +251,43 @@ void Renderer::DrawSun(RenderPass viewId, const DrawnFrame& frame) const
 	                          });
 }
 
-void Renderer::DrawSunGlare(const Camera& camera) const
+void Renderer::CollectSunGlare(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const
 {
-	if (!Locator::skySystem::has_value())
+	auto& hides = frame.sky.glareLandHides;
+	hides.fill(false);
+	// The glare tests the land only when it shows: in the main view of the world, with the sun placed and not hidden
+	if (_warmingUp || !drawDesc.drawSky || drawDesc.viewId != RenderPass::Main || frame.templeActive || frame.sky.sunHidden ||
+	    frame.camera == nullptr || !frame.sky.sun.has_value() || !frame.sky.sun->sun.placement.has_value() ||
+	    !Locator::pickingSystem::has_value())
 	{
 		return;
 	}
-	const auto [sun, body] = Locator::entitiesRegistry::value().TryGet<ecs::components::Sun, ecs::components::CelestialBody>(
-	    Locator::skySystem::value().GetSun());
+	const auto& camera = *frame.camera;
+	const auto origin = camera.GetOrigin();
+	const auto samples = sun::GlareSamples(frame.sky.sun->sun.placement->position, origin, camera.GetNearClip());
+	static_assert(std::tuple_size_v<decltype(samples)> == std::tuple_size_v<std::remove_reference_t<decltype(hides)>>);
+	const auto& picking = Locator::pickingSystem::value();
+	for (size_t i = 0; i < samples.size(); ++i)
+	{
+		hides.at(i) = picking.LandOrSeaAlong(origin, samples.at(i), origin).has_value();
+	}
+}
+
+void Renderer::DrawSunGlare(const Camera& camera, const DrawnFrame& frame) const
+{
+	if (!frame.sky.sun.has_value())
+	{
+		return;
+	}
+	const auto* sun = &frame.sky.sun->sun;
+	const auto* body = &frame.sky.sun->body;
 	// A warm-up draws the glare even before the sun is placed, then at no size
-	if (sun == nullptr || body == nullptr || (!sun->placement.has_value() && !_warmingUp))
+	if (!sun->placement.has_value() && !_warmingUp)
 	{
 		return;
 	}
 	// Inside the temple, or when a script hides the sun, the sun has no glare, and the glare does not change
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (!_warmingUp && (inTemple || Locator::skySystem::value().IsSunHidden()))
+	if (!_warmingUp && (frame.templeActive || frame.sky.sunHidden))
 	{
 		return;
 	}
@@ -290,8 +313,7 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	}
 	for (size_t i = 0; i < samples.size() && !_warmingUp; ++i)
 	{
-		bool isHidden = Locator::pickingSystem::has_value() &&
-		                Locator::pickingSystem::value().LandOrSeaAlong(origin, samples[i], origin).has_value();
+		bool isHidden = frame.sky.glareLandHides.at(i);
 		// The sample's pixel, when it is in front of the near plane and on the screen
 		const auto clip = toClip * glm::vec4(samples[i], 1.0f);
 		std::optional<glm::vec2> pixel;
@@ -327,7 +349,7 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	// A warm-up leaves the glare as it is, and draws it even when it does not show
 	if (!_warmingUp)
 	{
-		const auto frameMilliseconds = static_cast<uint32_t>(Locator::time::value().GetFrameGameTime().count());
+		const auto frameMilliseconds = static_cast<uint32_t>(frame.clock.frameGameTime.count());
 		_sunGlare = sun::EaseGlare(_sunGlare, hidden, frameMilliseconds);
 		if (_sunGlare <= 0.0f)
 		{
@@ -338,9 +360,8 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	float alpha = 0.0f;
 	if (placement.has_value())
 	{
-		const auto* dome =
-		    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
-		alpha = sun::GlareAlpha(_sunGlare, placement->alpha, dome != nullptr ? dome->overcast : 0.0f,
+		const auto& dome = frame.sky.dome;
+		alpha = sun::GlareAlpha(_sunGlare, placement->alpha, dome.has_value() ? dome->overcast : 0.0f,
 		                        Locator::config::value().detail.fog);
 	}
 	// The game draws the glare when the frame ends, after all the things that blend, such as the clouds. Thus it goes

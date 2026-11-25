@@ -68,6 +68,7 @@
 #include "Graphics/BoneBudget.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
@@ -168,11 +169,11 @@ void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 	_landFootprints->Update();
 	// The game paints all of a block's texture again when its footprints change, so the block's snow is painted again too
 	const auto repainted = _landFootprints->TakeRepainted();
-	if (repainted.empty() || !Locator::terrainSystem::has_value())
+	if (repainted.empty() || drawDesc.frame->land.island == nullptr)
 	{
 		return;
 	}
-	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	const auto& blocks = drawDesc.frame->land.island->GetBlocks();
 	for (const auto block : repainted)
 	{
 		if (block < blocks.size())
@@ -267,10 +268,10 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 		{
 			// The ripple steps on with the frames the game's time moves on in, at the screen refresh's pace
 			// A warm-up does not step it
-			const auto& time = Locator::time::value();
+			const auto& clock = _drawnFrame->clock;
 			if (!_warmingUp)
 			{
-				_seaRipple = sea_rows::AdvanceRipple(_seaRipple, time.GetFrameRealTime(), time.GetFrameGameTime().count() != 0);
+				_seaRipple = sea_rows::AdvanceRipple(_seaRipple, clock.frameRealTime, clock.frameGameTime.count() != 0);
 			}
 			driftDraw = sea_rows::DriftDraw::Rows;
 			const auto rows = sea_rows::MakeRows(*range);
@@ -289,8 +290,8 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	{
 		const auto wind =
 		    Locator::weatherSystem::has_value() ? Locator::weatherSystem::value().GetAmbientWind() : glm::vec2(0.0f);
-		_seaDrift = sea_rows::AdvanceDrift(_seaDrift, wind, Locator::time::value().GetFrameGameTime(),
-		                                   sea_rows::Period(waterTiling), driftDraw);
+		_seaDrift =
+		    sea_rows::AdvanceDrift(_seaDrift, wind, _drawnFrame->clock.frameGameTime, sea_rows::Period(waterTiling), driftDraw);
 	}
 	const glm::vec4 u_seaDrift {_seaDrift.rows, _seaDrift.still};
 
@@ -330,34 +331,19 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 		spriteShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 		return;
 	}
-	if (!_landLightTable || !Locator::handSystem::has_value() || !Locator::terrainSystem::has_value())
+	if (!_landLightTable || desc.frame->land.island == nullptr)
 	{
 		return;
 	}
 	const float strength = HandLight::GetStrength(_landLightTable->GetLandColour());
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool inTemple = desc.frame->templeActive;
 	if (!hand_water_glow::Shows(inTemple, strength))
 	{
 		return;
 	}
-	const auto handEntity =
-	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-	const auto* transform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity);
-	if (transform == nullptr)
-	{
-		return;
-	}
-	const glm::vec2 centre {transform->position.x, transform->position.z};
-	const auto& island = Locator::terrainSystem::value();
-	const auto altitudeAt = [&island](int x, int z) -> std::optional<uint8_t> {
-		if (x < 0 || z < 0 || x >= LandIslandInterface::k_MapCellsPerSide || z >= LandIslandInterface::k_MapCellsPerSide)
-		{
-			return std::nullopt;
-		}
-		const auto* cell = island.FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
-		return cell != nullptr ? std::optional<uint8_t>(cell->altitude) : std::nullopt;
-	};
-	if (!hand_water_glow::NearLowLand(centre, altitudeAt))
+	// The fill found the place of the hand over the low land
+	const auto& centre = desc.frame->hands.waterGlowCentre;
+	if (!centre.has_value())
 	{
 		return;
 	}
@@ -383,7 +369,7 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 	model[0] = glm::vec4(hand_water_glow::k_HalfSize, 0.0f, 0.0f, 0.0f);
 	model[1] = glm::vec4(0.0f, 0.0f, -hand_water_glow::k_HalfSize, 0.0f);
 	model[2] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-	model[3] = glm::vec4(centre.x, 0.0f, centre.y, 1.0f);
+	model[3] = glm::vec4(centre->x, 0.0f, centre->y, 1.0f);
 
 	bgfx::setTransform(glm::value_ptr(model));
 	spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
@@ -600,11 +586,11 @@ const Texture2D& Renderer::GetLandColour() const
 
 void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 {
-	if (!drawDesc.drawIsland || !Locator::terrainSystem::has_value())
+	if (!drawDesc.drawIsland || drawDesc.frame->land.island == nullptr)
 	{
 		return;
 	}
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *drawDesc.frame->land.island;
 	const auto& cellColours = island.GetCellColourMap();
 	const auto size = cellColours.GetResolution();
 	if (!FitsLand(_landColourFrameBuffer, size))
@@ -779,7 +765,7 @@ void Renderer::ReleaseLightOfFrameBefore() const
 	_before.texturesKept = false;
 }
 
-TextureHandle Renderer::UpdateLandLight() const
+TextureHandle Renderer::UpdateLandLight(const DrawnFrame& frame) const
 {
 	if (!_landLightTable)
 	{
@@ -791,10 +777,7 @@ TextureHandle Renderer::UpdateLandLight() const
 		bgfx::setDeviceRestoreByApplication(toBgfx(*_landLightTexture));
 	}
 	_screenGlowStrength = 0;
-	const auto* dome =
-	    Locator::skySystem::has_value()
-	        ? Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome())
-	        : nullptr;
+	const auto* dome = frame.sky.dome.has_value() ? &*frame.sky.dome : nullptr;
 	if (const auto& palettes = Locator::resources::value().GetLandLightPalettes();
 	    dome != nullptr && palettes.Contains(LandLightPalette::k_Id.value()))
 	{
@@ -902,7 +885,7 @@ void Renderer::DrawFilmReflections(const DrawSceneDesc& desc) const
 
 void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 {
-	if (!Locator::terrainSystem::has_value())
+	if (drawDesc.frame->land.island == nullptr)
 	{
 		return;
 	}
@@ -916,7 +899,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	else
 	{
 		std::vector<land_detail::BlockPlace> places;
-		for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+		for (const auto& block : drawDesc.frame->land.island->GetBlocks())
 		{
 			places.push_back({.corner = block.GetMapPosition(), .at = block.GetBlockPosition()});
 		}
@@ -929,7 +912,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 		    places);
 	}
 
-	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	const auto& blocks = drawDesc.frame->land.island->GetBlocks();
 	// The blocks that the view can see: the same test as the list of the things that are drawn. With the land mirrored
 	// in the sea, the box reaches as far under the water as it stands over it, so it holds the block's reflection too.
 	const auto viewProjection = drawDesc.camera->GetViewProjectionMatrix();
@@ -1037,6 +1020,7 @@ bool Renderer::CoarseEdgesPainted(glm::ivec2 block) const
 
 void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn, const Texture2D* paintedSnow) const
 {
+	// The paint takes the land's repaints, thus it uses the land itself and not the drawn copy's view of it
 	if (!Locator::terrainSystem::has_value())
 	{
 		return;

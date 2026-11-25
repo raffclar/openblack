@@ -42,6 +42,7 @@
 #include "Enums.h"
 #include "Graphics/DeviceRestore.h"
 #include "Graphics/DrawEncoder.h"
+#include "Graphics/DrawnCreatures.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
@@ -119,9 +120,10 @@ public:
 
 	void ConfigureView(RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept final;
 
+	void FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept final;
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
-	[[nodiscard]] bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
+	[[nodiscard]] bool WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
 	bool SetPipelinePrefetch(bool enabled) noexcept final;
 	[[nodiscard]] uint32_t GetPipelinePrefetchPending() const noexcept final;
@@ -178,7 +180,9 @@ private:
 	/// The sun in the sky, after the sky's dome
 	void DrawSun(RenderPass viewId, const DrawnFrame& frame) const;
 	/// The sun's glare over the finished view, dimmed by what hides the sun from the camera
-	void DrawSunGlare(const Camera& camera) const;
+	/// Tests which samples of the sun's glare the land or the sea hides from the camera, for the draw of the glare
+	void CollectSunGlare(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
+	void DrawSunGlare(const Camera& camera, const DrawnFrame& frame) const;
 	/// Asks the drawing of a glare sample's pixel, between two corners of the screen (0 to 1 from the top left), whether
 	/// anything is drawn there nearer than a depth
 	void AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft, glm::vec2 bottomRight,
@@ -218,10 +222,18 @@ private:
 	/// The smoke from the homes' chimneys, each in its place among what blends, in the main view
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
 	/// Gathers what the particle effects draw this frame, once for every pass
-	void CollectParticles() const;
+	void CollectParticles(DrawnEffects& effects) const;
 	/// Gathers the symbols of belief of each village centre into a frame of its own, as the game draws them after the
 	/// centre's column and not with the other effects
-	void CollectTownBeliefParticles() const;
+	void CollectTownBeliefParticles(DrawnEffects& effects) const;
+	/// Makes the corners of the ground blobs that the main view draws
+	void CollectGroundBlobs(DrawnEffects& effects, const DrawSceneDesc& desc) const;
+	/// Makes the corners of the creatures' footprints that the main view draws
+	void CollectCreatureFootprints(DrawnEffects& effects, const DrawSceneDesc& desc) const;
+	/// Keeps the ropes of the leashes that the frame shows
+	void CollectLeashes(DrawnEffects& effects, const DrawSceneDesc& desc) const;
+	/// Keeps the glow shells over the temples' hearts and the collars of the leash posts
+	void CollectTempleLooks(DrawnEffects& effects, const DrawSceneDesc& desc) const;
 	/// The symbols of belief of one village centre, among the other things that blend. When a view is given, the symbols
 	/// are not drawn when all of them are out of it: then they put no pixel on the screen.
 	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre,
@@ -319,7 +331,9 @@ private:
 	void DrawPowerUpRings(const DrawSceneDesc& desc, const PowerUpRingsDraw& shown,
 	                      const view_frustum::Frustum* seenBy = nullptr, DrawEncoder* encoder = nullptr) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
-	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
+	[[nodiscard]] RenderPass TranslucentView(RenderPass scene) const;
+	/// Whether the frame that the renderer draws shows the inside of the temple
+	[[nodiscard]] bool DrawsTemple() const noexcept;
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
 	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
 	/// The seeds of the miracles that the players cast, over the main room's map
@@ -677,14 +691,15 @@ private:
 	void SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairLightSource* source, bool landLit,
 	                           const std::array<glm::vec4, 2>& haze) const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
-	/// creatures, its pose, its shape and its eyes
-	using InterfaceCreatureBody =
-	    std::function<void(entt::id_type mesh, uint32_t instance, std::span<const glm::mat4> bones,
-	                       const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes)>;
+	/// creatures, its pose, where its bones start in the texture of the posed bones, its shape and its eyes
+	using InterfaceCreatureBody = std::function<void(
+	    entt::id_type mesh, uint32_t instance, std::span<const glm::mat4> bones, std::optional<uint32_t> firstBone,
+	    const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes)>;
 	/// The creatures that the interface asked to show last, each moved to its place before the interface's camera
-	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
+	void DrawInterfaceCreatures(const DrawnCreatures::Interface& shown, const InterfaceCreatureBody& drawBody) const;
 	/// The creature that the main menu's tattoo editor asked to show last, in its view of its own
-	void DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
+	void DrawMenuCreature(const DrawSceneDesc& desc, const DrawnCreatures::Menu& shown,
+	                      const InterfaceCreatureBody& drawBody) const;
 	/// The columns of light over the village centres of the players whose borders show. Each centre's symbols of belief
 	/// come just after its column, also in the reflection.
 	void DrawTownColumns(const DrawSceneDesc& desc) const;
@@ -737,6 +752,11 @@ private:
 	bool _bgfxProfile = false;
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
 	mutable bool _warmingUp {false};
+	/// The steps of the frame filled the effects for the next draw of the scene
+	mutable bool _effectsFilled {false};
+	/// The drawn copy of the frame that the renderer draws, for the passes that do not get it with their description.
+	/// The game keeps the copy for all of its frames.
+	mutable const DrawnFrame* _drawnFrame {nullptr};
 	/// The next frame holds a warm-up's draws, after which its views are set back
 	mutable bool _warmUpInFrame {false};
 	/// The colour that the main view clears the window to
@@ -1040,21 +1060,9 @@ private:
 	mutable std::vector<std::unique_ptr<Texture2D>> _handSkinTextures;
 	mutable std::vector<std::pair<uint32_t, const Texture2D*>> _handSkins;
 	mutable std::optional<painted_skin::Stamp> _handSkinStamp;
-	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
-	/// upload the bones of
-	struct DrawnCreature
-	{
-		entt::entity entity;
-		uint32_t instance;
-		/// A copy of the creature drawn elsewhere in its own pose: the entity it takes its pose and eyes from, and where
-		/// it is lit from. The copy is a thing of the temple's rooms.
-		entt::entity posedBy {entt::null};
-		std::optional<glm::vec3> light;
-		/// The bones of its pose, or those of its mesh when it has no pose of its own
-		std::span<const glm::mat4> bones {};
-		/// Where its bones start in the texture of the posed bones
-		std::optional<uint32_t> firstBone {};
-	};
+	/// The creatures that the fill of this frame selects: all of them, or the nearest the camera when there are more than
+	/// the backend can upload the bones of. The fill then gives them to the drawn copy.
+	using DrawnCreature = DrawnCreatures::Creature;
 	mutable std::vector<DrawnCreature> _drawnCreatures;
 	/// A usual hair draw of the frame: the place of its creature, the camera that draws it and how much of the land's
 	/// light it takes. A hair with colours of its own does not use the place.
@@ -1105,6 +1113,17 @@ private:
 	void SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const;
 	/// Where the bones start in the texture of the posed bones, when they are the bones of a creature drawn this frame
 	[[nodiscard]] std::optional<uint32_t> FirstBoneOf(std::span<const glm::mat4> bones) const;
+	/// Copies what the creatures' pass reads of the creatures, of the interface's creatures and of the tattoo editor's
+	/// creature into the drawn copy. Call it after the upload of the posed bones.
+	void CollectDrawnCreatures(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
+	/// Copies the creatures that the interface asked to show into the drawn copy
+	void CollectInterfaceCreatures(DrawnCreatures& creatures, const DrawSceneDesc& drawDesc) const;
+	/// Copies the creature that the tattoo editor asked to show into the drawn copy
+	void CollectMenuCreature(DrawnCreatures& creatures) const;
+	/// The meshes that blend the body of a species to a shape, with no skins
+	[[nodiscard]] static DrawnCreatures::Shape ShapeOf(CreatureType species, const creature_morph::Morph& morph);
+	/// Copies the sprites that the frame shows into the drawn copy
+	void CollectSprites(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
 	/// Sampled by the primitives without a skin, as Direct3D's texture stages read white with no texture set
 	std::optional<TextureHandle> _whiteTexture;
 	/// A texel that the renderer reads back to make a frame wait for the GPU; none if the backend cannot read textures
@@ -1135,8 +1154,11 @@ private:
 	void ReleaseLightOfFrameBefore() const;
 	/// u_modelLight: the game's model light this frame
 	[[nodiscard]] glm::vec4 GetModelLight() const;
+	/// Copies what the passes read of the drawn hand: the colour that the flash of a known gesture adds to it, and the
+	/// place of its glow on the water
+	void CollectHands(DrawnFrame& frame) const;
 	/// Rebuilds the land's light for this frame from the palette; the texture of it
-	TextureHandle UpdateLandLight() const;
+	TextureHandle UpdateLandLight(const DrawnFrame& frame) const;
 	/// Works out the land's level of detail for this frame from the view's camera (see land_detail)
 	void UpdateLandDetail(const DrawSceneDesc& drawDesc) const;
 	/// The blocks' corners as they are drawn this frame (see land_detail::k_CornerTextureSide): the altitude of each
@@ -1146,11 +1168,10 @@ private:
 	/// The land's light, or a texture to bind in its place before it is first built
 	[[nodiscard]] TextureHandle GetLandLightTexture() const;
 	std::unique_ptr<Mesh> _plane;
-	/// What the particle effects draw this frame, and the order of the pass being drawn, kept for their room
-	mutable particles::draw::Frame _particleFrame;
 	/// The light maps and shadows that the particles drew in the frame before: the game stamps them on the land at the
 	/// start of the next frame
 	mutable std::vector<particles::draw::LightStamp> _landStamps;
+	/// The order of the particles of the pass being drawn, kept for their room
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
 	/// What the effect over a seed of the gestures' hints draws, and its order
@@ -1159,25 +1180,9 @@ private:
 	mutable std::unique_ptr<Camera> _hintCamera;
 	mutable std::vector<particles::draw::Command> _hintParticleCommands;
 	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
-	/// What the symbols of belief of one village centre draw this frame
-	struct TownBeliefFrame
-	{
-		entt::entity centre {entt::null};
-		particles::draw::Frame frame;
-		/// The run of the symbols in the layout of the symbols, when the effect draws only symbols. Then the frame is
-		/// clear.
-		std::optional<uint32_t> symbolRun;
-		/// The lowest and the highest corners of a box that holds every corner of the frame's sprites. It is none when
-		/// the frame has more than sprites.
-		std::optional<std::pair<glm::vec3, glm::vec3>> spriteBox;
-	};
-	/// The frames of the village centres' symbols of belief. Only the first _townBeliefFrameCount are of this frame.
-	mutable std::vector<TownBeliefFrame> _townBeliefFrames;
-	mutable size_t _townBeliefFrameCount {0};
+	/// The order of the symbols of belief of one village centre in the pass being drawn
 	mutable std::vector<particles::draw::Command> _townBeliefCommands;
 	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
-	/// The symbols of belief of the centres whose effects draw only symbols, all in one layout
-	mutable particles::draw::SymbolLayout _townBeliefSymbols;
 	/// What one pass draws of the layout of the symbols for a centre: its commands, and its sprites in the sprite order
 	struct TownBeliefSymbolDraw
 	{

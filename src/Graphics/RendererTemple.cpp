@@ -45,6 +45,7 @@
 #include "Graphics/AlphaTest.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
@@ -76,15 +77,15 @@ constexpr std::array<OrientedTextVertex, 3> k_WarmUpTriangle {};
 
 void Renderer::DrawTempleText(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (desc.viewId != RenderPass::Main || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& temple = Locator::temple::value();
+	const auto& temple = desc.frame->temple;
 	// The words come with the rooms' scrolls on a visit. A warm-up draws a triangle of no size in their place.
-	const auto vertices = _warmingUp && temple.GetText().empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
-	                                                             : std::span<const OrientedTextVertex>(temple.GetText());
-	const auto* texture = temple.GetTextTexture();
+	const auto vertices = _warmingUp && temple.text.empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
+	                                                        : std::span<const OrientedTextVertex>(temple.text);
+	const auto* texture = temple.textTexture;
 	if (vertices.empty() || texture == nullptr)
 	{
 		return;
@@ -107,7 +108,7 @@ void Renderer::DrawTempleText(const DrawSceneDesc& desc) const
 
 	// The game draws the glyphs blended by their coverage, tested against the room's depth
 	const auto* shader = _shaderManager->GetShader("Text3D");
-	const auto model = glm::translate(glm::mat4(1.0f), temple.GetPosition());
+	const auto model = glm::translate(glm::mat4(1.0f), temple.position);
 	bgfx::setTransform(glm::value_ptr(model));
 	bgfx::setVertexBuffer(0, &buffer);
 	shader->SetTextureSampler("s_texture", 0, *texture);
@@ -121,11 +122,11 @@ void Renderer::DrawTempleText(const DrawSceneDesc& desc) const
 
 void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (desc.viewId != RenderPass::Main || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& temple = Locator::temple::value();
+	const auto& temple = desc.frame->temple;
 	const auto pool = entt::hashed_string("temple/interior/mainwater_l3d").value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	if (!temple.IsRoomDrawn(TempleRoom::Main) || !meshes.Contains(pool))
@@ -133,9 +134,9 @@ void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 		return;
 	}
 	// The alpha of the water follows the sine of the time
-	const float time = temple.GetPoolTime();
+	const float time = temple.poolTime;
 	const auto alpha = temple_pool::FirstLayerAlpha(time);
-	const auto& light = temple.GetLight();
+	const auto& light = temple.light;
 	const auto layerLight = temple_pool::LayerLight(light);
 	struct Layer
 	{
@@ -151,7 +152,7 @@ void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 	};
 	// Under the water the room's reflection shows, where the floor leaves it uncovered
 	{
-		const auto model = glm::translate(glm::mat4(1.0f), temple.GetPosition());
+		const auto model = glm::translate(glm::mat4(1.0f), temple.position);
 		const auto* reflection = _shaderManager->GetShader("Reflection");
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = desc.viewId;
@@ -165,14 +166,13 @@ void Renderer::DrawTemplePool(const DrawSceneDesc& desc) const
 		const auto& mesh = *meshes.Handle(pool);
 		for (uint8_t subMesh = 0; subMesh < mesh.GetNumSubMeshes(); ++subMesh)
 		{
-			reflection->SetTextureSampler("s_reflection", 4,
-			                              Locator::oceanSystem::value().GetReflectionFramebuffer().GetColorAttachment());
+			reflection->SetTextureSampler("s_reflection", 4, desc.frame->sea.reflection->GetColorAttachment());
 			DrawMesh(mesh, submitDesc, subMesh);
 		}
 	}
 	for (const auto& layer : layers)
 	{
-		const auto model = glm::translate(glm::mat4(1.0f), temple.GetPosition() + layer.position) *
+		const auto model = glm::translate(glm::mat4(1.0f), temple.position + layer.position) *
 		                   glm::rotate(glm::mat4(1.0f), layer.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = desc.viewId;
@@ -196,18 +196,18 @@ void Renderer::DrawTempleMapPass() const
 {
 	// The view keeps its clear from one frame to the next, so it is only touched to draw the land afresh
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::TempleMap);
-	if (!Locator::temple::has_value() || !Locator::temple::value().Active() || !Locator::terrainSystem::has_value())
+	if (!DrawsTemple() || _drawnFrame == nullptr || _drawnFrame->land.island == nullptr)
 	{
 		return;
 	}
-	const auto visit = Locator::temple::value().GetVisits();
+	const auto visit = _drawnFrame->temple.visits;
 	if (_templeMapVisit == visit)
 	{
 		// The map shows the land of this visit already. The warm-up of a new load makes the triangles of the land's
 		// blocks for the next visit.
 		if (_warmingUp)
 		{
-			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+			for (const auto& block : _drawnFrame->land.island->GetBlocks())
 			{
 				[[maybe_unused]] const auto triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
 			}
@@ -240,7 +240,7 @@ void Renderer::DrawTempleMapPass() const
 	bgfx::setViewTransform(viewId, glm::value_ptr(view), glm::value_ptr(projection));
 	bgfx::touch(viewId);
 
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *_drawnFrame->land.island;
 	const auto* terrainShader = _shaderManager->GetShader("Terrain");
 	const auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
 	auto smallBump = Locator::resources::value().GetTextures().Handle(LandIslandInterface::k_SmallBumpTextureId);
@@ -381,8 +381,7 @@ void Renderer::DrawTempleUnderside(const DrawSceneDesc& desc) const
 	// this shows black instead. The creature's room goes deepest, to 70.5 below the temple.
 	constexpr float k_Depth = -75.0f;
 	constexpr float k_Extent = 10000.0f;
-	if (desc.viewId != RenderPass::Main || !_whiteTexture || !Locator::temple::has_value() ||
-	    !Locator::temple::value().Active())
+	if (desc.viewId != RenderPass::Main || !_whiteTexture || !desc.frame->templeActive)
 	{
 		return;
 	}
@@ -411,7 +410,7 @@ void Renderer::DrawTempleUnderside(const DrawSceneDesc& desc) const
 	std::memcpy(buffer.data, vertices.data(), count * sizeof(OrientedTextVertex));
 
 	const auto* shader = _shaderManager->GetShader("Text3D");
-	const auto model = glm::translate(glm::mat4(1.0f), Locator::temple::value().GetPosition());
+	const auto model = glm::translate(glm::mat4(1.0f), desc.frame->temple.position);
 	bgfx::setTransform(glm::value_ptr(model));
 	bgfx::setVertexBuffer(0, &buffer);
 	shader->SetTextureSampler("s_texture", 0, *_whiteTexture);
@@ -424,15 +423,14 @@ void Renderer::DrawTempleUnderside(const DrawSceneDesc& desc) const
 
 void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !_templeMapFrameBuffer || !Locator::temple::has_value() ||
-	    !Locator::temple::value().Active())
+	if (desc.viewId != RenderPass::Main || !_templeMapFrameBuffer || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& temple = Locator::temple::value();
+	const auto& temple = desc.frame->temple;
 	// A visit frames the map. A warm-up draws a triangle of no size in its place.
-	const auto vertices = _warmingUp && temple.GetMap().empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
-	                                                            : std::span<const OrientedTextVertex>(temple.GetMap());
+	const auto vertices = _warmingUp && temple.map.empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
+	                                                       : std::span<const OrientedTextVertex>(temple.map);
 	if (vertices.empty())
 	{
 		return;
@@ -454,7 +452,7 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 
 	// The land's texture by the vertices' colours, blended by their alpha
 	const auto* shader = _shaderManager->GetShader("Text3D");
-	const auto model = glm::translate(glm::mat4(1.0f), temple.GetPosition());
+	const auto model = glm::translate(glm::mat4(1.0f), temple.position);
 	bgfx::setTransform(glm::value_ptr(model));
 	bgfx::setVertexBuffer(0, &buffer);
 	// At the low detail levels the room shows the map at half size
@@ -469,24 +467,24 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 
 void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (desc.viewId != RenderPass::Main || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& temple = Locator::temple::value();
+	const auto& temple = desc.frame->temple;
 	// A visit puts the markers on the map. A warm-up draws one of each kind at no size in their place.
-	const bool warmUp = _warmingUp && temple.GetMapMarkers().empty();
+	const bool warmUp = _warmingUp && temple.mapMarkers.empty();
 	const std::vector<TempleMapMarker> warmUpMarkers =
 	    warmUp ? std::vector<TempleMapMarker> {{.kind = TempleMapMarkerKind::Temple},
 	                                           {.kind = TempleMapMarkerKind::Creature},
 	                                           {.kind = TempleMapMarkerKind::Challenge}}
 	           : std::vector<TempleMapMarker> {};
-	const auto& markers = warmUp ? warmUpMarkers : temple.GetMapMarkers();
+	const auto& markers = warmUp ? warmUpMarkers : temple.mapMarkers;
 	if (markers.empty())
 	{
 		return;
 	}
-	const auto origin = temple.GetPosition();
+	const auto origin = temple.position;
 	const float size = warmUp ? 0.0f : 1.0f;
 
 	// First a glow under each marker, the room's light glow drawn over everything: 1.3 across, a tenth above the marker
@@ -526,7 +524,7 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 	};
 	constexpr float k_MarkerScale = 0.05f;
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	const auto turn = glm::rotate(glm::mat4(1.0f), temple.GetMapMarkerTurn(), glm::vec3(0.0f, 1.0f, 0.0f));
+	const auto turn = glm::rotate(glm::mat4(1.0f), temple.mapMarkerTurn, glm::vec3(0.0f, 1.0f, 0.0f));
 	for (const auto& marker : markers)
 	{
 		const auto icon = k_Icons.at(static_cast<size_t>(marker.kind));
@@ -543,19 +541,19 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		submitDesc.state = k_BgfxDefaultStateInvertedZ;
 		submitDesc.modelMatrices = &model;
 		submitDesc.matrixCount = 1;
-		submitDesc.tint = glm::vec4(temple.GetLight().Colour(glm::vec3(marker.colour) / 255.0f), 1.0f);
-		submitDesc.lightAdd = temple.GetLight().add;
+		submitDesc.tint = glm::vec4(temple.light.Colour(glm::vec3(marker.colour) / 255.0f), 1.0f);
+		submitDesc.lightAdd = temple.light.add;
 		DrawMesh(*meshes.Handle(icon), submitDesc, std::numeric_limits<uint8_t>::max());
 	}
 }
 
 void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (desc.viewId != RenderPass::Main || !desc.frame->templeActive)
 	{
 		return;
 	}
-	const auto& trophies = Locator::temple::value().GetCaveTrophies();
+	const auto& trophies = desc.frame->temple.caveTrophies;
 	if (trophies.empty())
 	{
 		return;
@@ -620,7 +618,7 @@ void Renderer::DrawCaveTrophies(const DrawSceneDesc& desc) const
 		submitDesc.useMaterialBlending = true;
 		// The colour multiplies what lights them: the medals come out the mid grey of the game's at 0x80. The game
 		// puts it in the temple's light.
-		const auto& light = Locator::temple::value().GetLight();
+		const auto& light = desc.frame->temple.light;
 		// Each is fogged where it stands, its colour in the temple's light scaled in whole bytes before the light
 		// shades it, and the fog's colour added takes the place of the light's
 		submitDesc.objectLook =

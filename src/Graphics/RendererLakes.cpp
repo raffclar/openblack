@@ -31,6 +31,7 @@
 #include "3D/OceanInterface.h"
 #include "Camera/Camera.h"
 #include "EngineConfig.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
@@ -120,11 +121,11 @@ std::pair<std::unique_ptr<Mesh>, std::vector<lake_mirrors::Level>> MakeLakeMesh(
 
 bool Renderer::PrepareLakeMesh() const
 {
-	if (!Locator::terrainSystem::has_value())
+	if (_drawnFrame == nullptr || _drawnFrame->land.island == nullptr)
 	{
 		return false;
 	}
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *_drawnFrame->land.island;
 	const auto* lakes = island.GetLakeMap();
 	if (lakes == nullptr)
 	{
@@ -152,7 +153,8 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 {
 	const auto before = std::exchange(_lakePasses, {});
 	_lakeSlotOfLevel.clear();
-	if (!drawDesc.drawWater || !drawDesc.drawIsland || _warmingUp || !Locator::oceanSystem::has_value() || !PrepareLakeMesh())
+	if (!drawDesc.drawWater || !drawDesc.drawIsland || _warmingUp || drawDesc.frame->sea.reflection == nullptr ||
+	    !PrepareLakeMesh())
 	{
 		return;
 	}
@@ -164,7 +166,7 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 	}
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::LakeMirrorPass);
 	glm::u16vec2 size {0};
-	Locator::oceanSystem::value().GetReflectionFramebuffer().GetSize(size.x, size.y);
+	drawDesc.frame->sea.reflection->GetSize(size.x, size.y);
 
 	// The answers of the drawing of the last frames: a level whose water did not show gets no mirror
 	for (size_t i = 0; i < _lakeQueries.size(); ++i)
@@ -230,7 +232,7 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 		                                                    TextureFormat::RGBA8, TextureFormat::Depth24Stencil8));
 	}
 
-	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+	const auto& blocks = drawDesc.frame->land.island->GetBlocks();
 	for (size_t index = 0; index < _lakePasses.size(); ++index)
 	{
 		const auto slot = static_cast<uint8_t>(index);
@@ -344,17 +346,18 @@ void Renderer::SetLakeUniforms(const ShaderProgram& lakeShader) const
 void Renderer::DrawPassLakes(const DrawSceneDesc& desc) const
 {
 	// Only the view itself has the lakes' water
-	if (desc.viewId != RenderPass::Main || !desc.drawWater || !desc.drawIsland || _warmingUp || !PrepareLakeMesh())
+	if (desc.viewId != RenderPass::Main || !desc.drawWater || !desc.drawIsland || _warmingUp ||
+	    desc.frame->sea.reflection == nullptr || !PrepareLakeMesh())
 	{
 		return;
 	}
 	const auto* lakeShader = _shaderManager->GetShader("Lake");
-	const auto& ocean = Locator::oceanSystem::value();
-	const auto& seaMirror = ocean.GetReflectionFramebuffer();
+	const auto& sea = desc.frame->sea;
+	const auto& seaMirror = *sea.reflection;
 	glm::u16vec2 size {0};
 	seaMirror.GetSize(size.x, size.y);
 	const bool asks = Locator::config::value().lakeMirrors.occlusion;
-	auto texture = Locator::resources::value().GetTextures().Handle(ocean.GetTexture());
+	auto texture = Locator::resources::value().GetTextures().Handle(sea.texture);
 	// The water is tested against the depth of the land and writes no depth, as the sea. It is blended over the land by
 	// the land's coast alpha under it, so the land in front of a lake hides it.
 	constexpr auto k_LakeState = (k_BgfxDefaultStateInvertedZ & ~(BGFX_STATE_WRITE_Z | BGFX_STATE_CULL_MASK)) |

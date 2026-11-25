@@ -9,10 +9,12 @@
 
 #define LOCATOR_IMPLEMENTATIONS 1
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -59,8 +61,12 @@ void Renderer::ShowInterfaceCreatures(interface_creatures::Request request) noex
 	_interfaceCreatures = std::move(request);
 }
 
-void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const
+void Renderer::CollectInterfaceCreatures(DrawnCreatures& creatures, const DrawSceneDesc& desc) const
 {
+	if (!_interfaceCreatures.has_value())
+	{
+		return;
+	}
 	// Each request shows for one frame of the scene only
 	const auto request = std::move(*_interfaceCreatures);
 	_interfaceCreatures.reset();
@@ -68,6 +74,93 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 	{
 		return;
 	}
+
+	// One camera goes round all the creatures, over the interface's space, with the depth cleared before them
+	const auto view = interface_creatures::View(request.turn);
+	const auto projection = interface_creatures::SpaceProjection(desc.camera->GetProjectionMatrix());
+	DrawnCreatures::Interface shown {
+	    .view = view,
+	    .onTarget = pixel_centres::OnTarget(projection, request.viewSize),
+	    .viewOrigin = request.viewOrigin,
+	    .viewSize = request.viewSize,
+	    .models = {},
+	    .bodies = {},
+	};
+
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	for (const auto& wanted : request.creatures)
+	{
+		if (shown.models.size() == k_MostShown || !desc.entities.Valid(wanted.creature))
+		{
+			continue;
+		}
+		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(wanted.creature);
+		const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(wanted.creature);
+		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(wanted.creature);
+		if (mesh == nullptr || creature == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
+		{
+			continue;
+		}
+		const auto body = meshes.Handle(mesh->id);
+		const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(wanted.creature);
+		const bool posed = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size();
+		const auto bones =
+		    posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(body->GetBoneMatrices());
+		if (bones.empty())
+		{
+			continue;
+		}
+		// The creature goes to the point under its place on the screen, at its depth, its bones' middle and its feet there
+		// The interface's space is the game's default screen, which the whole interface takes
+		const auto depth = interface_creatures::Depth(ecs::components::ShownSize(*creature), wanted.size, 1.0f);
+		const auto point =
+		    interface_creatures::PointFromScreen(view, projection, interface_creatures::k_Space, wanted.anchor, depth);
+		// The drawn bones go with the place where the frame draws the body
+		const auto drawnPlace = ecs::components::DrawnTransform(*transform, animation);
+		const auto model = creature::PlacementMatrix(drawnPlace.position, drawnPlace.rotation, drawnPlace.scale);
+		const auto move =
+		    glm::translate(glm::mat4(1.0f), interface_creatures::MoveToPoint(point, model, bones, drawnPlace.position.y));
+		shown.models.push_back(move * model);
+
+		// The body finds its bones in the texture of the posed bones when the world draws the same bones
+		DrawnCreatures::InterfaceBody drawn {
+		    .mesh = mesh->id,
+		    .bones = std::vector<glm::mat4>(bones.begin(), bones.end()),
+		    .firstBone = FirstBoneOf(bones),
+		    .shape = std::nullopt,
+		    .eyes = std::nullopt,
+		};
+		if (const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(wanted.creature); morph != nullptr)
+		{
+			drawn.shape = ShapeOf(creature->species, morph->drawn);
+			if (const auto skins = _creatureSkins.find(wanted.creature); skins != _creatureSkins.end())
+			{
+				drawn.shape->skins = skins->second.drawn;
+			}
+		}
+		// Its eyes move with it
+		if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(wanted.creature); eyes != nullptr)
+		{
+			drawn.eyes = *eyes;
+			for (auto& eye : drawn.eyes->drawn)
+			{
+				if (eye.eyeball.has_value())
+				{
+					eye.eyeball = move * *eye.eyeball;
+				}
+				if (eye.eyelid.has_value())
+				{
+					eye.eyelid = move * *eye.eyelid;
+				}
+			}
+		}
+		shown.bodies.push_back(std::move(drawn));
+	}
+	creatures.interfaceCreatures = std::move(shown);
+}
+
+void Renderer::DrawInterfaceCreatures(const DrawnCreatures::Interface& shown, const InterfaceCreatureBody& drawBody) const
+{
 	if (!_interfaceCreatureInstances.has_value())
 	{
 		bgfx::VertexLayout layout;
@@ -84,106 +177,41 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 	}
 
 	// One camera goes round all the creatures, over the interface's space, with the depth cleared before them
-	const auto view = interface_creatures::View(request.turn);
-	const auto projection = interface_creatures::SpaceProjection(desc.camera->GetProjectionMatrix());
-	const auto onTarget = pixel_centres::OnTarget(projection, request.viewSize);
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::InterfaceCreatures);
 	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
-	bgfx::setViewRect(viewId, static_cast<uint16_t>(request.viewOrigin.x), static_cast<uint16_t>(request.viewOrigin.y),
-	                  static_cast<uint16_t>(request.viewSize.x), static_cast<uint16_t>(request.viewSize.y));
-	bgfx::setViewTransform(viewId, &view, &onTarget);
+	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
+	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
+	bgfx::setViewTransform(viewId, &shown.view, &shown.onTarget);
 	bgfx::touch(viewId);
-
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	std::vector<ecs::systems::RenderContext::ObjectInstance> instances;
-	struct Body
-	{
-		entt::id_type mesh;
-		std::span<const glm::mat4> bones;
-		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
-		std::optional<ecs::components::CreatureEyes> eyes;
-	};
-	std::vector<Body> bodies;
-	for (const auto& shown : request.creatures)
-	{
-		if (instances.size() == k_MostShown || !desc.entities.Valid(shown.creature))
-		{
-			continue;
-		}
-		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(shown.creature);
-		const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(shown.creature);
-		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(shown.creature);
-		if (mesh == nullptr || creature == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
-		{
-			continue;
-		}
-		const auto body = meshes.Handle(mesh->id);
-		const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(shown.creature);
-		const bool posed = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size();
-		const auto bones =
-		    posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(body->GetBoneMatrices());
-		if (bones.empty())
-		{
-			continue;
-		}
-		// The creature goes to the point under its place on the screen, at its depth, its bones' middle and its feet there
-		// The interface's space is the game's default screen, which the whole interface takes
-		const auto depth = interface_creatures::Depth(ecs::components::ShownSize(*creature), shown.size, 1.0f);
-		const auto point =
-		    interface_creatures::PointFromScreen(view, projection, interface_creatures::k_Space, shown.anchor, depth);
-		// The drawn bones go with the place where the frame draws the body
-		const auto drawnPlace = ecs::components::DrawnTransform(*transform, animation);
-		const auto model = creature::PlacementMatrix(drawnPlace.position, drawnPlace.rotation, drawnPlace.scale);
-		const auto move =
-		    glm::translate(glm::mat4(1.0f), interface_creatures::MoveToPoint(point, model, bones, drawnPlace.position.y));
-		instances.push_back({.model = move * model});
-
-		Body drawn {.mesh = mesh->id, .bones = bones, .targets = std::nullopt, .eyes = std::nullopt};
-		if (const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(shown.creature); morph != nullptr)
-		{
-			const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
-			                                          [&meshes](entt::id_type id) { return meshes.Contains(id); });
-			drawn.targets = L3DMeshSubmitDesc::MorphTargets {
-			    .meshes = {&*meshes.Handle(ids.evilGood), &*meshes.Handle(ids.thinFat), &*meshes.Handle(ids.weakStrong)},
-			    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
-			    .skins = {},
-			    .blendSeams = Locator::config::value().blendCreatureSeams,
-			};
-			if (const auto skins = _creatureSkins.find(shown.creature); skins != _creatureSkins.end())
-			{
-				drawn.targets->skins = skins->second.drawn;
-			}
-		}
-		// Its eyes move with it
-		if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.creature); eyes != nullptr)
-		{
-			drawn.eyes = *eyes;
-			for (auto& eye : drawn.eyes->drawn)
-			{
-				if (eye.eyeball.has_value())
-				{
-					eye.eyeball = move * *eye.eyeball;
-				}
-				if (eye.eyelid.has_value())
-				{
-					eye.eyelid = move * *eye.eyelid;
-				}
-			}
-		}
-		bodies.push_back(drawn);
-	}
-	if (instances.empty())
+	if (shown.models.empty())
 	{
 		return;
+	}
+
+	std::vector<ecs::systems::RenderContext::ObjectInstance> instances;
+	instances.reserve(shown.models.size());
+	for (const auto& model : shown.models)
+	{
+		instances.push_back({.model = model});
 	}
 	bgfx::update(toBgfx(*_interfaceCreatureInstances), 0,
 	             bgfx::copy(instances.data(), static_cast<uint32_t>(instances.size() * sizeof(instances.front()))));
 	// Each body with its eyes and with no hair. The hair stays where the creature is in the world, so it is not on the
 	// body in the box.
-	for (size_t i = 0; i < bodies.size(); ++i)
+	for (size_t i = 0; i < shown.bodies.size(); ++i)
 	{
-		const auto& body = bodies.at(i);
-		drawBody(body.mesh, static_cast<uint32_t>(i), body.bones, body.targets.has_value() ? &*body.targets : nullptr,
+		const auto& body = shown.bodies.at(i);
+		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
+		if (body.shape.has_value())
+		{
+			targets = L3DMeshSubmitDesc::MorphTargets {
+			    .meshes = body.shape->meshes,
+			    .weights = body.shape->weights,
+			    .skins = body.shape->skins,
+			    .blendSeams = body.shape->blendSeams,
+			};
+		}
+		drawBody(body.mesh, static_cast<uint32_t>(i), body.bones, body.firstBone, targets.has_value() ? &*targets : nullptr,
 		         body.eyes.has_value() ? &*body.eyes : nullptr);
 	}
 }
@@ -198,8 +226,12 @@ void Renderer::ShowMenuCreature(interface_creatures::MenuCreature creature) noex
 	_menuCreature = creature;
 }
 
-void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const
+void Renderer::CollectMenuCreature(DrawnCreatures& creatures) const
 {
+	if (!_menuCreature.has_value())
+	{
+		return;
+	}
 	// Each request shows for one frame of the scene only
 	const auto shown = *_menuCreature;
 	_menuCreature.reset();
@@ -234,14 +266,51 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 		return;
 	}
 
+	DrawnCreatures::Menu kept {
+	    .view = shown.view,
+	    .onTarget = pixel_centres::OnTarget(shown.projection, shown.viewSize),
+	    .viewOrigin = shown.viewOrigin,
+	    .viewSize = shown.viewSize,
+	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
+	    .mesh = mesh->id,
+	    .bones = std::vector<glm::mat4>(bones.begin(), bones.end()),
+	    .shape = std::nullopt,
+	    .eyes = std::nullopt,
+	    .hair = std::nullopt,
+	    .position = transform->position,
+	    .layers = {},
+	};
+	if (morph != nullptr)
+	{
+		kept.shape = ShapeOf(creature->species, morph->drawn);
+		if (const auto skins = _drawnCreatureSkins.find(copy->creature); skins != _drawnCreatureSkins.end())
+		{
+			kept.shape->skins = skins->second.drawn;
+		}
+	}
+	if (const auto* eyes = drawn.TryGet<const ecs::components::CreatureEyes>(shown.copy); eyes != nullptr)
+	{
+		kept.eyes = *eyes;
+	}
+	const auto* hair = drawn.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	kept.layers = tattoo_menu::DrawOrder(hair != nullptr, creatures.hairShown);
+	if (hair != nullptr && std::ranges::find(kept.layers, tattoo_menu::Layer::Hair) != kept.layers.end())
+	{
+		kept.hair = *hair;
+	}
+	creatures.menuCreature = std::move(kept);
+}
+
+void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const DrawnCreatures::Menu& shown,
+                                const InterfaceCreatureBody& drawBody) const
+{
 	// The editor's camera over the dialogs' space, with the depth cleared: the creature is drawn over the dialog and
 	// in front of nothing else
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::MenuCreature);
 	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
 	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
-	const auto onTarget = pixel_centres::OnTarget(shown.projection, shown.viewSize);
-	bgfx::setViewTransform(viewId, &shown.view, &onTarget);
+	bgfx::setViewTransform(viewId, &shown.view, &shown.onTarget);
 	// The body, its eyes and then its hair, in the order they are given, so the hair blends over the body
 	_shaderManager->SetViewOrder(RenderPass::MenuCreature, ViewOrder::Sequential);
 	bgfx::touch(viewId);
@@ -260,40 +329,34 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 		// Each draw gives the instances first, thus the device keeps no copy after a restore
 		bgfx::setDeviceRestoreByApplication(toBgfx(*_menuCreatureInstance));
 	}
-	const ecs::systems::RenderContext::ObjectInstance instance {
-	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};
+	const ecs::systems::RenderContext::ObjectInstance instance {.model = shown.model};
 	bgfx::update(toBgfx(*_menuCreatureInstance), 0, bgfx::copy(&instance, sizeof(instance)));
 
 	std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
-	if (morph != nullptr)
+	if (shown.shape.has_value())
 	{
-		const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
-		                                          [&meshes](entt::id_type id) { return meshes.Contains(id); });
 		targets = L3DMeshSubmitDesc::MorphTargets {
-		    .meshes = {&*meshes.Handle(ids.evilGood), &*meshes.Handle(ids.thinFat), &*meshes.Handle(ids.weakStrong)},
-		    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
-		    .skins = {},
-		    .blendSeams = Locator::config::value().blendCreatureSeams,
+		    .meshes = shown.shape->meshes,
+		    .weights = shown.shape->weights,
+		    .skins = shown.shape->skins,
+		    .blendSeams = shown.shape->blendSeams,
 		};
-		if (const auto skins = _drawnCreatureSkins.find(copy->creature); skins != _drawnCreatureSkins.end())
-		{
-			targets->skins = skins->second.drawn;
-		}
 	}
-	const auto* eyes = drawn.TryGet<const ecs::components::CreatureEyes>(shown.copy);
-	const auto* hair = drawn.TryGet<const ecs::components::CreatureHair>(shown.copy);
-	for (const auto layer : tattoo_menu::DrawOrder(hair != nullptr, Locator::creatureHairSystem::has_value() &&
-	                                                                    Locator::creatureHairSystem::value().IsShown()))
+	for (const auto layer : shown.layers)
 	{
 		switch (layer)
 		{
 		case tattoo_menu::Layer::Body:
-			drawBody(mesh->id, 0, bones, targets.has_value() ? &*targets : nullptr, eyes);
+			drawBody(shown.mesh, 0, shown.bones, std::nullopt, targets.has_value() ? &*targets : nullptr,
+			         shown.eyes.has_value() ? &*shown.eyes : nullptr);
 			break;
 		case tattoo_menu::Layer::Hair:
 			// Its own hair, which hangs from its own pose, faces the editor's eye
-			DrawCreatureHair(desc, *hair, transform->position, RenderPass::MenuCreature,
-			                 glm::vec3(glm::inverse(shown.view)[3]));
+			if (shown.hair.has_value())
+			{
+				DrawCreatureHair(desc, *shown.hair, shown.position, RenderPass::MenuCreature,
+				                 glm::vec3(glm::inverse(shown.view)[3]));
+			}
 			break;
 		}
 	}
@@ -305,6 +368,8 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	{
 		return;
 	}
+	// The film hides the world, thus the frame has no fill of its effects. The film's draws read the rest of the copy.
+	_drawnFrame = desc.frame;
 	// The film's camera over the film's picture, with the depth cleared: the renderer draws the creature over the
 	// picture and in front of nothing else
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);

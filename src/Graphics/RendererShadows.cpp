@@ -67,6 +67,7 @@
 #include "EngineConfig.h"
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/HandLight.h"
 #include "Graphics/LandFootprints.h"
@@ -105,7 +106,7 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	}
 
 	// A texel for each texel of the blocks' textures, over the whole island
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *drawDesc.frame->land.island;
 	const auto indexExtent = island.GetIndexExtent();
 	const auto blocks = indexExtent.maximum - indexExtent.minimum + glm::u16vec2(1, 1);
 	const auto width = static_cast<uint16_t>(blocks.x * lnd::LNDMaterial::k_Width);
@@ -184,7 +185,7 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 
 void Renderer::SetObjectShadowUniforms(const ShaderProgram& program) const
 {
-	const auto& island = Locator::terrainSystem::value();
+	const auto& island = *_drawnFrame->land.island;
 	auto u_objectShadows = glm::vec4(0.0f);
 	if (_objectShadowFrameBuffer)
 	{
@@ -941,9 +942,9 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	_keptGroundShadows = std::move(kept);
 
 	// Each land block's list of the shadows reaching it, after the shadows themselves
-	if (Locator::terrainSystem::has_value())
+	if (drawDesc.frame->land.island != nullptr)
 	{
-		const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+		const auto& blocks = drawDesc.frame->land.island->GetBlocks();
 		_groundShadowBlocks.assign(blocks.size(), glm::vec2(0.0f));
 		if (_groundShadowCount > 0)
 		{

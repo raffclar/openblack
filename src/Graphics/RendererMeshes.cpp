@@ -380,7 +380,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		return;
 	}
 
-	const auto& island = Locator::terrainSystem::value();
+	// The draws of the scene read the land of the drawn copy. A draw before the fill of the frame reads the land itself.
+	const auto& island = _drawnFrame != nullptr && _drawnFrame->land.island != nullptr ? *_drawnFrame->land.island
+	                                                                                   : Locator::terrainSystem::value();
 
 	auto extent = island.GetExtent();
 	auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
@@ -670,8 +672,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// Window submeshes are lit by their houses at night
 				glm::vec4 u_window {subMesh.GetFlags().isWindow ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-				if (Locator::skyClockSystem::has_value())
+				if (_drawnFrame != nullptr && _drawnFrame->sky.windowTime.has_value())
 				{
+					u_window.y = *_drawnFrame->sky.windowTime;
+					u_window.z = _drawnFrame->sky.windowNight ? 1.0f : 0.0f;
+				}
+				else if (_drawnFrame == nullptr && Locator::skyClockSystem::has_value())
+				{
+					// A draw before the fill of the frame reads the clock itself
 					const auto& clock = Locator::skyClockSystem::value().GetClock();
 					u_window.y = clock.GetVisualTime();
 					u_window.z = clock.IsVisualNight() ? 1.0f : 0.0f;
@@ -747,7 +755,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// Objects in the world take the colour of the land's light where they stand; the sky and the temple's
 				// insides have lights of their own
-				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+				const bool inTemple = DrawsTemple();
 				const bool landLit =
 				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
 				// Below Medium detail the sun lights only the creatures and the hand
@@ -775,11 +783,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::Haze))
 			{
 				// The distance haze is the world's, not the sky's or the temple's. The temple has a depth fog of its own.
-				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+				const bool inTemple = DrawsTemple();
 				const bool hazed = desc.landLightAndHaze && desc.hazed && !desc.isSky && !desc.drawAll && !inTemple;
 				if (inTemple && desc.templeFog)
 				{
-					const auto& fog = Locator::temple::value().GetFog();
+					const auto& fog = _drawnFrame != nullptr ? _drawnFrame->temple.fog : Locator::temple::value().GetFog();
 					const auto u_haze = fog.Uniform();
 					const glm::vec4 u_hazeColour {fog.colour, 0.0f};
 					setUniform(MeshUniform::Haze, &u_haze);
@@ -826,7 +834,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// The creatures' and the hand's shadows fall on what stands on the land, not on the creatures, nor in
 				// the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
-				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+				const bool inTemple = DrawsTemple();
 				SetObjectGroundShadowUniforms(to, *program,
 				                              desc.groundShadows && Locator::config::value().detail.objectShadows && mainView &&
 				                                  !inTemple && !desc.isSky && !desc.drawAll && desc.morphTargets == nullptr);
@@ -861,8 +869,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				glm::vec4 u_shine {0.0f};
 				if (shining)
 				{
-					const auto realTime =
-					    Locator::time::has_value() ? Locator::time::value().GetElapsedTime() : std::chrono::milliseconds(0);
+					const auto realTime = _drawnFrame != nullptr       ? _drawnFrame->clock.elapsed
+					                      : Locator::time::has_value() ? Locator::time::value().GetElapsedTime()
+					                                                   : std::chrono::milliseconds(0);
 					const auto turn = light_shine::TextureTurn(realTime);
 					u_shine = glm::vec4(1.0f, static_cast<float>(prim.secondGroupBone), static_cast<float>(std::cos(turn)),
 					                    static_cast<float>(std::sin(turn)));
@@ -896,7 +905,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				                          ? std::optional(static_cast<float>(*desc.alphaTestRef) / 255.0f)
 				                          : std::nullopt;
 				const glm::vec4 u_skyAlphaThreshold = {
-				    Locator::skyClockSystem::value().GetCurrentSkyType(),
+				    _drawnFrame != nullptr ? _drawnFrame->sky.skyType : Locator::skyClockSystem::value().GetCurrentSkyType(),
 				    desc.alphaThreshold.value_or(givenRef.value_or(ownThreshold)),
 				    seeThroughTest,
 				    seeThroughRef,
@@ -1321,21 +1330,20 @@ void Renderer::UploadPosedBones(const DrawSceneDesc& drawDesc) const
 namespace
 {
 /// The hand the player moves, which the others follow in how they look
-const ecs::components::HandMorph* PlayerHandMorph()
+const ecs::components::HandMorph* PlayerHandMorph(const DrawnFrame* frame)
 {
-	if (!Locator::handSystem::has_value())
+	if (frame == nullptr)
 	{
 		return nullptr;
 	}
-	const auto hand =
-	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto hand = frame->hands.Drawn();
 	return Locator::entitiesRegistry::value().TryGet<const ecs::components::HandMorph>(hand);
 }
 } // namespace
 
 void Renderer::UploadHandSkins() const
 {
-	const auto* morph = PlayerHandMorph();
+	const auto* morph = PlayerHandMorph(_drawnFrame);
 	if (morph == nullptr || morph->skins.empty())
 	{
 		_handSkins.clear();
@@ -1370,7 +1378,7 @@ void Renderer::UploadHandSkins() const
 
 std::optional<RendererInterface::L3DMeshSubmitDesc::MorphTargets> Renderer::HandMorphTargets() const
 {
-	const auto* morph = PlayerHandMorph();
+	const auto* morph = PlayerHandMorph(_drawnFrame);
 	if (morph == nullptr || morph->state.drawn == 0.0f)
 	{
 		return std::nullopt;

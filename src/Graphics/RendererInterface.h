@@ -54,6 +54,7 @@ class Registry;
 
 namespace openblack::graphics
 {
+struct DrawnEffects;
 struct DrawnFrame;
 class L3DMesh;
 class Texture2D;
@@ -346,6 +347,10 @@ public:
 
 	virtual void ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept = 0;
 	virtual void Reset(glm::u16vec2 resolution) const noexcept = 0;
+	/// Fills the effects of the drawn copy for the next DrawScene, on the game's thread. It runs the steps that read the
+	/// world before the land's colour: the skins, the bones, the land's light, the particles' walks, and the corners and
+	/// the values that the effects draw. Call it once before each DrawScene, with the same description.
+	virtual void FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const noexcept = 0;
 	virtual void DrawScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
 	/// Bakes the shadows of the things on the land into the land, as the next scene draw does. Call it behind the
 	/// loading screen, so that the first frame of a land does not do the bake of the whole island.
@@ -357,7 +362,8 @@ public:
 	/// frame shows none of it, and nothing that later frames draw changes. Call it behind the loading screen, before
 	/// the draws of the loading frame, so that the first frames of the game do not make them. Some renderers divide the
 	/// draws between some frames: call it with part 0, then with the next part in each frame while it gives true.
-	[[nodiscard]] virtual bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept = 0;
+	/// The warm-up fills the effects of `frame`, which `drawDesc` draws.
+	[[nodiscard]] virtual bool WarmUpScene(DrawnFrame& frame, const DrawSceneDesc& drawDesc, uint32_t part) const noexcept = 0;
 	/// Starts or stops a pipeline prefetch. During a prefetch, the frames start each new pipeline of their draws in the
 	/// background, where the renderer makes many pipelines at the same time. The frames do not draw the draws whose
 	/// pipeline is not ready. Then a warm-up after it gets the ready pipelines without a wait. Gives false when the

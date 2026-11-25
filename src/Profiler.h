@@ -76,6 +76,7 @@ public:
 		EditorUpdate,
 		GameLogic,
 		DrawnFrameFill,
+		DrawnEffectsFill,
 		SceneDraw,
 		CreatureSkinUpload,
 		FootprintPass,
@@ -152,6 +153,7 @@ public:
 	    "Editor",               //
 	    "Game Logic",           //
 	    "Drawn Frame Fill",     //
+	    "Drawn Effects Fill",   //
 	    "Encode Draw Scene",    //
 	    "Creature Skin Upload", //
 	    "Footprint Pass",       //
