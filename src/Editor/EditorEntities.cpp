@@ -69,6 +69,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WorldObjects.h"
 #include "EditorMath.h"
@@ -758,6 +759,8 @@ entt::entity Make(const Recipe& recipe)
 	if (entity != entt::null)
 	{
 		SetPose(entity, pose);
+		// A building of a town that comes back where it went takes the place of the plan that its town made then
+		ecs::town_planning::TakeBackPlan(entity);
 	}
 	return entity;
 }

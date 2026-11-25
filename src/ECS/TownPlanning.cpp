@@ -41,6 +41,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
@@ -417,6 +418,43 @@ entt::entity Start(entt::entity town, entt::entity plan, float siteDesire)
 	return building;
 }
 
+/// The unfinished building that a town started from the plan of a building that went goes, when the building comes
+/// back to its place. Its town does not plan it again.
+void RemoveStartedPlan(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto gone = building_replan::Of(registry, building);
+	if (!gone.has_value())
+	{
+		return;
+	}
+	const auto town = registry.Context().towns.at(gone->townId);
+	for (const auto site : construction::SitesOfTown(town))
+	{
+		if (site == building || !registry.AllOf<BuildProgress>(site))
+		{
+			continue;
+		}
+		const auto started = building_replan::Of(registry, site);
+		if (!started.has_value() || !building_replan::TakesPlaceOf(*gone, started->townId, started->info, started->position))
+		{
+			continue;
+		}
+		if (auto* abode = registry.TryGet<Abode>(site))
+		{
+			abode->notPlannedAgain = true;
+		}
+		else
+		{
+			registry.Get<SpellDispenser>(site).notPlannedAgain = true;
+		}
+		// The footpaths that the plan gave to the unfinished building go back to the building that came back
+		villager_footpath::HandOverFootpaths(site, building);
+		world_objects::Remove(site);
+		return;
+	}
+}
+
 /// The reach across the ground of a plan's model: its larger half width, scaled
 float PlanReach(entt::entity plan)
 {
@@ -594,6 +632,21 @@ void town_planning::PlanAgain(entt::entity building)
 	registry.Get<PlannedAbode>(plan).wasBuilt = replan->wasBuilt;
 	// The plan keeps the footpaths of the building, and gives them to the building that goes up in its place
 	villager_footpath::HandOverFootpaths(building, plan);
+}
+
+void town_planning::TakeBackPlan(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto plan = building_replan::PlanLeftAt(registry, building);
+	if (plan == entt::null)
+	{
+		RemoveStartedPlan(building);
+		return;
+	}
+	const auto townId = registry.Get<const PlannedAbode>(plan).townId;
+	std::erase(registry.Get<Town>(registry.Context().towns.at(townId)).planned, plan);
+	villager_footpath::HandOverFootpaths(plan, building);
+	registry.Destroy(plan);
 }
 
 std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::entity town, Tribe tribe, uint32_t value,

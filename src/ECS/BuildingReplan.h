@@ -48,6 +48,14 @@ struct Replan
 /// building of a valid town, for a building with no row, and for a building that its town must not plan again.
 [[nodiscard]] std::optional<Replan> Of(const Registry& registry, entt::entity building);
 
+/// Whether a plan or a building of a town takes the place of a building that went: it is of the same town and row, and it
+/// stands at the same place across the ground
+[[nodiscard]] bool TakesPlaceOf(const Replan& gone, uint32_t townId, AbodeInfo info, glm::vec3 position);
+
+/// The plan that the town of a building made when a building of the same row went from the same place. The editor makes a
+/// building again there when it undoes a removal. entt::null when the town has no such plan.
+[[nodiscard]] entt::entity PlanLeftAt(const Registry& registry, entt::entity building);
+
 /// Whether a building of this kind goes up as a miracle dispenser, when a plan or a scaffold makes it
 [[nodiscard]] constexpr bool MadeAsDispenser(AbodeType type)
 {

@@ -12,6 +12,7 @@
 #include "Common/PortableRotations.h"
 #include "ECS/BuildingReplan.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
@@ -48,6 +49,23 @@ entt::entity MakeDispenser(Registry& registry, entt::entity town)
 	const auto entity = registry.Create();
 	Place(registry, entity, 0.0f);
 	registry.Assign<SpellDispenser>(entity, SpellDispenser {.building = AbodeInfo::CelticSpellDispenser, .town = town});
+	return entity;
+}
+
+entt::entity MakeCentre(Registry& registry)
+{
+	const auto entity = registry.Create();
+	Place(registry, entity, 0.0f);
+	registry.Assign<Abode>(entity, AbodeNumber::A, k_TownId, 0u, 0u).info = AbodeInfo::CelticTownCentre;
+	return entity;
+}
+
+entt::entity MakePlan(Registry& registry, entt::entity town, AbodeInfo info, glm::vec3 position)
+{
+	const auto entity = registry.Create();
+	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(k_Scale));
+	registry.Assign<PlannedAbode>(entity, PlannedAbode {.townId = registry.Get<Town>(town).id, .info = info});
+	registry.Get<Town>(town).planned.push_back(entity);
 	return entity;
 }
 
@@ -144,4 +162,39 @@ TEST(BuildingReplan, ATownWhoseLastDispenserIsPlannedAgainStays)
 	// The plan of the lost dispenser keeps the town; with no plan, the town has nothing left and goes
 	EXPECT_FALSE(town_removal::GoesWhenBuildingLeaves({.buildings = 0, .plans = 1, .people = 0}));
 	EXPECT_TRUE(town_removal::GoesWhenBuildingLeaves({.buildings = 0, .plans = 0, .people = 0}));
+}
+
+TEST(BuildingReplan, ABuildingMadeAgainFindsThePlanThatItsTownMadeAtItsPlace)
+{
+	Registry registry;
+	const auto town = MakeTown(registry, k_TownId);
+	const auto other = MakePlan(registry, town, AbodeInfo::CelticHut, k_Place);
+	// The town plans again on the land, so that the height of the plan can be different
+	const auto left = MakePlan(registry, town, AbodeInfo::CelticTownCentre, k_Place + glm::vec3(0.0f, 2.0f, 0.0f));
+	EXPECT_EQ(building_replan::PlanLeftAt(registry, MakeCentre(registry)), left);
+	EXPECT_NE(left, other);
+}
+
+TEST(BuildingReplan, ABuildingMadeAgainFindsNoPlanOfAnotherPlaceOrTown)
+{
+	Registry registry;
+	const auto town = MakeTown(registry, k_TownId);
+	const auto otherTown = MakeTown(registry, k_TownId + 1);
+	MakePlan(registry, town, AbodeInfo::CelticTownCentre, k_Place + glm::vec3(1.0f, 0.0f, 0.0f));
+	MakePlan(registry, otherTown, AbodeInfo::CelticTownCentre, k_Place);
+	const auto centre = MakeCentre(registry);
+	EXPECT_TRUE(building_replan::PlanLeftAt(registry, centre) == entt::null);
+	// A thing that is not a building of a town has no plan
+	EXPECT_TRUE(building_replan::PlanLeftAt(registry, registry.Create()) == entt::null);
+}
+
+TEST(BuildingReplan, OnlyAThingOfTheSameTownAndRowAtThePlaceTakesThePlaceOfABuilding)
+{
+	const building_replan::Replan gone {.townId = k_TownId, .info = AbodeInfo::CelticWorkshop, .position = k_Place};
+	EXPECT_TRUE(
+	    building_replan::TakesPlaceOf(gone, k_TownId, AbodeInfo::CelticWorkshop, k_Place + glm::vec3(0.0f, 3.0f, 0.0f)));
+	EXPECT_FALSE(building_replan::TakesPlaceOf(gone, k_TownId + 1, AbodeInfo::CelticWorkshop, k_Place));
+	EXPECT_FALSE(building_replan::TakesPlaceOf(gone, k_TownId, AbodeInfo::CelticStoragePit, k_Place));
+	EXPECT_FALSE(
+	    building_replan::TakesPlaceOf(gone, k_TownId, AbodeInfo::CelticWorkshop, k_Place + glm::vec3(0.0f, 0.0f, 0.5f)));
 }
