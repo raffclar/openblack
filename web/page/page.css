@@ -1,34 +1,75 @@
+/* The static theme of the site bw.zanidrak.com (web/static_src/app.css of the service): dark only, with the tones of
+   the starting beach of Land 1. The names have the prefix "site-", so that an older style sheet of the site that sets
+   other variables does not change them. */
 :root {
   color-scheme: dark;
-  --background: #101010;
-  --text: #d8d4c8;
-  --muted: #9a958a;
-  --accent: #c8a04a;
-  --good: #7fbf6a;
-  --bad: #e07060;
-  --panel: #1c1b19;
+  --site-bg: #0e1c24;
+  --site-surface: #15262f;
+  --site-raised: #1d323d;
+  --site-line: #2d4653;
+  --site-ink: #edf3f2;
+  --site-muted: #b3c4c8;
+  --site-accent: #63c9cf;
+  --site-accent-strong: #8fdade;
+  --site-on-accent: #08171c;
+  --site-sand: #e6c690;
+  --site-good: #a7c88e;
+  --site-evil: #f08a8f;
+  --site-pane: rgb(14 28 36 / 0.95);
+  --site-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --site-font-display: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  /* The colours of the map of the game files, for each state of a file */
+  --map-present: #a7c88e;
+  --map-downloading: #63c9cf;
+  --map-urgent: #92866a;
+  --map-prefetch: #386f77;
+  --map-failed: #f08a8f;
+  --map-lazy: #1d323d;
+  --map-frame: #2d4653;
+  --map-label: #b3c4c8;
+  --map-hover: #edf3f2;
+  --map-back: #0e1c24;
   /* The height of the strip above the game while the game plays. The badge lives in it. */
   --badge-bar: 22px;
 }
-body { margin: 0; background: var(--background); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+body { margin: 0; background: var(--site-bg); color: var(--site-ink); font: 15px/1.625 var(--site-font-sans);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
-h1 { color: var(--accent); margin-top: 0; }
-.privacy { color: var(--muted); }
+h1, h2 { font-family: var(--site-font-display); font-weight: 600; letter-spacing: 0.025em; text-wrap: balance; }
+h1 { color: var(--site-ink); margin-top: 0; }
+h2 { margin: 0; }
+::selection { background: color-mix(in oklab, var(--site-accent) 35%, transparent); }
+.privacy { color: var(--site-muted); }
 section { margin: 16px 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-button, .file-button {
-  background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 4px;
-  padding: 8px 14px; font: inherit; cursor: pointer;
+/* The game files and the install check are cards of the site */
+#site-files, #check { background: var(--site-surface); border: 1px solid var(--site-line); border-radius: 16px;
+  padding: 24px; box-sizing: border-box;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 8px 24px -12px rgb(0 0 0 / 0.30); }
+@media (max-width: 560px) {
+  #site-files, #check { padding: 16px; }
 }
+/* The quiet button of the site; Play and Join Online Game are the main button of the site */
+button, .file-button {
+  background: color-mix(in srgb, var(--site-surface) 60%, transparent); color: var(--site-ink);
+  border: 1px solid var(--site-line); border-radius: 12px; padding: 8px 16px; font: inherit; font-weight: 500;
+  cursor: pointer; transition: background-color 0.15s, border-color 0.15s;
+}
+button:hover:not(:disabled), .file-button:hover {
+  background: var(--site-raised); border-color: color-mix(in srgb, var(--site-accent) 60%, transparent); }
+#play, #play-online { background: var(--site-accent); color: var(--site-on-accent); border-color: transparent;
+  font-weight: 600; box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 2px 8px -2px rgb(0 0 0 / 0.35); }
+#play:hover:not(:disabled), #play-online:hover:not(:disabled) { background: var(--site-accent-strong); }
+:focus-visible { outline: 2px solid var(--site-accent); outline-offset: 2px; border-radius: 6px; }
 button:disabled { opacity: 0.5; cursor: default; }
 .file-button input { display: none; }
 .play-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-#drop-zone { border: 2px dashed var(--muted); border-radius: 6px; padding: 24px; width: 100%; box-sizing: border-box; }
-#drop-zone.active { border-color: var(--accent); }
+#drop-zone { border: 2px dashed var(--site-muted); border-radius: 6px; padding: 24px; width: 100%; box-sizing: border-box; }
+#drop-zone.active { border-color: var(--site-accent); }
 #check-list { margin: 0; padding-left: 20px; }
-.good { color: var(--good); }
-.bad { color: var(--bad); }
-.build { color: var(--muted); margin-top: -8px; font-size: 13px; }
-.build-link { color: var(--accent); }
+.good { color: var(--site-good); }
+.bad { color: var(--site-evil); }
+.build { color: var(--site-muted); margin-top: -8px; font-size: 13px; }
+.build-link { color: var(--site-accent); }
 [hidden] { display: none !important; }
 
 /* While the game plays, it fills the whole window. SDL takes the size of the game window from the size of #canvas on
@@ -45,24 +86,63 @@ body.playing #game { top: var(--badge-bar); }
 #messages { max-width: 760px; margin: 0 auto; padding: 0 16px; }
 body.playing #messages { position: fixed; top: calc(var(--badge-bar) + 8px); left: 50%; transform: translateX(-50%); z-index: 3;
   width: min(760px, 100% - 32px); padding: 0; box-sizing: border-box; }
-.message { border-left: 4px solid var(--bad); background: var(--panel); padding: 8px 12px; width: 100%; box-sizing: border-box; }
+.message { border-left: 4px solid var(--site-evil); background: var(--site-surface); padding: 8px 12px; width: 100%; box-sizing: border-box; }
 .message strong { display: block; }
 /* The buttons of a message: close it, and for a stop of the game, copy the diagnostics and load the page again */
 .message-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; }
 .message-buttons button { padding: 4px 10px; }
 .message + .message { margin-top: 8px; }
-#log-box { max-width: 1280px; margin: 8px auto; padding: 0 16px; color: var(--muted); }
+#log-box { max-width: 1280px; margin: 8px auto; padding: 0 16px; color: var(--site-muted); }
 #log { max-height: 30vh; overflow: auto; white-space: pre-wrap; font: 12px monospace; margin: 0; }
 /* While the game plays, the log is a panel over the game. The badge opens and closes it. */
 body.playing #log-box { display: none; }
 body.playing.log-open #log-box { display: block; position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 2;
-  margin: 0; padding: 8px; background: rgba(16, 16, 16, 0.9); border: 1px solid var(--panel); }
+  margin: 0; padding: 8px; background: var(--site-pane); border: 1px solid var(--site-line); }
 body.playing.log-open #log { max-height: 40vh; }
 /* While the game plays, the badge has its own strip above the game, so that it covers no control of the game. The game
    canvas starts below the strip. In the full screen the game fills the screen and the strip is not shown. */
 #build-badge { position: fixed; top: 0; left: 0; right: 0; height: var(--badge-bar); box-sizing: border-box;
   padding: 0 6px; z-index: 4; display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: nowrap;
-  overflow: hidden; white-space: nowrap; background: var(--background);
-  font: 12px/1.2 system-ui, sans-serif; color: var(--muted); }
-#build-badge button { padding: 0 6px; font: inherit; border-color: var(--muted); border-radius: 3px; }
-#build-badge button:hover, #build-badge button:focus-visible { border-color: var(--accent); }
+  overflow: hidden; white-space: nowrap; background: var(--site-bg);
+  font: 12px/1.2 system-ui, sans-serif; color: var(--site-muted); }
+#build-badge button { padding: 0 6px; font: inherit; border-color: var(--site-muted); border-radius: 3px; }
+#build-badge button:hover, #build-badge button:focus-visible { border-color: var(--site-accent); }
+
+/* The map of the game files. The canvas takes the width of the page; the legend, the totals and the text of the square
+   under the pointer go below it. */
+#asset-map { align-self: stretch; display: flex; flex-direction: column; gap: 12px; }
+#asset-map-canvas { display: block; width: 100%; height: clamp(200px, 44vw, 320px); border-radius: 16px;
+  border: 1px solid var(--site-line); background: var(--map-back); box-sizing: border-box; touch-action: manipulation; }
+.asset-map-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.asset-map-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.asset-map-legend li { display: flex; align-items: center; gap: 8px; }
+.asset-map-legend b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.swatch[data-state="present"] { background: var(--map-present); }
+.swatch[data-state="downloading"] { background: var(--map-downloading); }
+.swatch[data-state="urgent"] { background: var(--map-urgent); }
+.swatch[data-state="prefetch"] { background: var(--map-prefetch); }
+.swatch[data-state="lazy"] { background: var(--map-lazy); outline: 1px solid var(--map-frame); }
+.swatch[data-state="failed"] { background: var(--map-failed); }
+.asset-map-totals { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px;
+  font-size: 13px; }
+.asset-map-totals dt { color: var(--site-sand); font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.18em; }
+.asset-map-totals dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.asset-map-info { grid-column: 1 / -1; margin: 0; min-height: 3.2em; padding: 8px 12px; border-radius: 12px;
+  border: 1px solid var(--site-line); background: var(--site-bg); font-size: 13px; display: flex; flex-direction: column;
+  overflow-wrap: anywhere; }
+.asset-map-info strong { color: var(--site-sand); font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; }
+.asset-map-title { font-weight: 600; }
+@media (max-width: 560px) {
+  .asset-map-side { grid-template-columns: minmax(0, 1fr); }
+}
+/* The small map in the strip above the game. It opens and closes the map as a panel over the game. */
+#assets-toggle { display: inline-flex; align-items: center; gap: 6px; }
+#asset-mini { width: 64px; height: 12px; display: block; border-radius: 2px; }
+body.playing #asset-map { position: fixed; top: calc(var(--badge-bar) + 8px); right: 8px; z-index: 3;
+  width: min(560px, calc(100% - 16px)); max-height: calc(100% - var(--badge-bar) - 16px); overflow: auto;
+  box-sizing: border-box; padding: 12px; border-radius: 16px; border: 1px solid var(--site-line);
+  background: var(--site-pane); box-shadow: 0 0 48px 8px rgb(2 10 14 / 0.55); }
+body.playing #asset-map-canvas { height: 220px; }
+body.playing:not(.assets-open) #asset-map { display: none; }

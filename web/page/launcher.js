@@ -691,6 +691,85 @@ function keepStorage() {
   return keptStorage;
 }
 
+// ------------------------------------------------------------------------------------------------ the map of the game files
+
+// The states of the game files on the map (launcher-map.js), while the page and the game get them from the site
+let assetMap = null;
+// The time when the page asked for the program. An earlier answer for the program is the answer to the HEAD request.
+let programAsked = Infinity;
+
+/** The size of the program on the site, from the answer to a HEAD request, or 0 when the site does not give it */
+async function programSize() {
+  try {
+    const response = await fetch('openblack.wasm', { method: 'HEAD', credentials: 'same-origin' });
+    const size = Number(response.headers.get('Content-Length'));
+    return response.ok && Number.isSafeInteger(size) && size > 0 ? size : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Shows the text of a square of the map, or the help when no square is under the pointer */
+function showAssetCell(text) {
+  const info = element('asset-map-info');
+  if (!text) {
+    info.textContent = 'Point at a square, or touch it, to see the part of the game, the file, its size and its state.';
+    return;
+  }
+  const group = document.createElement('strong');
+  group.textContent = text.group;
+  const title = document.createElement('span');
+  title.className = 'asset-map-title';
+  title.textContent = text.title;
+  info.replaceChildren(group, title, ...text.lines.map((line) => {
+    const item = document.createElement('span');
+    item.textContent = line;
+    return item;
+  }));
+}
+
+/** Writes the totals of the map in the legend, the figures under the map and the strip above the game */
+function showAssetTotals(totals) {
+  const set = (id, text) => {
+    const target = element(id);
+    if (target.textContent !== text) {
+      target.textContent = text;
+    }
+  };
+  for (const state of k_AssetMapStates) {
+    set(`asset-state-${state}`, formatAssetBytes(totals.bytes[state]));
+  }
+  set('asset-total-present', `${formatAssetBytes(totals.bytes.present)} of ${formatAssetBytes(totals.total)}`);
+  set('asset-total-received', formatAssetBytes(totals.received));
+  set('asset-total-wire', formatAssetBytes(totals.wire));
+  set('asset-total-remaining', formatAssetBytes(totals.remaining));
+  set('asset-total-speed', totals.active > 0 ? `${formatAssetBytes(totals.speed)}/s` : '-');
+  set('asset-total-left', totals.remaining === 0 ? 'Nothing waits' : formatAssetTime(totals.secondsLeft));
+  set('asset-mini-text', totals.remaining === 0 ? 'Files' : `${formatAssetBytes(totals.remaining)} to get`);
+}
+
+/**
+ * Shows the map of the game files of the list, and the program when the site gives its size. Gives the model that
+ * takes the events of the downloads.
+ */
+function showAssetMap(index, programBytes) {
+  const files = index.files.filter((file) => isGameFile(file.path));
+  const extra = programBytes > 0 ? [{ group: 'program', path: 'openblack.wasm', size: programBytes, key: 'program' }] : [];
+  const model = new AssetMapModel(buildAssetMap(files, { blockSize: index.blockSize, extra }));
+  element('asset-map').hidden = false;
+  showAssetCell(null);
+  const big = new AssetMapView(element('asset-map-canvas'), model, { onHover: showAssetCell });
+  const mini = new AssetMapView(element('asset-mini'), model, { labels: false });
+  const program = (name) => name.endsWith('/openblack.wasm');
+  watchAssetWire(model, (name) => name.includes('/assets/') || program(name), (entry) => {
+    if (program(entry.name) && entry.startTime >= programAsked) {
+      model.handle('done', 'program');
+    }
+  });
+  startAssetMapLoop(model, [big, mini], showAssetTotals);
+  return model;
+}
+
 async function useSiteGameFiles() {
   const fetchFile = (address, options) => fetch(address, options);
   const answer = await fetchAssetIndex(fetchFile);
@@ -698,6 +777,7 @@ async function useSiteGameFiles() {
     log(`The site gives no game files to this account (status ${answer.status}): ${answer.reason || 'no reason'}.`);
     return false;
   }
+  const programBytes = programSize();
   const root = await storageRoot();
   if (!root) {
     log('The site gives the game files, but this browser has no private storage for them.');
@@ -707,6 +787,7 @@ async function useSiteGameFiles() {
   keepStorage();
   element('site-files-intro').hidden = false;
   element('site-files').hidden = false;
+  assetMap = showAssetMap(answer.index, await programBytes);
   const progress = element('site-files-progress');
   let shown = '';
   let last = { bytes: 0, files: 0 };
@@ -737,7 +818,7 @@ async function useSiteGameFiles() {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
       wanted: isGameFile, progress: show, all,
       share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
-      log,
+      log, watch: (event, key, detail) => assetMap.handle(event, key, detail),
     });
     siteFiles = { store, blockSize };
     getAll();
@@ -1024,6 +1105,11 @@ async function start(online = false) {
   element('chooser').hidden = true;
   element('game').hidden = false;
   element('build-badge').hidden = false;
+  if (assetMap) {
+    // While the game plays, the map is a panel over the game, which the small map in the strip opens and closes
+    document.body.append(element('asset-map'));
+    element('assets-toggle').hidden = false;
+  }
   document.body.classList.add('playing');
   watchPage();
   const canvas = element('canvas');
@@ -1101,6 +1187,11 @@ async function start(online = false) {
   const script = document.createElement('script');
   script.src = 'openblack.js';
   document.body.append(script);
+  if (assetMap) {
+    programAsked = performance.now();
+    assetMap.handle('queued', 'program', 'now');
+    assetMap.handle('started', 'program');
+  }
   // After the start, the page gets the files that the first land can read in its play, one at a time
   if (siteFiles) {
     const { store } = siteFiles;
@@ -1126,6 +1217,12 @@ async function main() {
     copyDiagnostics(button);
     // The keys go to the game again, not to the button
     button.blur();
+  });
+  element('assets-toggle').addEventListener('click', (event) => {
+    const open = document.body.classList.toggle('assets-open');
+    event.currentTarget.setAttribute('aria-expanded', String(open));
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
   });
   element('log-toggle').addEventListener('click', (event) => {
     const open = document.body.classList.toggle('log-open');
