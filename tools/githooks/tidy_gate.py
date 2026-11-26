@@ -11,6 +11,7 @@ usage:
 
 options:
   --build-dir <dir>   the folder with compile_commands.json (see find_build_dir for the other places)
+  --web-build-dir <dir>  the folder of the web build (Emscripten) with its compile_commands.json, for src/Web (see below)
   --jobs <n>          clang-tidy processes at the same time (default 2)
   --timeout <s>       time limit of one file (default 120)
   --strict            a missing tool, compile database or a time-out is a failure (exit 2), not a pass
@@ -25,6 +26,12 @@ Find clang-tidy 17 in this order (the first one that is version 17 wins):
 Find the build folder (compile_commands.json) in this order:
   --build-dir, the environment variable OB_TIDY_BUILD_DIR, the git setting openblack.tidyBuildDir, the value
   tools.tidyBuildDir in .claude/openblack.local.json, then <paths.builds>/<name of the work tree>.
+A file of src/Web is compiled only by the web build, so the desktop database has no command for it. The gate checks such
+a file with the compile command of the web build (ob-web configure writes the compile_commands.json of that build) and
+the target flags that the Emscripten compiler gives. Find the web build folder in this order: --web-build-dir, the
+environment variable OB_TIDY_WEB_BUILD_DIR, the git setting openblack.tidyWebBuildDir, the value tools.tidyWebBuildDir in
+.claude/openblack.local.json, then <paths.builds>/<name of the work tree>-web. Without that database, a change to a file
+of src/Web stops the gate (exit 2 with --strict), as for the desktop database.
 On Windows, clang-tidy needs the MSVC and Windows SDK headers. If INCLUDE is not set, the gate sets it from
 OB_TIDY_MSVC_DIR, the git setting openblack.tidyMsvcDir or the value tools.tidyMsvcDir (the MSVC folder with include
 inside), else from the newest installed MSVC 14.40 or 14.41 (the newer ones need a newer clang).
@@ -35,6 +42,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -43,6 +51,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 SOURCE_FOLDERS = ("src/", "apps/", "components/", "test/")
+WEB_FOLDER = "src/Web/"
 CPP_EXTENSIONS = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl")
 TU_EXTENSIONS = (".c", ".cc", ".cpp", ".cxx")
 
@@ -238,6 +247,66 @@ def find_build_dir(root, given):
     return None
 
 
+def find_web_build_dir(root, given):
+    """The folder of the web build with its compile_commands.json, or None."""
+    candidates = [given] if given else []
+    candidates.append(_setting(root, "OB_TIDY_WEB_BUILD_DIR", "openblack.tidyWebBuildDir", "tools.tidyWebBuildDir"))
+    builds = _config_value(root, "paths.builds")
+    if builds:
+        candidates.append(os.path.join(builds, os.path.basename(root) + "-web"))
+    for candidate in candidates:
+        if candidate and os.path.isfile(os.path.join(candidate, "compile_commands.json")):
+            return candidate
+    return None
+
+
+def is_web_only(path, desktop_files):
+    """A file of src/Web that the desktop build does not compile. desktop_files holds the normalised paths it does."""
+    return path.startswith(WEB_FOLDER) and os.path.normcase(os.path.normpath(path)) not in desktop_files
+
+
+def web_target_flags(compiler):
+    """The flags that tell clang the web target, from the Emscripten compiler of a compile command.
+
+    em++ --cflags names the target, the sysroot and the include folders of the Emscripten headers. The options for the
+    code generator (-mllvm) are not for the checks and clang 17 may not know them, so they are left out.
+    """
+    folder = os.path.dirname(os.path.normpath(compiler))
+    emsdk = os.path.dirname(os.path.dirname(folder))
+    env = dict(os.environ)
+    env.setdefault("EMSDK", emsdk)
+    env.setdefault("EM_CONFIG", os.path.join(emsdk, ".emscripten"))
+    python = sorted(glob.glob(os.path.join(emsdk, "python", "*", "python.exe")) + glob.glob(os.path.join(emsdk, "python", "*", "bin", "python3")))
+    if python:
+        env.setdefault("EMSDK_PYTHON", python[-1])
+    try:
+        done = subprocess.run([compiler, "--cflags"], capture_output=True, text=True, errors="replace", env=env,
+                              stdin=subprocess.DEVNULL, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0 or "wasm32" not in done.stdout:
+        return None
+    words = shlex.split(done.stdout.strip(), posix=True)
+    flags = []
+    skip = False
+    for word in words:
+        if skip:
+            skip = False
+        elif word == "-mllvm":
+            skip = True
+        else:
+            flags.append(word)
+    return flags
+
+
+def web_command(command, flags, clang):
+    """The compile command of the web build for clang-tidy: a clang driver, the target flags, no Emscripten settings."""
+    words = shlex.split(command, posix=False)
+    start = next((i for i, w in enumerate(words) if web_compiler_of(w)), 0)
+    rest = [w for w in words[start + 1 :] if not re.match(r"^-s[A-Z_]+(=|$)", w)]
+    return " ".join([f'"{clang}"'] + [f'"{f}"' if " " in f else f for f in flags] + rest)
+
+
 def find_msvc_dir(root):
     """The MSVC folder (with include inside) that clang-tidy 17 reads, or an empty string off Windows."""
     if os.name != "nt":
@@ -275,15 +344,39 @@ def with_compiler(command, compiler):
     return f'"{compiler}"{rest}'
 
 
-def run_gate(changed, root, build_dir, tool, jobs, timeout, strict):
-    """Run clang-tidy on each changed file. Return (findings, problems)."""
+def web_compiler_of(command):
+    """The path of the Emscripten compiler in a compile command of the web build, or an empty string."""
+    for word in shlex.split(command, posix=False):
+        name = os.path.basename(word.strip('"').replace("\\", "/")).lower()
+        if name.startswith(("em++", "emcc")):
+            return word.strip('"')
+    return ""
+
+
+def run_gate(changed, root, build_dir, tool, jobs, timeout, strict, web=False):
+    """Run clang-tidy on each changed file. Return (findings, problems).
+
+    web is true for the files of src/Web: build_dir is then the web build, whose commands name the Emscripten compiler.
+    """
     with open(os.path.join(build_dir, "compile_commands.json"), encoding="utf-8") as handle:
         database = json.load(handle)
     by_file = {os.path.normcase(os.path.normpath(e["file"])): e for e in database}
     entries = []
     problems = []
-    msvc = find_msvc_dir(root)
+    msvc = "" if web else find_msvc_dir(root)
     compiler = os.path.join(msvc, "bin", "Hostx64", "x64", "cl.exe") if msvc else ""
+    web_flags = None
+    web_clang = ""
+    if web:
+        compilers = [web_compiler_of(e.get("command") or " ".join(e.get("arguments", []))) for e in database]
+        em_compiler = next((c for c in compilers if c), "")
+        web_flags = web_target_flags(em_compiler) if em_compiler else None
+        if web_flags is None:
+            problems.append(f"src/Web: the target flags of the Emscripten compiler are not found (em++ --cflags failed) for {build_dir}")
+            return [], problems
+        emsdk = os.path.dirname(os.path.dirname(os.path.dirname(os.path.normpath(em_compiler))))
+        clangs = glob.glob(os.path.join(emsdk, "upstream", "bin", "clang++*"))
+        web_clang = clangs[0] if clangs else "clang++"
     for path in sorted(changed):
         full = os.path.normpath(os.path.join(root, path))
         entry = by_file.get(os.path.normcase(full))
@@ -301,7 +394,9 @@ def run_gate(changed, root, build_dir, tool, jobs, timeout, strict):
                 command = command.replace(entry["file"].replace("\\", "/").replace("/", style), full.replace("\\", style))
             entry["command"] = command
         command = entry.get("command") or " ".join(entry.get("arguments", []))
-        if msvc and os.path.isfile(compiler):
+        if web:
+            command = web_command(command, web_flags, web_clang)
+        elif msvc and os.path.isfile(compiler):
             # clang-tidy reads the MSVC headers from the folder of the compiler named in the command, so name 14.41.
             command = with_compiler(command, compiler)
         entries.append({"directory": entry["directory"], "command": command, "file": full})
@@ -313,7 +408,7 @@ def run_gate(changed, root, build_dir, tool, jobs, timeout, strict):
         with open(os.path.join(temp, "compile_commands.json"), "w", encoding="utf-8") as handle:
             json.dump(entries, handle)
         env = dict(os.environ)
-        include = windows_include_paths(msvc)
+        include = "" if web else windows_include_paths(msvc)
         if include:
             env["INCLUDE"] = include
         filt = line_filter(changed)
@@ -350,6 +445,7 @@ def main(argv=None):
     parser.add_argument("mode", choices=("staged", "range"))
     parser.add_argument("base", nargs="?")
     parser.add_argument("--build-dir")
+    parser.add_argument("--web-build-dir")
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--strict", action="store_true")
@@ -387,17 +483,37 @@ def main(argv=None):
     status = 0
     tool = find_clang_tidy(root)
     build_dir = find_build_dir(root, args.build_dir)
+    web_dir = find_web_build_dir(root, args.web_build_dir)
+    desktop_files = set()
+    if build_dir is not None:
+        with open(os.path.join(build_dir, "compile_commands.json"), encoding="utf-8") as handle:
+            desktop_files = {os.path.normcase(os.path.normpath(os.path.relpath(e["file"], root) if os.path.isabs(e["file"]) else e["file"]))
+                             for e in json.load(handle)}
+    web_changed = {p: r for p, r in changed.items() if is_web_only(p, desktop_files)}
+    desktop_changed = {p: r for p, r in changed.items() if p not in web_changed}
     if tool is None:
         status = cannot("clang-tidy 17 is not found: the check of the changed lines is skipped. Set OB_CLANG_TIDY_DIR, "
                         "git config openblack.clangTidyDir, or tools.clangTidy17Dir.")
-    elif build_dir is None:
-        status = cannot("no compile_commands.json is found: the check of the changed lines is skipped. Set "
-                        "OB_TIDY_BUILD_DIR, git config openblack.tidyBuildDir, or tools.tidyBuildDir.")
     else:
-        findings, problems = run_gate(changed, root, build_dir, tool, args.jobs, args.timeout, args.strict)
-        failed += findings
-        for problem in problems:
-            status = max(status, cannot(problem))
+        if desktop_changed:
+            if build_dir is None:
+                status = cannot("no compile_commands.json is found: the check of the changed lines is skipped. Set "
+                                "OB_TIDY_BUILD_DIR, git config openblack.tidyBuildDir, or tools.tidyBuildDir.")
+            else:
+                findings, problems = run_gate(desktop_changed, root, build_dir, tool, args.jobs, args.timeout, args.strict)
+                failed += findings
+                for problem in problems:
+                    status = max(status, cannot(problem))
+        if web_changed:
+            if web_dir is None:
+                status = max(status, cannot("the changed files of src/Web need the compile_commands.json of the web build, and "
+                                            "it is not found. Run ob-web configure, then set OB_TIDY_WEB_BUILD_DIR, git config "
+                                            "openblack.tidyWebBuildDir, or tools.tidyWebBuildDir."))
+            else:
+                findings, problems = run_gate(web_changed, root, web_dir, tool, args.jobs, args.timeout, args.strict, web=True)
+                failed += findings
+                for problem in problems:
+                    status = max(status, cannot(problem))
 
     if failed:
         print("tidy gate: findings on the changed lines (clang-tidy 17):", file=sys.stderr)

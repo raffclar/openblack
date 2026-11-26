@@ -153,5 +153,36 @@ class Header(unittest.TestCase):
         self.assertEqual(picked["command"], "cl a")
 
 
+class WebFiles(unittest.TestCase):
+    COMMAND = (r'E:\sccache.exe "E:\emsdk\upstream\emscripten\em++.exe" -DA=1 -IE:\inc -pthread '
+               r'-fwasm-exceptions -sWASM_LEGACY_EXCEPTIONS=0 -MD -o x.o -c E:\src\Web\A.cpp')
+
+    def test_a_file_of_src_web_that_the_desktop_does_not_compile_is_web_only(self):
+        desktop = {os.path.normcase(os.path.normpath("src/Game.cpp"))}
+        self.assertTrue(tidy_gate.is_web_only("src/Web/UserFolderBackend.cpp", desktop))
+        self.assertTrue(tidy_gate.is_web_only("src/Web/WebPointer.h", desktop))
+
+    def test_other_files_are_not_web_only(self):
+        desktop = {os.path.normcase(os.path.normpath("src/Game.cpp"))}
+        self.assertFalse(tidy_gate.is_web_only("src/Game.cpp", desktop))
+        self.assertFalse(tidy_gate.is_web_only("src/Webby/A.cpp", desktop))
+
+    def test_a_web_file_that_the_desktop_compiles_uses_the_desktop_command(self):
+        desktop = {os.path.normcase(os.path.normpath("src/Web/Shared.cpp"))}
+        self.assertFalse(tidy_gate.is_web_only("src/Web/Shared.cpp", desktop))
+
+    def test_the_emscripten_compiler_is_found_after_a_launcher(self):
+        self.assertEqual(tidy_gate.web_compiler_of(self.COMMAND), r"E:\emsdk\upstream\emscripten\em++.exe")
+        self.assertEqual(tidy_gate.web_compiler_of("cl.exe /c a.cpp"), "")
+
+    def test_the_web_command_has_a_clang_driver_target_flags_and_no_emscripten_settings(self):
+        command = tidy_gate.web_command(self.COMMAND, ["-target", "wasm32-unknown-emscripten"], "E:/clang++.exe")
+        self.assertTrue(command.startswith('"E:/clang++.exe" -target wasm32-unknown-emscripten -DA=1'))
+        self.assertNotIn("sccache", command)
+        self.assertNotIn("-sWASM_LEGACY_EXCEPTIONS", command)
+        self.assertIn("-fwasm-exceptions", command)
+        self.assertIn(r"-c E:\src\Web\A.cpp", command)
+
+
 if __name__ == "__main__":
     unittest.main()
