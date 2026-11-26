@@ -1095,6 +1095,22 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
+			if (ImGui::BeginMenu("Creature Reflection"))
+			{
+				// The game mirrors only the first creature of the local player in the sea. The other choice also mirrors
+				// the other creatures of the local player, for example those that the editor makes.
+				if (ImGui::MenuItem("Original", nullptr, !config.mirrorEveryOwnCreature))
+				{
+					config.mirrorEveryOwnCreature = false;
+				}
+				if (ImGui::MenuItem("Every Creature of the Player", nullptr, config.mirrorEveryOwnCreature))
+				{
+					config.mirrorEveryOwnCreature = true;
+				}
+
+				ImGui::EndMenu();
+			}
+
 			if (ImGui::BeginMenu("Shadows"))
 			{
 				ImGui::Checkbox("Creature Shadows", &config.drawCreatureShadows);

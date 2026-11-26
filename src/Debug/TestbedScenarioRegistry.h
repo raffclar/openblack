@@ -197,6 +197,8 @@ struct Environment
 	bool dynamicTreeShadows {false};
 	/// The player's "maximum detail" option is on or off, as the debug menu's Model Detail choice sets it
 	std::optional<bool> maximumDetail;
+	/// The debug menu's Creature Reflection choice: the sea also mirrors the other creatures of the local player
+	std::optional<bool> mirrorEveryOwnCreature;
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
 	/// The switch of the Soccer Add-On is on while the scenario runs, so that the towns play football

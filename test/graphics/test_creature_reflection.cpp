@@ -39,6 +39,22 @@ TEST(CreatureReflection, OnlyThePrimaryCreatureIsMirrored)
 	EXPECT_FALSE(creature_reflection::Shown(other));
 }
 
+TEST(CreatureReflection, TheDebugOptionAddsTheOtherCreaturesOfTheLocalPlayerOnly)
+{
+	auto second = Mirrored();
+	second.primaryCreature = false;
+	second.ownCreature = true;
+	EXPECT_FALSE(creature_reflection::Shown(second));
+	second.mirrorEveryOwnCreature = true;
+	EXPECT_TRUE(creature_reflection::Shown(second));
+	// A creature of another player stays unmirrored, and the other tests of the game still apply
+	second.ownCreature = false;
+	EXPECT_FALSE(creature_reflection::Shown(second));
+	second.ownCreature = true;
+	second.height = creature_reflection::k_HighestStand;
+	EXPECT_FALSE(creature_reflection::Shown(second));
+}
+
 TEST(CreatureReflection, TheBlockMustBeInViewAndNear)
 {
 	auto situation = Mirrored();

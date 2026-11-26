@@ -620,23 +620,35 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 	// A second creature of the player, made as the editor's creature spawner makes it, beside the first one. The
-	// original game gives a player one creature only, and it mirrors only that one, so the second one is not mirrored.
-	all.push_back({
-	    .id = "appearance.creature_editor_sea_reflection",
-	    .name = "Second creature of the player in the sea",
-	    .facet = Facet::Appearance,
-	    .description = "At noon, the clock stopped, two giant apes of the player stand in the far shallows of the "
-	                   "testbed's lake, seen across the water from the south. The ape on the left is the first creature "
-	                   "of the player. The ape on the right is a second creature, made as the editor makes it.",
-	    .expected = "The ape on the left shows upside down in the water in front of it. The ape on the right shows no "
-	                "reflection, as the game mirrors only the first creature of the player.",
-	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
-	    .creatures = {Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "first ape"),
-	                  Posed(CreatureType::GiantApe, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "second ape")},
-	    .commands = headMoves,
-	    .repeatFrom = 0,
-	});
+	// original game gives a player one creature only, and it mirrors only that one. The debug menu's Creature Reflection
+	// choice also mirrors the second one.
+	for (const bool every : {false, true})
+	{
+		all.push_back({
+		    .id = every ? "appearance.creature_editor_sea_reflection_every" : "appearance.creature_editor_sea_reflection",
+		    .name = every ? "Second creature of the player in the sea, every creature mirrored"
+		                  : "Second creature of the player in the sea",
+		    .facet = Facet::Appearance,
+		    .description = every ? "At noon, the clock stopped, two giant apes of the player stand in the far shallows of "
+		                           "the testbed's lake, seen across the water from the south. The ape on the left is the "
+		                           "first creature of the player. The ape on the right is a second creature, made as the "
+		                           "editor makes it. The debug menu's Creature Reflection choice is Every Creature of the "
+		                           "Player."
+		                         : "At noon, the clock stopped, two giant apes of the player stand in the far shallows of "
+		                           "the testbed's lake, seen across the water from the south. The ape on the left is the "
+		                           "first creature of the player. The ape on the right is a second creature, made as the "
+		                           "editor makes it. The debug menu's Creature Reflection choice is Original.",
+		    .expected = every ? "Both apes show upside down in the water in front of them, in the same flat colour."
+		                      : "The ape on the left shows upside down in the water in front of it. The ape on the right "
+		                        "shows no reflection, as the game mirrors only the first creature of the player.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .mirrorEveryOwnCreature = every},
+		    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+		    .creatures = {Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "first ape"),
+		                  Posed(CreatureType::GiantApe, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "second ape")},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	}
 	// The player's hand mirrored in the lake with the villager that it holds, beside the player's creature
 	all.push_back({
 	    .id = "appearance.hand_sea_reflection",
