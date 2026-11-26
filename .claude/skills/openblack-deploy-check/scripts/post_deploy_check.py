@@ -17,7 +17,8 @@ given). A STOP item is not a fault: when no item fails, the summary says PASS, a
 fails, the summary says FAIL and the exit code is 1.
 
 Items (each one request, or one browser visit):
-1. The deploy log: the installed web and server builds and the game build id are the builds of the tars.
+1. The deploy log: the installed web and server builds and the game build id are the builds of the tars. A deploy of
+   the web build only has no game server, so the item does not ask for a game build id.
 2. The service answers: GET / gives the redirect to the sign-in page (the site has no public health address).
 3. The play gate answers: GET /play/openblack.wasm with no sign-in gives 401.
 4. Sentry (sentry.exe, org zanidrak, project openblack): no issue that Sentry saw first after the deploy start.
@@ -90,14 +91,28 @@ def deploy_log_item(log_path, sha):
         item("deploy log: installed builds", None, f"give --deploy-log (no file {log_path})")
         return
     text = open(log_path, encoding="utf-8", errors="replace").read()
+    item(*deploy_log_result(text, sha))
+
+
+def deploy_log_result(text, sha):
+    """Read the act log of a deploy and give the name, the state and the detail of the deploy log item.
+
+    A deploy of the web build only (TARGET=web) does not install a game server, so its log has no game build id.
+    Then the item does not ask for one. The game server is in the deploy when its log has the server-nightly step."""
     labels = sorted(set(re.findall(r"\b(\d{8}-\d{6}-[0-9a-f]{9})\b", text)))
     game_ids = sorted(set(re.findall(r"\b(\d+\.\d+\.\d+\+[0-9a-f]{12}/codec\d+)\b", text)))
     installed = [label for label in labels if sha and label.endswith(sha[:9])]
-    ids_ok = bool(game_ids) and all(game_id.split("+")[1].startswith(sha[:12]) for game_id in game_ids[-1:])
+    with_server = "server-nightly:" in text
+    if with_server:
+        ids_ok = bool(game_ids) and all(game_id.split("+")[1].startswith(sha[:12]) for game_id in game_ids[-1:])
+        server = f"game build id {game_ids[-1] if game_ids else 'none'}"
+    else:
+        ids_ok = True
+        server = "web build only: no game server in this deploy, so no game build id"
     passed = "every check passed" in text
-    item("deploy log: installed builds are the tars' commit", bool(installed) and ids_ok and passed,
-         f"labels {', '.join(installed) or 'none for ' + str(sha)[:9]}; game build id {game_ids[-1] if game_ids else 'none'}; "
-         f"workflow says every check passed: {'yes' if passed else 'no'}")
+    return ("deploy log: installed builds are the tars' commit", bool(installed) and ids_ok and passed,
+            f"labels {', '.join(installed) or 'none for ' + str(sha)[:9]}; {server}; "
+            f"workflow says every check passed: {'yes' if passed else 'no'}")
 
 
 def sentry_item(since):
