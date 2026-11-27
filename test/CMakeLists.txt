@@ -2868,6 +2868,7 @@ if (OPENBLACK_PARSER_SANITIZERS)
     openblack_parser_sanitizer_tests
     PRIVATE ${CMAKE_SOURCE_DIR}/components/lnd/include
             ${CMAKE_SOURCE_DIR}/components/onlinemap/include
+            ${CMAKE_SOURCE_DIR}/components/landgen/include
             ${CMAKE_SOURCE_DIR}/src
   )
   target_link_libraries(

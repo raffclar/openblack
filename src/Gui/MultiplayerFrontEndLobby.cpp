@@ -848,7 +848,8 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 		{
 			_roomMapSets = room.MapSets();
 			_reportedMap.reset();
-			FetchRoomMap(map.sha256);
+			// The lobby has no game server land yet, so the map is found by its hash alone
+			FetchRoomMap(map.sha256, {});
 		}
 		if (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Ready)
 		{
