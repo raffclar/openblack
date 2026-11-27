@@ -104,6 +104,8 @@ private:
 	/// each blend from the store when it asks for it. A blend comes only from the species and the drawn body, so it is
 	/// the same blend that the turn makes.
 	void PrepareFirstBlends(std::span<const entt::entity> creatures);
+	/// Starts the blends of the animations that a body played, for the new shape of the body, on the shared threads
+	void StartBlendsOfNewShape(CreatureType species, const creature_morph::Morph& drawn, std::vector<size_t> played);
 	/// The creatures that have no pose yet
 	[[nodiscard]] static std::vector<entt::entity> Unposed();
 	/// The blends of the first pose and the first plan that the creatures do not keep already

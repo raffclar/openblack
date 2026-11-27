@@ -1017,8 +1017,47 @@ void CreatureAnimationSystem::MorphTurn(entt::entity entity)
 	{
 		return;
 	}
+	// The animations that the body played in its old shape. A new shape empties them, and the body asks for most of
+	// them again.
+	std::vector<size_t> played;
+	played.reserve(animation->animations.size());
+	for (const auto& [index, blended] : animation->animations)
+	{
+		if (!blended.frames.empty())
+		{
+			played.push_back(index);
+		}
+	}
+	const auto revision = morph->revision;
 	ecs::archetypes::CreatureArchetype::MorphStep(registry, entity);
 	BuildSkeleton(*creature, *morph, *animation);
+	if (morph->revision != revision && animation->animations.empty())
+	{
+		StartBlendsOfNewShape(creature->species, morph->drawn, std::move(played));
+	}
+}
+
+void CreatureAnimationSystem::StartBlendsOfNewShape(CreatureType species, const creature_morph::Morph& drawn,
+                                                    std::vector<size_t> played)
+{
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(species);
+	// One blend is made when the turn asks for it, as the threads do not make it sooner
+	if (played.size() < 2 || !rigs.Contains(rigId))
+	{
+		return;
+	}
+	const auto& rig = *rigs.Handle(rigId);
+	// The threads make the blends for the new shape while the turn continues. The pose of the body takes them from the
+	// store. A blend comes only from the species and the drawn body, so it is the same blend that the turn makes.
+	std::ranges::sort(played);
+	std::vector<creature_blends::Wanted> wanted;
+	wanted.reserve(played.size());
+	std::ranges::transform(played, std::back_inserter(wanted), [&rig, &drawn](size_t index) {
+		return creature_blends::Wanted {.rig = &rig, .morph = drawn, .index = index};
+	});
+	auto& stores = BlendStores();
+	_background.Start(stores, std::move(wanted), Workers(), stores.shaping);
 }
 
 void CreatureAnimationSystem::ShapeBodies()
