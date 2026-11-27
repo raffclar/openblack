@@ -14,16 +14,20 @@
 #include "Components/Abode.h"
 #include "Components/Animal.h"
 #include "Components/Creature.h"
+#include "Components/DeadTree.h"
 #include "Components/Disciple.h"
 #include "Components/FixedOutline.h"
 #include "Components/Flock.h"
+#include "Components/Flowers.h"
 #include "Components/LivingListPlace.h"
 #include "Components/LivingReaction.h"
 #include "Components/MapCellResident.h"
 #include "Components/MapPlace.h"
+#include "Components/Mesh.h"
 #include "Components/ScriptControl.h"
 #include "Components/SpellDispenser.h"
 #include "Components/Town.h"
+#include "Components/Transform.h"
 #include "Components/Villager.h"
 #include "DrawReadWatch.h"
 #include "KeptStores.h"
@@ -83,6 +87,13 @@ Registry::Registry()
 	MarkHashRows<components::FixedOutline>();
 	MarkHashRows<components::MapCellResident>();
 	MarkHashRows<components::MapPlace>();
+	// The marks of the things whose place, model or map cells changed follow each gain, replace and loss of these
+	// components. A request that can write them in place marks the thing too.
+	ConnectThingChanges<components::Transform>();
+	ConnectThingChanges<components::Mesh>();
+	ConnectThingChanges<components::MapCellResident>();
+	ConnectThingChanges<components::DeadTree>();
+	ConnectThingChanges<components::Flowers>();
 	// The stores that the rules of life and the walks test most exist from the start, and the registry keeps them
 	KeptStores::MakeStores(_registry);
 	_kept = std::make_unique<KeptStores>(*this);
@@ -147,6 +158,7 @@ void Registry::StoresWritten() noexcept
 {
 	// A direct write to the stores does not mark the rows that it changes
 	_rowMarks.Forget();
+	_thingWrites.MarkAll();
 	_livingList->rebuild = true;
 	reaction_groups::Recount(*this);
 }
@@ -195,6 +207,7 @@ void Registry::Reset()
 	_registry.ctx().emplace<RegistryContext>();
 	// The next entities can have the ids and the versions of the entities that went
 	_rowMarks.Forget();
+	_thingWrites.MarkAll();
 	_entitiesMade = 0;
 	++_resets;
 	++_townMemberChanges;
