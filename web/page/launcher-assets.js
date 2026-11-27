@@ -1110,6 +1110,10 @@ class AssetStore {
     for (const user of this.users.get(file.sha256)) {
       this.share(user, null, kept);
     }
+    // The page can keep blocks of the file from before, for example the first block of a music bank of the start
+    if (file.blocks && !this.full) {
+      await this.removeJoinedBlocks(number);
+    }
   }
 
   async getBlock(number, block) {

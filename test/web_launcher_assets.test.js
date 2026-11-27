@@ -1032,6 +1032,18 @@ check('the page removes the blocks of a bank when it keeps the whole bank, and g
   assert.deepEqual(shared.map((given) => [given.number, given.block]), [[number, null]]);
 });
 
+check('a bank that comes whole after its first block removes the block', async () => {
+  const { store, root, index } = await streamedSite();
+  const number = numberOf(index.files, 'Audio/Music/align/Good.sad');
+  const file = index.files[number];
+  const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+  // The phases got the first block of the bank
+  assert.equal(folder.children.has(file.blocks[0]), true);
+  await store.getWholeJob(number, 'now');
+  assert.equal(folder.children.has(file.sha256), true);
+  assert.deepEqual(file.blocks.filter((block) => folder.children.has(block)), []);
+});
+
 check('a block that a bank that is not whole also has stays in the folder', async () => {
   const files = { 'Audio/Music/one.sad': 'HEADfirst bank', 'Audio/Music/two.sad': 'HEADother bank' };
   const site = fakeSite(files, { index: streamedText(files, Object.keys(files)) });
