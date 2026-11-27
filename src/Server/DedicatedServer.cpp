@@ -62,6 +62,7 @@
 #include "ECS/StatisticsRules.h"
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -72,6 +73,7 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
@@ -1342,13 +1344,29 @@ GameRole::HostConditions HostConditionsOfWorld()
 	return lobby_host_report::ConditionsOf(gameEnd.GetConditions(), standings);
 }
 
-/// The figures of each god of the decided game, for the report to the lobby. The world does not change.
+/// The mind file of the god's creature as it is now. Empty when the god has no creature or the creature has no mind.
+std::vector<uint8_t> CreatureOfGod(PlayerNames god)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::creatureCarryOverSystem::has_value())
+	{
+		return {};
+	}
+	const auto creature = Locator::playerSystem::value().GetPrimaryCreature(god);
+	if (!creature.has_value())
+	{
+		return {};
+	}
+	return Locator::creatureCarryOverSystem::value().CreatureFile(*creature).value_or(std::vector<uint8_t> {});
+}
+
+/// The figures of each god of the decided game, for the report to the lobby, with the creature of each god. The world
+/// does not change.
 std::vector<lobby_results::GodFigures> GodFiguresOfWorld()
 {
 	std::vector<lobby_results::GodFigures> gods;
 	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
 	{
-		gods.push_back({.god = god, .place = standing.place, .godsDefeated = 0});
+		gods.push_back({.god = god, .place = standing.place, .godsDefeated = 0, .creature = CreatureOfGod(god)});
 	}
 	Locator::entitiesRegistry::value().Each<const ecs::components::Player, const ecs::components::PlayerStatistics>(
 	    [&gods](const ecs::components::Player& player, const ecs::components::PlayerStatistics& statistics) {

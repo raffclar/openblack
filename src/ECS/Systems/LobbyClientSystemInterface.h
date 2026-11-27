@@ -271,6 +271,14 @@ public:
 	virtual void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) = 0;
 	/// Sends the files of the player's creature to the lobby, which gives the address of the creature's web page
 	virtual void UploadCreature(lobby_api::CreatureUpload upload, LobbyCallback<lobby_api::CreatureUploadReply> callback) = 0;
+	/// Sends a file of the game's Profiles folder to the files that the lobby keeps for the account, in place of the file
+	/// that it kept at that place. The folder has "/" between its parts. The lobby takes only a file that the game writes
+	/// at that place. A lobby that does not keep files gives an error.
+	virtual void PutPlayerFile(std::string /*folder*/, std::string /*name*/, std::vector<uint8_t> /*bytes*/,
+	                           LobbyCallback<LobbyDone> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 	/// Tells the lobby that a skirmish of the player is decided. The call sends no data: the session tells the lobby
 	/// which account sends it.
 	virtual void SendSkirmishPing(LobbyCallback<LobbyDone> callback) = 0;

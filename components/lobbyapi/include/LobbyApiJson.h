@@ -142,4 +142,12 @@ struct FormPart
 /// A boundary that is not in the bytes of any part. The seed makes the boundary different between bodies.
 [[nodiscard]] std::string MultipartBoundary(std::span<const FormPart> parts, uint64_t seed);
 
+/// The folder of the Profiles folder that keeps the creature mind files of the profiles, as PUT /api/v1/me/files names it
+constexpr std::string_view k_CreatureMindFolder = "Scripts/CreatureMind";
+
+/// The text with each byte that is not a letter, a digit or one of "-._~" as "%" and two hex digits (RFC 3986)
+[[nodiscard]] std::string PercentEncoded(std::string_view text);
+/// The path of PUT /api/v1/me/files for a file of the Profiles folder: the folder has "/" between its parts
+[[nodiscard]] std::string PlayerFilePath(std::string_view folder, std::string_view name);
+
 } // namespace openblack::lobby_api

@@ -41,9 +41,13 @@ class CreatureCarryOverSystem final: public CreatureCarryOverSystemInterface
 public:
 	/// The file of the current player's profile the creature is kept in, none when there is none
 	using ProfileFile = std::function<std::optional<std::string>()>;
+	/// Gets the name of the profile's mind file and the mind each time that the system writes the file. The desktop
+	/// game sends the file to the account's files on the lobby from here.
+	using MindWritten = std::function<void(std::string fileName, std::shared_ptr<const creaturemind::MindFileData> mind)>;
 
 	/// The creature kept is written to and read from the profile's file in the folder, when there are both
-	explicit CreatureCarryOverSystem(std::optional<std::filesystem::path> folder = std::nullopt, ProfileFile profileFile = {});
+	explicit CreatureCarryOverSystem(std::optional<std::filesystem::path> folder = std::nullopt, ProfileFile profileFile = {},
+	                                 MindWritten mindWritten = {});
 	/// Writes every file that waits, then stops the thread of the writer
 	~CreatureCarryOverSystem() override;
 	CreatureCarryOverSystem(const CreatureCarryOverSystem&) = delete;
@@ -95,6 +99,7 @@ private:
 
 	std::optional<std::filesystem::path> _folder;
 	ProfileFile _profileFile;
+	MindWritten _mindWritten;
 	/// The profile's file the game being played keeps its creature in, taken when it started; none before the first game
 	std::optional<std::string> _gameFile;
 	std::shared_ptr<const creaturemind::MindFileData> _kept;

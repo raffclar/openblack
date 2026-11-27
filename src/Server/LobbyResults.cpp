@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iterator>
 #include <ranges>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -24,6 +25,40 @@
 
 namespace openblack::server::lobby_results
 {
+
+namespace
+{
+
+/// A god of the report: its account and its figures
+struct GodWithAccount
+{
+	int64_t account {0};
+	const GodFigures* figures {nullptr};
+};
+
+/// Each god slot whose seat had a player with an account and whose god has figures, in the order of the slots
+std::vector<GodWithAccount> GodsWithAccounts(std::span<const GodFigures> gods, std::span<const LockstepHost::Seat> seats)
+{
+	std::vector<GodWithAccount> found;
+	for (size_t slot = 0; slot < seats.size(); ++slot)
+	{
+		const auto& seat = seats[slot];
+		const auto account = seat.state == LockstepHost::SeatState::Open ? std::nullopt : lobby_status::AccountId(seat.account);
+		const auto player = player_slots::PlayerOfSlot(slot);
+		if (!account.has_value() || !player.has_value())
+		{
+			continue;
+		}
+		const auto figures = std::ranges::find(gods, *player, &GodFigures::god);
+		if (figures != gods.end())
+		{
+			found.push_back({.account = *account, .figures = &*figures});
+		}
+	}
+	return found;
+}
+
+} // namespace
 
 int32_t PositionOf(std::optional<int32_t> place, int32_t lastPlace) noexcept
 {
@@ -50,23 +85,11 @@ std::optional<lobby_api::ResultReport> MakeReport(const Game& game, std::span<co
 	    .gods = {},
 	};
 	const auto timePlayed = static_cast<int64_t>(statistics::TimePlayed(game.turn));
-	for (size_t slot = 0; slot < seats.size(); ++slot)
+	for (const auto& [account, figures] : GodsWithAccounts(gods, seats))
 	{
-		const auto& seat = seats[slot];
-		const auto account = seat.state == LockstepHost::SeatState::Open ? std::nullopt : lobby_status::AccountId(seat.account);
-		const auto player = player_slots::PlayerOfSlot(slot);
-		if (!account.has_value() || !player.has_value())
-		{
-			continue;
-		}
-		const auto figures = std::ranges::find(gods, *player, &GodFigures::god);
-		if (figures == gods.end())
-		{
-			continue;
-		}
-		const auto clan = std::ranges::find(clans, *account, &lobby_api::ServerStatusClan::account);
+		const auto clan = std::ranges::find(clans, account, &lobby_api::ServerStatusClan::account);
 		report.gods.push_back({
-		    .account = *account,
+		    .account = account,
 		    .clan = clan != clans.end() ? std::optional(clan->clan) : std::nullopt,
 		    .position = PositionOf(figures->place, lastPlace),
 		    .godsDefeated = static_cast<int32_t>(figures->godsDefeated),
@@ -94,6 +117,32 @@ std::string ResultsAddress(std::string_view api, std::string_view serverId)
 		api.remove_suffix(1);
 	}
 	return std::string(api) + "/servers/" + std::string(serverId) + "/results";
+}
+
+std::vector<CreatureReport> MakeCreatureReports(std::span<const GodFigures> gods, std::span<const LockstepHost::Seat> seats)
+{
+	std::vector<CreatureReport> creatures;
+	for (const auto& [account, figures] : GodsWithAccounts(gods, seats))
+	{
+		if (!figures->creature.empty())
+		{
+			creatures.push_back({.account = account, .mind = figures->creature});
+		}
+	}
+	return creatures;
+}
+
+std::vector<uint8_t> CreatureSignedBytes(std::string_view game, int64_t account, std::span<const uint8_t> mind)
+{
+	const auto head = std::string(k_CreatureSigningPrefix) + std::string(game) + '\n' + std::to_string(account) + '\n';
+	std::vector<uint8_t> bytes(head.begin(), head.end());
+	bytes.insert(bytes.end(), mind.begin(), mind.end());
+	return bytes;
+}
+
+std::string CreatureAddress(std::string_view resultsAddress, std::string_view game, int64_t account)
+{
+	return std::string(resultsAddress) + "/" + std::string(game) + "/creatures/" + std::to_string(account);
 }
 
 Next NextAfter(int32_t status) noexcept

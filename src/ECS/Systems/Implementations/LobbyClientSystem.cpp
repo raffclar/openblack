@@ -1481,6 +1481,31 @@ void LobbyClientSystem::UploadCreature(lobby_api::CreatureUpload upload, LobbyCa
 	});
 }
 
+void LobbyClientSystem::PutPlayerFile(std::string folder, std::string name, std::vector<uint8_t> bytes,
+                                      LobbyCallback<LobbyDone> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Put,
+	    .path = lobby_api::PlayerFilePath(folder, name),
+	    .headers = {{"Content-Type", "application/octet-stream"}, {"Accept", std::string(k_JsonType)}},
+	    .body = std::move(bytes),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, LobbyDone {});
+	        },
+	});
+}
+
 void LobbyClientSystem::SendPing(std::vector<int64_t> friends, LobbyCallback<lobby_api::PingReply> callback)
 {
 	if (!_config.has_value())

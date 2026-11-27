@@ -93,35 +93,9 @@ bool RefusedTheVersionLength(int32_t status, std::string_view body)
 	       std::ranges::find(problem->errorFields, std::string_view("gamever")) != problem->errorFields.end();
 }
 
-namespace
-{
-/// The text with each byte that is not a letter, a digit or one of "-._~" as "%" and two hex digits
-std::string PercentEncoded(std::string_view text)
-{
-	constexpr std::string_view k_Hex = "0123456789ABCDEF";
-	std::string out;
-	for (const char c : text)
-	{
-		const auto u = static_cast<unsigned char>(c);
-		const bool plain = (u >= 'a' && u <= 'z') || (u >= 'A' && u <= 'Z') || (u >= '0' && u <= '9') || u == '-' || u == '.' ||
-		                   u == '_' || u == '~';
-		if (plain)
-		{
-			out += c;
-		}
-		else
-		{
-			out += '%';
-			out += k_Hex[u >> 4];
-			out += k_Hex[u & 0xF];
-		}
-	}
-	return out;
-}
-} // namespace
-
 std::string MapAddress(std::string_view api, std::string_view serverId, const CustomMap& map)
 {
+	using lobby_api::PercentEncoded;
 	std::string base(api);
 	while (base.ends_with('/'))
 	{

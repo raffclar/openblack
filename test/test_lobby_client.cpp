@@ -24,6 +24,7 @@
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
+#include "Online/CreatureMindSend.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/SiteSessionInterface.h"
@@ -848,6 +849,56 @@ TEST_F(LobbyClientTest, CreatureUploadSendsTheThreeFiles)
 	_http.Answer(201, R"({"url":"https://bw.example/creatures/abc"})");
 	ASSERT_TRUE(reply.has_value());
 	EXPECT_EQ(reply->url, "https://bw.example/creatures/abc");
+}
+
+TEST(LobbyPlayerFiles, ThePathOfAFileEncodesTheFolderAndTheName)
+{
+	EXPECT_EQ(lobby_api::PlayerFilePath(lobby_api::k_CreatureMindFolder, "C4a4f6e63.erc"),
+	          "/me/files?folder=Scripts%2FCreatureMind&name=C4a4f6e63.erc");
+	EXPECT_EQ(lobby_api::PercentEncoded("a b&c=d/~"), "a%20b%26c%3Dd%2F~");
+	EXPECT_EQ(lobby_api::PercentEncoded("\xC3\xA9"), "%C3%A9");
+}
+
+TEST_F(LobbyClientTest, APlayerFileGoesAsItsBytesToItsPlaceInTheAccountsFiles)
+{
+	Make();
+	LogIn();
+	bool done = false;
+	_client->PutPlayerFile("Scripts/CreatureMind", "C4a4f6e63.erc", {0x21, 0x00, 0xFF},
+	                       [&](auto&& result) { done = result.Ok(); });
+	ASSERT_EQ(_http.sent.size(), 1u);
+	EXPECT_EQ(_http.Next().method, HttpMethod::Put);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/files?folder=Scripts%2FCreatureMind&name=C4a4f6e63.erc");
+	EXPECT_EQ(_http.NextHeader("Content-Type"), "application/octet-stream");
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer access1");
+	EXPECT_EQ(_http.Next().body, (std::vector<uint8_t> {0x21, 0x00, 0xFF}));
+	_http.Answer(201, R"({"id":"00000000-0000-0000-0000-000000000001"})");
+	EXPECT_TRUE(done);
+}
+
+TEST(CreatureMindSendRules, OnlyASignedInAccountThatIsNotAGuestSendsTheMind)
+{
+	using online::creature_mind_send::Sends;
+	EXPECT_TRUE(Sends(LobbySessionState::LoggedIn, false));
+	EXPECT_FALSE(Sends(LobbySessionState::LoggedIn, true));
+	EXPECT_FALSE(Sends(LobbySessionState::LoggingIn, false));
+	EXPECT_FALSE(Sends(LobbySessionState::LoggedOut, false));
+}
+
+TEST_F(LobbyClientTest, TheMindFileGoesToTheFolderOfTheCreatureMindsOnlyWithASession)
+{
+	Make();
+	const std::vector<uint8_t> mind {1, 2, 3};
+	online::creature_mind_send::Send(*_client, "C4a4f6e63.erc", mind);
+	EXPECT_TRUE(_http.sent.empty());
+
+	LogIn();
+	online::creature_mind_send::Send(*_client, "C4a4f6e63.erc", mind);
+	ASSERT_EQ(_http.sent.size(), 1u);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/files?folder=Scripts%2FCreatureMind&name=C4a4f6e63.erc");
+	EXPECT_EQ(_http.Next().body, mind);
+	_http.Answer(200, "{}");
+	EXPECT_TRUE(_http.sent.empty());
 }
 
 TEST_F(LobbyClientTest, ErrorsOfTheLobbyHaveTheirKinds)

@@ -23,6 +23,7 @@
 #include <string_view>
 #include <vector>
 
+#include <MindFile.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/Implementations/LandIsland.h"
@@ -203,6 +204,7 @@
 #include "Input/GameActionMap.h"
 #include "Input/InputDeviceInterface.h"
 #include "LHVM.h"
+#include "Online/CreatureMindSend.h"
 #include "Online/FriendList.h"
 #include "Online/GameBuildHash.h"
 #include "Online/GameBuildId.h"
@@ -878,8 +880,25 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::fixedOutlineSystem::emplace<FixedOutlineSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	// The player's creature is kept under their profile's file
+	// The desktop game sends each mind file that it writes to the account's files on the lobby. The page of the web game
+	// sends the files of its Profiles folder itself.
+	CreatureCarryOverSystem::MindWritten mindWritten;
+#if !defined(__EMSCRIPTEN__)
+	mindWritten = [](std::string fileName, const std::shared_ptr<const creaturemind::MindFileData>& mind) {
+		if (mind == nullptr || !Locator::lobbyClient::has_value())
+		{
+			return;
+		}
+		auto& lobby = Locator::lobbyClient::value();
+		if (!online::creature_mind_send::Sends(lobby.GetState(), lobby.IsGuest()))
+		{
+			return;
+		}
+		online::creature_mind_send::Send(lobby, std::move(fileName), creaturemind::Write(*mind));
+	};
+#endif
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
-	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
+	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); }, std::move(mindWritten));
 	Locator::saveGameSystem::emplace<SaveGameSystem>();
 	// The creature's web page and its pictures go to the folder of the profile picked now
 	Locator::creatureWebPageSystem::emplace<CreatureWebPageSystem>([]() -> std::optional<std::u16string> {

@@ -1171,4 +1171,31 @@ std::optional<ByteRange> ParseContentRange(std::string_view text)
 	return ByteRange {.first = *first, .last = *last, .total = *total};
 }
 
+std::string PercentEncoded(std::string_view text)
+{
+	constexpr std::string_view k_Hex = "0123456789ABCDEF";
+	std::string out;
+	out.reserve(text.size());
+	for (const char c : text)
+	{
+		const auto u = static_cast<unsigned char>(c);
+		const bool plain = (u >= 'a' && u <= 'z') || (u >= 'A' && u <= 'Z') || (u >= '0' && u <= '9') || u == '-' || u == '.' ||
+		                   u == '_' || u == '~';
+		if (plain)
+		{
+			out += c;
+			continue;
+		}
+		out += '%';
+		out += k_Hex[u >> 4U];
+		out += k_Hex[u & 0xFU];
+	}
+	return out;
+}
+
+std::string PlayerFilePath(std::string_view folder, std::string_view name)
+{
+	return fmt::format("/me/files?folder={}&name={}", PercentEncoded(folder), PercentEncoded(name));
+}
+
 } // namespace openblack::lobby_api

@@ -11,6 +11,7 @@
 
 #include <array>
 #include <chrono>
+#include <deque>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -135,6 +136,19 @@ struct GameRole::Parts
 	bool resultDone {false};
 	uint32_t resultSends {0};
 	std::chrono::steady_clock::time_point nextResultSend {};
+	/// The creature of a god of the result, which goes to the lobby after the lobby took the result
+	struct CreatureSend
+	{
+		std::string address;
+		std::vector<uint8_t> mind;
+		std::string signature;
+		uint32_t sends {0};
+	};
+	/// The creatures that wait, the first goes next. The lobby takes them only after it took the result.
+	std::deque<CreatureSend> creatures;
+	bool resultTaken {false};
+	bool creatureSending {false};
+	std::chrono::steady_clock::time_point nextCreatureSend {};
 	/// The answers to the search of the clients on the local network
 	std::unique_ptr<online::LanResponder> lan;
 	/// The report of the host to the lobby: the god teams and the winning conditions
@@ -203,6 +217,7 @@ struct GameRole::Parts
 			case lobby_results::Next::Done:
 			{
 				resultDone = true;
+				resultTaken = true;
 				const auto answer = lobby_api::ParseResultAnswer(response.Text());
 				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby took the result of the game (result {})",
 				                   answer.has_value() ? std::to_string(answer->result) : std::string("not known"));
@@ -220,6 +235,46 @@ struct GameRole::Parts
 				                   resultSends, lobby_results::k_MostSends);
 				break;
 			}
+		});
+	}
+
+	void SendCreature()
+	{
+		if (!lobby || !resultTaken || creatures.empty() || creatureSending ||
+		    std::chrono::steady_clock::now() < nextCreatureSend)
+		{
+			return;
+		}
+		creatureSending = true;
+		auto& next = creatures.front();
+		++next.sends;
+		online::HttpRequest request {.method = online::HttpMethod::Put,
+		                             .url = next.address,
+		                             .headers = {{"Content-Type", "application/octet-stream"},
+		                                         {std::string(lobby_results::k_SignatureHeader), next.signature}},
+		                             .body = next.mind};
+		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+			creatureSending = false;
+			const auto& sent = creatures.front();
+			const auto after = lobby_results::NextAfter(response.status);
+			if (after == lobby_results::Next::SendAgain && sent.sends < lobby_results::k_MostSends)
+			{
+				nextCreatureSend = std::chrono::steady_clock::now() + lobby_results::k_SendAgainAfter;
+				SPDLOG_LOGGER_WARN(spdlog::get("game"),
+				                   "The lobby did not take a creature of the result (status {}), send {} of {}",
+				                   response.status, sent.sends, lobby_results::k_MostSends);
+				return;
+			}
+			if (after == lobby_results::Next::Done)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby took a creature of the result ({} bytes)", sent.mind.size());
+			}
+			else
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take a creature of the result (status {}): {}",
+				                   response.status, response.Text().substr(0, 200));
+			}
+			creatures.pop_front();
 		});
 	}
 
@@ -551,6 +606,7 @@ void GameRole::Update()
 		}
 		parts.SendMap();
 		parts.SendResult();
+		parts.SendCreature();
 		parts.lobby->Poll();
 	}
 }
@@ -633,8 +689,25 @@ void GameRole::ReportResult(const lobby_results::Game& game, std::span<const lob
 		return;
 	}
 	parts.resultSignature = join_ticket::EncodeBase64Url(*signature);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game {} is decided at turn {}: the server sends the result of {} gods",
-	                   game.id, game.turn, report->gods.size());
+	// The creature of each god goes after the result, signed with the id of the game and the account of the god
+	for (auto& creature : lobby_results::MakeCreatureReports(gods, parts.host->Seats()))
+	{
+		const auto creatureSignature =
+		    ed25519::Sign(*parts.resultSeed, lobby_results::CreatureSignedBytes(report->game, creature.account, creature.mind));
+		if (!creatureSignature.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The server cannot sign a creature of the game {}", game.id);
+			continue;
+		}
+		parts.creatures.push_back({
+		    .address = lobby_results::CreatureAddress(parts.resultsAddress, report->game, creature.account),
+		    .mind = std::move(creature.mind),
+		    .signature = join_ticket::EncodeBase64Url(*creatureSignature),
+		});
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"),
+	                   "The game {} is decided at turn {}: the server sends the result of {} gods and {} creatures", game.id,
+	                   game.turn, report->gods.size(), parts.creatures.size());
 	parts.SendResult();
 }
 
@@ -648,7 +721,7 @@ void GameRole::Close()
 	// The last report goes after the report that did not come back yet
 	const auto until = std::chrono::steady_clock::now() + k_LastReportLimit;
 	const auto wait = [&parts, until] {
-		while ((parts.reporting || parts.resultSending) && std::chrono::steady_clock::now() < until)
+		while ((parts.reporting || parts.resultSending || parts.creatureSending) && std::chrono::steady_clock::now() < until)
 		{
 			parts.lobby->Poll();
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));

@@ -80,9 +80,11 @@ std::optional<entt::entity> PlayersCreature()
 }
 } // namespace
 
-CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder, ProfileFile profileFile)
+CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::path> folder, ProfileFile profileFile,
+                                                 MindWritten mindWritten)
     : _folder(std::move(folder))
     , _profileFile(std::move(profileFile))
+    , _mindWritten(std::move(mindWritten))
 {
 }
 
@@ -222,6 +224,10 @@ void CreatureCarryOverSystem::Write(std::shared_ptr<const creaturemind::MindFile
 	if (!kept.has_value())
 	{
 		return;
+	}
+	if (_mindWritten)
+	{
+		_mindWritten(kept->mind.filename().string(), mind);
 	}
 	if (_writer == nullptr)
 	{

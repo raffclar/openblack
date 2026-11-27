@@ -173,6 +173,55 @@ TEST(LobbyResults, AddressOfTheResults)
 	EXPECT_EQ(ResultsAddress("https://srv.example.org/api/v1", "abc"), "https://srv.example.org/api/v1/servers/abc/results");
 }
 
+TEST(LobbyResults, EachGodOfTheReportWithACreatureSendsItsCreature)
+{
+	const std::vector seats {
+	    SeatOf(LockstepHost::SeatState::Taken, "7"),
+	    SeatOf(LockstepHost::SeatState::Open, "13"),
+	    SeatOf(LockstepHost::SeatState::Taken, "9"),
+	    SeatOf(LockstepHost::SeatState::Taken, "11"),
+	};
+	const std::vector<GodFigures> gods {
+	    {.god = PlayerNames::PLAYER_ONE, .place = 2, .godsDefeated = 1, .creature = {1, 2, 3}},
+	    // An open seat has no account, so its creature does not go
+	    {.god = PlayerNames::PLAYER_TWO, .place = 1, .godsDefeated = 0, .creature = {4}},
+	    // A god with no creature sends none
+	    {.god = PlayerNames::PLAYER_THREE, .place = 1, .godsDefeated = 0, .creature = {}},
+	    {.god = PlayerNames::PLAYER_FOUR, .place = 1, .godsDefeated = 0, .creature = {5, 6}},
+	};
+	const auto creatures = MakeCreatureReports(gods, seats);
+	ASSERT_EQ(creatures.size(), 2U);
+	EXPECT_EQ(creatures[0].account, 7);
+	EXPECT_EQ(creatures[0].mind, (std::vector<uint8_t> {1, 2, 3}));
+	EXPECT_EQ(creatures[1].account, 11);
+	EXPECT_EQ(creatures[1].mind, (std::vector<uint8_t> {5, 6}));
+}
+
+TEST(LobbyResults, TheSignatureOfACreatureCoversTheGameTheAccountAndTheMind)
+{
+	const std::vector<uint8_t> mind {0x00, 0x0A, 0xFF};
+	const auto bytes = CreatureSignedBytes("game-1", 7, mind);
+	std::string expected = "bwgame-creature-v1\ngame-1\n7\n";
+	expected.append(mind.begin(), mind.end());
+	EXPECT_EQ(std::string(bytes.begin(), bytes.end()), expected);
+	const auto seed = ed25519::SeedOfPem(k_TestKeyPem);
+	ASSERT_TRUE(seed.has_value());
+	const auto signature = ed25519::Sign(*seed, bytes);
+	const auto key = ed25519::PublicKeyOf(*seed);
+	ASSERT_TRUE(signature.has_value());
+	ASSERT_TRUE(key.has_value());
+	EXPECT_TRUE(ed25519::Verify(*key, bytes, *signature));
+	// The signature of one god's creature is not the signature of another god's
+	EXPECT_FALSE(ed25519::Verify(*key, CreatureSignedBytes("game-1", 8, mind), *signature));
+	EXPECT_FALSE(ed25519::Verify(*key, CreatureSignedBytes("game-2", 7, mind), *signature));
+}
+
+TEST(LobbyResults, AddressOfACreature)
+{
+	EXPECT_EQ(CreatureAddress(ResultsAddress("https://srv.example.org/api/v1/", "abc"), "game-1", 7),
+	          "https://srv.example.org/api/v1/servers/abc/results/game-1/creatures/7");
+}
+
 TEST(LobbyResults, ServerSendsAgainOnlyWhenTheLobbyDidNotAnswer)
 {
 	EXPECT_EQ(NextAfter(201), Next::Done);

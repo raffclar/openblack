@@ -939,6 +939,43 @@ TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorA
 	EXPECT_TRUE(std::filesystem::exists(KeptFilesIn(folder.Path(), k_ProfileFile).mind));
 }
 
+TEST_F(CreatureCarryOverSaves, EachWriteOfTheProfilesMindGivesTheFileNameAndTheMindToTheSender)
+{
+	const TestFolder folder("carry_over_mind_written");
+	std::vector<std::pair<std::string, std::u16string>> written;
+	ecs::systems::CreatureCarryOverSystem carryOver(
+	    folder.Path(), ProfileFile, [&written](std::string fileName, std::shared_ptr<const creaturemind::MindFileData> mind) {
+		    written.emplace_back(std::move(fileName), mind != nullptr ? mind->name : u"");
+	    });
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 599);
+	carryOver.ProcessTurn();
+	EXPECT_TRUE(written.empty());
+	Live(creature, 600);
+	carryOver.ProcessTurn();
+	ASSERT_EQ(written.size(), 1u);
+	EXPECT_EQ(written.front().first, k_ProfileFile);
+	EXPECT_EQ(written.front().second, u"Spot");
+	Live(creature, 1200);
+	carryOver.ProcessTurn();
+	EXPECT_EQ(written.size(), 2u);
+	carryOver.FinishWrites();
+}
+
+TEST_F(CreatureCarryOverSaves, WithNoProfileFileNothingGoesToTheSender)
+{
+	const TestFolder folder("carry_over_mind_no_profile");
+	int written = 0;
+	ecs::systems::CreatureCarryOverSystem carryOver(
+	    folder.Path(), []() -> std::optional<std::string> { return std::nullopt; },
+	    [&written](std::string /*fileName*/, std::shared_ptr<const creaturemind::MindFileData> /*mind*/) { ++written; });
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 599);
+	carryOver.ProcessTurn();
+	Live(creature, 600);
+	carryOver.ProcessTurn();
+	carryOver.EndGame();
+	EXPECT_EQ(written, 0);
+}
+
 TEST_F(CreatureCarryOverSaves, AReadOfTheProfilesFilesWaitsUntilTheWriterPutThemOnTheDisk)
 {
 	const TestFolder folder("carry_over_writer");

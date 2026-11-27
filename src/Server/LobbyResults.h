@@ -31,6 +31,8 @@ namespace openblack::server::lobby_results
 
 /// The text before the body in the bytes that the server signs
 constexpr std::string_view k_SigningPrefix = "bwgame-result-v1\n";
+/// The text before the game, the account and the mind file in the bytes that the server signs for the creature of a god
+constexpr std::string_view k_CreatureSigningPrefix = "bwgame-creature-v1\n";
 /// The header that holds the signature (base64url with no padding)
 constexpr std::string_view k_SignatureHeader = "Bwgame-Signature";
 /// The time before the server sends the report again after the lobby did not answer
@@ -51,6 +53,17 @@ struct GodFigures
 	std::optional<int32_t> place;
 	/// The gods that this god defeated
 	uint32_t godsDefeated {0};
+	/// The mind file of the god's creature when the game is decided. Empty when the god has no creature.
+	std::vector<uint8_t> creature;
+};
+
+/// The creature of a god of the report, which goes to the lobby after the lobby took the report
+struct CreatureReport
+{
+	/// The account of the god
+	int64_t account {0};
+	/// The mind file of the god's creature
+	std::vector<uint8_t> mind;
 };
 
 /// The game that the report is about
@@ -74,6 +87,17 @@ struct Game
 [[nodiscard]] std::optional<lobby_api::ResultReport> MakeReport(const Game& game, std::span<const GodFigures> gods,
                                                                 std::span<const LockstepHost::Seat> seats,
                                                                 std::span<const lobby_api::ServerStatusClan> clans);
+
+/// The creatures of the gods of the report: each god of the report that has a creature, in the order of the report
+[[nodiscard]] std::vector<CreatureReport> MakeCreatureReports(std::span<const GodFigures> gods,
+                                                              std::span<const LockstepHost::Seat> seats);
+
+/// The bytes that the server signs for the creature of a god: the creature signing prefix, the id of the game and a new
+/// line, the account and a new line, then the exact mind file
+[[nodiscard]] std::vector<uint8_t> CreatureSignedBytes(std::string_view game, int64_t account, std::span<const uint8_t> mind);
+
+/// The address of the creature of a god after the address of the results: <results>/<game>/creatures/<account>
+[[nodiscard]] std::string CreatureAddress(std::string_view resultsAddress, std::string_view game, int64_t account);
 
 /// The bytes that the server signs: the signing prefix, then the exact body
 [[nodiscard]] std::vector<uint8_t> SignedBytes(std::string_view body);
