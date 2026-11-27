@@ -52,6 +52,10 @@ struct Situation
 {
 	/// The creature is the first creature of the local player
 	bool primaryCreature {false};
+	/// The creature belongs to the local player
+	bool ownCreature {false};
+	/// The debug option is on that mirrors every creature of the local player
+	bool mirrorEveryOwnCreature {false};
 	/// A land block is under the creature
 	bool onBlock {false};
 	/// Some part of the block's box is in the camera's view
