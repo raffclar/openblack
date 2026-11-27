@@ -244,6 +244,14 @@ TEST(GameLifetime, TheWarningComesTenMinutesBeforeTheDeadline)
 	EXPECT_TRUE(game_lifetime::WarningDue(10'000, 10'000 - 600));
 }
 
+TEST(GameLifetime, TheWarningLineNamesTheWholeMinutesThatAreLeft)
+{
+	EXPECT_EQ(game_lifetime::WarningLine(600), "The game server ends in 10 minutes.");
+	EXPECT_EQ(game_lifetime::WarningLine(541), "The game server ends in 10 minutes.");
+	EXPECT_EQ(game_lifetime::WarningLine(60), "The game server ends in 1 minute.");
+	EXPECT_EQ(game_lifetime::WarningLine(0), "The game server ends in 1 minute.");
+}
+
 TEST(LobbyGame, TheWaitForTheLoadsGoesAsJson)
 {
 	const game_socket::LoadWait wait {.loading = {"alice", "bob"}, .secondsLeft = 97};
