@@ -5083,10 +5083,10 @@ std::vector<uint8_t> SpellRecord(StreamStart start, uint32_t number, uint32_t sa
 		writer.Put(mark);
 		writer.Put(uint32_t {0});
 	}
-	for (int i = 0; i < 3; ++i)
-	{
-		writer.Put(std::array<uint8_t, 12> {});
-	}
+	// The movement of the spell, the map position where it was cast and the movement of the hand
+	writer.Put(std::array {0.0f, 0.0f, -3.0f});
+	writer.Put(std::array<uint8_t, 12> {});
+	writer.Put(std::array<uint8_t, 12> {});
 	// The prayer power, the prayer power when last filled, the flag of a closed spell, two more words and the flag that a
 	// person casts the spell
 	writer.Put(30.0f);
@@ -5110,11 +5110,12 @@ std::vector<uint8_t> SpellRecord(StreamStart start, uint32_t number, uint32_t sa
 	{
 		writer.Put(uint32_t {0});
 	}
-	// The magic type, the age, the size and one more float
+	// The magic type, the age, the size, the strength multiplier, the first cast place and the prayer power since the
+	// last motes of light
 	writer.Put(static_cast<uint32_t>(magicType));
 	writer.Put(3.25f);
 	writer.Put(40.0f);
-	writer.Put(0.0f);
+	writer.Put(2.0f);
 	writer.Put(std::array<uint8_t, 12> {});
 	writer.Put(0.5f);
 	writer.Put(0.25f);
@@ -5153,6 +5154,10 @@ TEST(VanillaWorldImport, AHeldSpellReadsItsMagicTypeItsTimeAndItsPrayerPower)
 	EXPECT_EQ(spell->duration, 12.5f);
 	EXPECT_EQ(spell->age, 3.25f);
 	EXPECT_EQ(spell->magnitude, 40.0f);
+	EXPECT_EQ(spell->strengthMultiplier, 2.0f);
+	EXPECT_EQ(spell->upkeepMotes, 0.5f);
+	EXPECT_EQ(spell->eventMotes, 0.25f);
+	EXPECT_EQ(spell->movement, (std::array {0.0f, 0.0f, -3.0f}));
 	EXPECT_EQ(spell->casterPoint, (std::array {1.0f, 2.0f, 3.0f}));
 	EXPECT_EQ(spell->abovePoint, (std::array {4.0f, 5.0f, 6.0f}));
 	EXPECT_EQ(spell->cameraForward, (std::array {0.0f, 0.0f, 1.0f}));
