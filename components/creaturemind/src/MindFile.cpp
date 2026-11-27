@@ -592,10 +592,65 @@ MindResult openblack::creaturemind::ReadFile(const std::filesystem::path& path, 
 	return Read(*bytes, data, names);
 }
 
+std::vector<uint8_t> openblack::creaturemind::FitSavedAs(std::span<const uint8_t> savedAs)
+{
+	if (savedAs.size() <= k_LongestNameBytes)
+	{
+		return {savedAs.begin(), savedAs.end()};
+	}
+	auto kept = savedAs.first(k_LongestNameBytes - 1);
+	// Remove the bytes of a UTF-8 character that the cut divides: the start byte and the continuation bytes before
+	// the cut
+	constexpr uint8_t k_TopTwoBits = 0xC0;
+	constexpr uint8_t k_Continuation = 0x80;
+	size_t end = kept.size();
+	while (end > 0 && (kept[end - 1] & k_TopTwoBits) == k_Continuation)
+	{
+		--end;
+	}
+	if (end > 0 && (kept[end - 1] & k_TopTwoBits) == k_TopTwoBits)
+	{
+		const auto start = kept[end - 1];
+		const size_t length = (start & 0xE0) == 0xC0 ? 2 : (start & 0xF0) == 0xE0 ? 3 : 4;
+		if (kept.size() - (end - 1) < length)
+		{
+			kept = kept.first(end - 1);
+		}
+	}
+	std::vector<uint8_t> fitted(kept.begin(), kept.end());
+	fitted.push_back(0);
+	return fitted;
+}
+
+std::vector<uint8_t> openblack::creaturemind::FitProfile(std::span<const uint8_t> profile)
+{
+	if (profile.size() <= k_LongestNameBytes)
+	{
+		return {profile.begin(), profile.end()};
+	}
+	// Two bytes for each character, and two for the terminating zero
+	constexpr size_t k_LongestCharacters = (k_LongestNameBytes - 2) / 2;
+	auto kept = profile.first(k_LongestCharacters * 2);
+	// Remove the first half of a character pair that the cut divides
+	constexpr uint8_t k_HighByteMask = 0xFC;
+	constexpr uint8_t k_FirstHalf = 0xD8;
+	if ((kept.back() & k_HighByteMask) == k_FirstHalf)
+	{
+		kept = kept.first(kept.size() - 2);
+	}
+	std::vector<uint8_t> fitted(kept.begin(), kept.end());
+	fitted.insert(fitted.end(), {0, 0});
+	return fitted;
+}
+
 std::vector<uint8_t> openblack::creaturemind::Write(const MindFileData& data)
 {
 	std::vector<uint8_t> bytes;
 	auto copy = data;
+	// Each name has a count of one byte, so a longer name goes out cut. No file has a count that does not agree with
+	// its name.
+	copy.savedAs = FitSavedAs(copy.savedAs);
+	copy.profile = FitProfile(copy.profile);
 	// The names go out encrypted
 	EncryptBlock(copy.savedAs);
 	EncryptBlock(copy.profile);

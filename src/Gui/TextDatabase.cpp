@@ -373,3 +373,17 @@ std::u16string openblack::gui::ToUtf16(std::string_view text)
 	}
 	return result;
 }
+
+std::u16string openblack::gui::CutText(std::u16string_view text, size_t most)
+{
+	if (text.size() <= most)
+	{
+		return std::u16string(text);
+	}
+	auto kept = text.substr(0, most);
+	if (!kept.empty() && kept.back() >= 0xD800 && kept.back() < 0xDC00)
+	{
+		kept.remove_suffix(1);
+	}
+	return std::u16string(kept);
+}

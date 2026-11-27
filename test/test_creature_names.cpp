@@ -73,3 +73,19 @@ TEST(CreatureNames, OnlyAGameAloneGivesThePlayersCreatureTheNameOfTheProfile)
 	// In a network game the profile of one computer must not change the world of all computers
 	static_assert(!creature_names::ProfileRenamesCreature(true));
 }
+
+TEST(CreatureNames, ANameKeepsAtMostSixtyThreeCharacters)
+{
+	const std::u16string longest(creature_names::k_LongestName, u'a');
+	EXPECT_EQ(creature_names::FitName(longest), longest);
+	EXPECT_EQ(creature_names::FitName(longest + u"b"), longest);
+	// The longest help text has 1285 characters
+	EXPECT_EQ(creature_names::FitName(std::u16string(1285, u'c')).size(), 63u);
+	EXPECT_EQ(creature_names::FitName(u"Guide"), u"Guide");
+	// The cut does not keep the first half of a character pair
+	const std::u16string pair = u"\U0001F600";
+	const auto divided = std::u16string(creature_names::k_LongestName - 1, u'a') + pair;
+	EXPECT_EQ(creature_names::FitName(divided), std::u16string(creature_names::k_LongestName - 1, u'a'));
+	const auto whole = std::u16string(creature_names::k_LongestName - 2, u'a') + pair + u"b";
+	EXPECT_EQ(creature_names::FitName(whole), std::u16string(creature_names::k_LongestName - 2, u'a') + pair);
+}

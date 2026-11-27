@@ -52,6 +52,14 @@ constexpr uint32_t k_StrayNameCount = 4;
 [[nodiscard]] std::u16string NewName(Owner owner, size_t creatures, std::optional<std::u16string_view> profileCreatureName,
                                      const std::function<std::u16string(uint32_t)>& helpWords);
 
+/// The most characters a creature's name can have. A script that names a creature with a longer help text gives it
+/// only the first characters.
+constexpr size_t k_LongestName = 63;
+
+/// The name cut to k_LongestName characters. The cut does not keep half of a character pair: a name that would end
+/// with the first half of a pair ends before it.
+[[nodiscard]] std::u16string FitName(std::u16string_view name);
+
 /// Whether a creature whose mind is loaded from a file takes the name the file keeps: all but a computer player's do
 [[nodiscard]] constexpr bool TakesNameFromFile(Owner owner)
 {
