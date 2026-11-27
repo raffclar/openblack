@@ -199,16 +199,21 @@ std::optional<creature_reflection::Situation> CreatureMirrorSituation(entt::enti
 		return std::nullopt;
 	}
 	const auto& players = Locator::playerSystem::value();
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	const bool mirrorEvery = Locator::config::has_value() && Locator::config::value().mirrorEveryOwnCreature;
+	const auto* body = mirrorEvery && Locator::entitiesRegistry::has_value()
+	                       ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Creature>(entity)
+	                       : nullptr;
 	creature_reflection::Situation situation {
-	    .primaryCreature =
-	        players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
-	                                                                     : PlayerNames::PLAYER_ONE)) == entity,
+	    .primaryCreature = players.GetPrimaryCreature(own) == entity,
+	    .ownCreature = body != nullptr && body->owner == own,
+	    .mirrorEveryOwnCreature = mirrorEvery,
 	    .height = 0.0f,
 	    .fizz = fizz,
 	    .maximumDetail = Locator::config::has_value() && Locator::config::value().maximumDetail,
 	};
 	const auto under = creature_reflection::BlockUnder(position);
-	if (situation.primaryCreature && under.has_value())
+	if ((situation.primaryCreature || (situation.mirrorEveryOwnCreature && situation.ownCreature)) && under.has_value())
 	{
 		const auto& blocks = Locator::terrainSystem::value().GetBlocks();
 		const auto block = std::ranges::find_if(blocks, [&under](const LandBlock& candidate) {

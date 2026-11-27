@@ -102,6 +102,10 @@ struct EngineConfig
 	/// Far villagers still change into their small shadows. Off by default: then the detail changes with the distance
 	/// as in the game. Only the draw reads it, never the synced game.
 	bool maximumDetail {false};
+	/// A debug option for the sea's mirror of creatures. The game mirrors only the first creature of the local player.
+	/// On, it mirrors every creature of the local player, for example those that the editor makes. Off by default. Only
+	/// the draw reads it, never the synced game.
+	bool mirrorEveryOwnCreature {false};
 	bool drawWater {true};
 	bool drawIsland {true};
 	bool drawEntities {true};

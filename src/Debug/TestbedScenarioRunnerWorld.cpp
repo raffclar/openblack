@@ -568,6 +568,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::config::value().maximumDetail = *environment.maximumDetail;
 	}
+	if (environment.mirrorEveryOwnCreature.has_value() && Locator::config::has_value())
+	{
+		Locator::config::value().mirrorEveryOwnCreature = *environment.mirrorEveryOwnCreature;
+	}
 	if (environment.dynamicTreeShadows && Locator::config::has_value())
 	{
 		Locator::config::value().dynamicTreeShadows = true;
