@@ -1849,6 +1849,8 @@ void AddFootballScenarios(std::vector<Scenario>& all);
 /// Villagers walking side by side, each at the speed its life, load, town and state give
 void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
+/// The artefacts of a town: the dance that charges them, their glow and symbol, and how they impress another town
+void AddArtefactScenarios(std::vector<Scenario>& all);
 /// The labels over the villagers' heads: the names display as it grows in and out
 void AddVillagerLabelScenarios(std::vector<Scenario>& all);
 /// The temple key and the realm key of the world camera
