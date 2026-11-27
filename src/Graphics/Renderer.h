@@ -263,9 +263,9 @@ private:
 	/// the layout of the symbols go to the GPU in one buffer.
 	void DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const entt::entity> centres,
 	                           const view_frustum::Frustum* seenBy, const std::function<void(size_t)>& drawColumn) const;
-	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
-	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
-	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// The particle effects of one step of the game's frame, in the order the camera of the pass draws them, among the
+	/// other things that blend: runs of sprites that share a sheet as one instanced draw, ribbons, models and mists
+	void DrawParticles(const DrawSceneDesc& desc, particles::draw::DrawStage stage) const;
 	/// Draws the light bulbs of the learning marks at once, after the solid models and before everything that is sorted
 	void DrawLearningBulbs(const DrawSceneDesc& desc) const;
 	/// Draws what a frame of particles holds, in the order of its commands, seen from a point
@@ -402,7 +402,8 @@ private:
 	[[nodiscard]] const Texture2D* ParticleLightMap(entt::id_type bitmap, int frame) const;
 	/// The texels of a frame of a particle light map, of grey or colour; none for a light map that cannot stamp
 	[[nodiscard]] std::span<const uint8_t> ParticleLightMapTexels(entt::id_type bitmap, int frame) const;
-	/// The border of the players' influence, in the main view
+	/// The border of the players' influence, in the main view. Outside the temple the game draws it at once after
+	/// everything else that it draws at once, before everything that it sorts.
 	void DrawInfluenceBorder(const DrawSceneDesc& desc) const;
 	/// The ripples the hand makes crossing a border, each in its place among what blends, in the main view
 	void DrawInfluenceRipples(const DrawSceneDesc& desc) const;

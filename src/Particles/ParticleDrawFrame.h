@@ -213,6 +213,18 @@ struct Item
 	glm::vec3 sortPoint;
 };
 
+/// The step of the game's frame that adds an effect to the sort. The scene submits each step at its own place, so that
+/// at an equal distance an effect comes after the things that the game adds before it.
+enum class DrawStage : uint8_t
+{
+	/// With the objects of the land's draw list, before the reward chests: the fires of the objects
+	ListedObjects,
+	/// With the learning marks, after the bulb of each mark: the glows of the marks
+	LearningMarks,
+	/// After the hand: the liquids, the particle effects and everything after them
+	AfterHand,
+};
+
 /// An effect's items, in the order the game draws it all at once
 struct Group
 {
@@ -221,6 +233,7 @@ struct Group
 	glm::vec3 origin;
 	uint32_t firstItem;
 	uint32_t itemCount;
+	DrawStage stage {DrawStage::AfterHand};
 };
 
 struct Frame
@@ -300,7 +313,8 @@ struct FightMark
 	/// Red, green, blue and alpha, 0..1
 	glm::vec4 colour;
 };
-/// Adds the fight sparkles to the frame, each taking its own place among what blends
+/// Adds the fight sparkles to the frame. The game draws them at once after the land, before the leashes and the force
+/// field of the fence, so every thing that it sorts draws over them.
 void AddFightMarks(Frame& frame, std::span<const FightMark> marks);
 
 /// The mark over a creature that learns: a light bulb model and a soft glow over it, facing the screen
@@ -430,9 +444,14 @@ struct OrderLists
 	std::vector<uint32_t> counts;
 	std::vector<std::pair<uint32_t, uint32_t>> ranked;
 };
-/// The same order as Order gives, made in the caller's lists
+/// The same order as Order gives, made in the caller's lists, of the groups of one step of the frame only
 void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
-           std::vector<uint32_t>& spriteOrder, OrderLists& lists);
+           std::vector<uint32_t>& spriteOrder, OrderLists& lists, DrawStage stage = DrawStage::AfterHand);
+/// Gives each group from the first group to the last group of the frame this step
+void SetStage(Frame& frame, size_t firstGroup, DrawStage stage);
+/// Moves the groups from the first group to the end of the frame before the groups that come before them, each in its
+/// order. The items stay where they are.
+void MoveGroupsToFront(Frame& frame, size_t firstGroup);
 /// The lowest and the highest corners of a box that holds each corner of each sprite that the frame draws, as the
 /// sprite shader puts the corners. It is none when the frame draws nothing or more than sprites.
 [[nodiscard]] std::optional<std::pair<glm::vec3, glm::vec3>> SpriteBox(const Frame& frame);
