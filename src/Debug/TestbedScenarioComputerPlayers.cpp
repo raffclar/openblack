@@ -109,6 +109,29 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.centre_symbols_after_join",
+	    .name = "The symbols of belief of a village centre after the humans of a network game joined",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of player two stands to the north, and no human or computer plays player two. A Norse "
+	                   "town centre of the player's town believes in the player and in player two. The centre shows its "
+	                   "symbols first. After 2 seconds, as in a network game, the land waits for its humans and player "
+	                   "one joins. The empty slot of player two then gets a computer god.",
+	    .expected = "At the start only the symbol of the player shows at the totem. After the join, two symbols show: the "
+	                "symbol of the player and the picture of the computer god of player two, in the colour of player two. "
+	                "Before the fix the centre kept only the symbol of the player, because it made its symbols before the "
+	                "humans joined.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_SlotTownCentre.x - 12.7f, 24.0f, k_SlotTownCentre.y - 27.2f},
+	                .look = {k_SlotTownCentre.x, 21.0f, k_SlotTownCentre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_SlotTownCentre}},
+	    .temples = {{.offset = {0.0f, 140.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Command::Kind::HumansJoin, .delaySeconds = 2.0f}},
+	    .townBeliefInPlayer = k_SlotTownBelief,
+	    .townBeliefInRival = k_SlotTownBelief,
+	});
+
+	all.push_back({
 	    .id = "multiplayer.map_land_after_start",
 	    .name = "A land of a network game that loads after the humans joined",
 	    .facet = Facet::Multiplayer,

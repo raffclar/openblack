@@ -333,7 +333,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
 	       kind == Kind::TempleFreeCamera || kind == Kind::InfiniteInfluenceCheat || kind == Kind::LoadGeneratedLand ||
 	       kind == Kind::LoadMapLand || kind == Kind::KillVillagers || kind == Kind::SetSkyPictures ||
-	       kind == Kind::StormBolt || IsPointerCommand(kind);
+	       kind == Kind::HumansJoin || kind == Kind::StormBolt || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)

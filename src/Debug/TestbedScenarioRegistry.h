@@ -1395,6 +1395,9 @@ struct Command
 		/// The dome of the sky shows the larger pictures of the sky pack (value 1) or the game's own pictures (value 0), as
 		/// the debug menu's choice does. Value 1 does nothing when no pack loaded. Needs no creature
 		SetSkyPictures,
+		/// The land waits for the humans of a network session, and then player one joins as the only human. The slots
+		/// with no player fill as they fill in a network game. Needs no creature
+		HumansJoin,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

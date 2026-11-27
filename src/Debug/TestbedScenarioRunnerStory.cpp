@@ -77,6 +77,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -479,6 +480,20 @@ bool Runner::GiveStoryCommand(const Command& command)
 			_onLoadedLand = true;
 		}
 		Log(fmt::format("{:.1f}s: generated land {}: {}", _seconds, command.value, loaded ? "loaded" : "not loaded"));
+		return true;
+	}
+	if (command.kind == Kind::HumansJoin)
+	{
+		// The land of a network session waits for its humans, and then player one joins
+		const bool joined = Locator::computerPlayerSystem::has_value();
+		if (joined)
+		{
+			constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
+			auto& minds = Locator::computerPlayerSystem::value();
+			minds.WaitForHumans({});
+			minds.HumansJoined(k_Humans);
+		}
+		Log(fmt::format("{:.1f}s: player one joins: {}", _seconds, joined ? "joined" : "no computer players"));
 		return true;
 	}
 	if (command.kind == Kind::LoadMapLand)
