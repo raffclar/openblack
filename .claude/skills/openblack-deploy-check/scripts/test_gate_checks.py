@@ -163,6 +163,39 @@ class PostDeployCheckTest(unittest.TestCase):
         self.assertIn("PASS: 3 of 4 items pass, 1 STOP", text)  # the deploy log item has no log file
 
 
+class DeployLogItemTest(unittest.TestCase):
+    """The deploy log item asks for a game build id only when the deploy installs the game server."""
+
+    SHA = "eeb5582ceebf822120016614aac3b345aef39c44"
+    WEB = "web_build=20261126-232642-eeb5582ce\nevery check passed\n"
+    SERVER = "server-nightly: game build id 0.1.0+eeb5582ceebf/codec45\n"
+
+    def result(self, text):
+        import post_deploy_check
+        return post_deploy_check.deploy_log_result(text, self.SHA)
+
+    def test_web_only_deploy_passes_with_no_game_build_id(self):
+        name, state, detail = self.result(self.WEB)
+        self.assertTrue(state, detail)
+        self.assertIn("web build only", detail)
+
+    def test_deploy_with_server_passes_with_the_game_build_id(self):
+        _, state, detail = self.result(self.WEB + self.SERVER)
+        self.assertTrue(state, detail)
+
+    def test_deploy_with_server_fails_with_no_game_build_id(self):
+        _, state, _ = self.result(self.WEB + "server-nightly: uploading\n")
+        self.assertFalse(state)
+
+    def test_deploy_with_server_fails_with_the_game_build_id_of_another_commit(self):
+        _, state, _ = self.result(self.WEB + "server-nightly: game build id 0.1.0+993914abe000/codec45\n")
+        self.assertFalse(state)
+
+    def test_web_only_deploy_fails_when_the_workflow_did_not_pass(self):
+        _, state, _ = self.result("web_build=20261126-232642-eeb5582ce\n")
+        self.assertFalse(state)
+
+
 if __name__ == "__main__":
     try:
         import PIL  # noqa: F401
