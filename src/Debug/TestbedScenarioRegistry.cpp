@@ -361,7 +361,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 255> k_Names {
+	constexpr std::array<std::string_view, 256> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -617,6 +617,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "load a land",
 	    "kill villagers",
 	    "set the sky pictures",
+	    "the humans join",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
