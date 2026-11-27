@@ -14,6 +14,7 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -109,6 +110,43 @@ TEST_F(LeashTempleGone, LeashesWithNoTempleStay)
 	const auto post = MakePost(PlayerNames::PLAYER_ONE, entt::null);
 	_leashes.BeginTurn();
 	EXPECT_TRUE(registry.Valid(post));
+}
+
+TEST_F(LeashTempleGone, EachTempleOfOnePlayerKeepsItsOwnLeashes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto first = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto second = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto onFirst = MakePost(PlayerNames::PLAYER_ONE, first);
+	const auto onSecond = MakePost(PlayerNames::PLAYER_ONE, second);
+	_leashes.BeginTurn();
+	_leashes.BeginTurn();
+	EXPECT_TRUE(registry.Valid(onFirst));
+	EXPECT_TRUE(registry.Valid(onSecond));
+}
+
+TEST_F(LeashTempleGone, ATapPicksTheLeashOnlyAtItsOwnTemple)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto first = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto second = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto onFirst = MakePost(PlayerNames::PLAYER_ONE, first);
+	const auto onSecond = MakePost(PlayerNames::PLAYER_ONE, second);
+	registry.Get<LeashPost>(onSecond).selected = true;
+	EXPECT_TRUE(_leashes.TapPost(PlayerNames::PLAYER_ONE, onFirst));
+	EXPECT_TRUE(registry.Get<const LeashPost>(onFirst).selected);
+	EXPECT_TRUE(registry.Get<const LeashPost>(onSecond).selected);
+}
+
+TEST_F(LeashTempleGone, ATempleThatCannotHangLeashesMakesNone)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto temple = MakeTemple(PlayerNames::PLAYER_ONE);
+	registry.Assign<Transform>(temple, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(temple, entt::hashed_string("temple/b_first_temple_l3d"), static_cast<int8_t>(0),
+	                      static_cast<int8_t>(0));
+	_leashes.BeginTurn();
+	EXPECT_EQ(registry.Size<LeashPost>(), 0U);
 }
 
 } // namespace

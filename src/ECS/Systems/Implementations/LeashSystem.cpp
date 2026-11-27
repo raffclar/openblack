@@ -17,6 +17,7 @@
 #include <limits>
 #include <numbers>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1476,10 +1477,10 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 void LeashSystem::HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// A player has one set of posts
+	// Each temple has one set of posts, and a player has one set at points of its own
 	std::vector<entt::entity> old;
-	registry.Each<const LeashPost>([&old, owner](entt::entity entity, const LeashPost& post) {
-		if (post.owner == owner)
+	registry.Each<const LeashPost>([&old, owner, temple](entt::entity entity, const LeashPost& post) {
+		if (post.owner == owner && post.temple == temple)
 		{
 			old.push_back(entity);
 			if (post.glow != entt::null)
@@ -1530,7 +1531,6 @@ void LeashSystem::HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& p
 		registry.Assign<LeashPost>(entity, post);
 	}
 	registry.SetDirty();
-	_postsPlaced = true;
 }
 
 temple_leashes::TempleState LeashSystem::TempleOf(const LeashPost& post) const
@@ -1667,8 +1667,9 @@ bool LeashSystem::TapPost(PlayerNames player, entt::entity post)
 		return true;
 	}
 	PlaySound(audio::SoundId::G_ClickOnSpell_01, std::nullopt);
+	// Each temple keeps its own picked leash
 	registry.Each<LeashPost>([tapped](LeashPost& other) {
-		if (other.owner == tapped->owner)
+		if (other.owner == tapped->owner && other.temple == tapped->temple)
 		{
 			other.selected = &other == tapped;
 		}
@@ -1684,40 +1685,73 @@ bool LeashSystem::TapPost(PlayerNames player, entt::entity post)
 void LeashSystem::PlacePostsAtTemples()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	std::vector<std::tuple<PlayerNames, std::array<glm::vec3, 3>, entt::entity>> found;
-	bool anyTemple = false;
-	registry.Each<const Temple, const Transform, const Mesh>([&](entt::entity entity, const Temple& temple,
-	                                                             const Transform& transform, const Mesh& mesh) {
-		anyTemple = true;
-		if (!meshes.Contains(mesh.id))
+	std::unordered_set<entt::entity> withPosts;
+	registry.Each<const LeashPost>([&withPosts](const LeashPost& post) {
+		if (post.temple != entt::null)
 		{
-			return;
+			withPosts.insert(post.temple);
 		}
-		// The leashes hang at the first three points of the temple's heart
-		const auto& points = meshes.Handle(mesh.id)->GetExtraMetrics();
-		if (points.size() < 3)
-		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The temple has {} points, too few to hang its leashes at", points.size());
-			return;
-		}
-		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		std::array<glm::vec3, 3> at {};
-		for (size_t i = 0; i < at.size(); ++i)
-		{
-			at.at(i) = glm::vec3(model * points.at(i)[3]);
-		}
-		found.emplace_back(temple.owner, at, entity);
 	});
-	if (!anyTemple)
+	// The temple made its posts as it came into being
+	std::vector<entt::entity> without;
+	registry.Each<const Temple, const Transform, const Mesh>(
+	    [&without, &withPosts](entt::entity entity, const Temple& /*temple*/, const Transform& /*transform*/,
+	                           const Mesh& /*mesh*/) {
+		    if (!withPosts.contains(entity))
+		    {
+			    without.push_back(entity);
+		    }
+	    });
+	if (without.empty() || !Locator::resources::has_value())
 	{
 		return;
 	}
-	for (const auto& [owner, points, temple] : found)
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	struct Found
 	{
-		HangPosts(owner, points, temple);
+		PlayerNames owner;
+		std::array<glm::vec3, 3> points;
+		entt::entity temple;
+	};
+	std::vector<Found> found;
+	for (const auto entity : without)
+	{
+		const auto& temple = registry.Get<const Temple>(entity);
+		const auto& transform = registry.Get<const Transform>(entity);
+		const auto& mesh = registry.Get<const Mesh>(entity);
+		if (!meshes.Contains(mesh.id))
+		{
+			continue;
+		}
+		// The leashes hang at the first three points of the temple's heart
+		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+		const auto at = temple_leashes::PointsOn(model, meshes.Handle(mesh.id)->GetExtraMetrics());
+		if (!at.has_value())
+		{
+			SPDLOG_LOGGER_TRACE(spdlog::get("game"), "The temple has too few points to hang its leashes at");
+			continue;
+		}
+		found.push_back({.owner = temple.owner, .points = *at, .temple = entity});
 	}
-	_postsPlaced = true;
+	for (const auto& entry : found)
+	{
+		// A game saved before the posts kept their temple has the posts of the temple at its points, with no link
+		bool unlinkedAtPoints = false;
+		registry.Each<LeashPost>([&unlinkedAtPoints, &entry](LeashPost& post) {
+			if (post.temple != entt::null || post.owner != entry.owner ||
+			    std::ranges::none_of(entry.points,
+			                         [&post](const glm::vec3& point) { return temple_leashes::HangsAt(post.point, point); }))
+			{
+				return;
+			}
+			post.temple = entry.temple;
+			unlinkedAtPoints = true;
+		});
+		if (temple_leashes::SetFor(false, unlinkedAtPoints) == temple_leashes::TempleSet::Makes)
+		{
+			HangPosts(entry.owner, entry.points, entry.temple);
+		}
+	}
 }
 
 void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& worn)
@@ -1905,7 +1939,6 @@ void LeashSystem::ProcessTurn()
 
 void LeashSystem::Reset()
 {
-	_postsPlaced = false;
 	_lastRefusal.reset();
 	_lastPressDouble = false;
 	_ropeHand = leash_snap::Hand::Away;
@@ -1915,19 +1948,8 @@ void LeashSystem::BeginTurn()
 {
 	// The leashes on a temple go with it, by any path: its destruction, the editor, or the load of a game
 	RemovePostsOfGoneTemples();
-	if (_postsPlaced)
-	{
-		return;
-	}
-	// A loaded world (a save, or the world state of the game server) keeps the posts that its temples got. Do not
-	// make them again.
-	bool loaded = false;
-	Locator::entitiesRegistry::value().Each<const LeashPost>([&loaded](const LeashPost& /*post*/) { loaded = true; });
-	if (loaded)
-	{
-		_postsPlaced = true;
-		return;
-	}
+	// Each temple hangs its own leashes as it comes into being: at the start of the land, from the editor, from an
+	// undo of a removal, or from a script. A loaded world keeps the posts that its temples got.
 	PlacePostsAtTemples();
 }
 

@@ -48,6 +48,7 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/TownMiracles.h"
+#include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -416,6 +417,16 @@ bool Runner::GiveStoryCommand(const Command& command)
 			Locator::templeDestructionSystem::value().Start(*temple);
 		}
 		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
+		return true;
+	}
+	if (command.kind == Kind::MakeTemple)
+	{
+		// The temple comes into being after the land started, as a land script makes a citadel
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 position {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		_temples.push_back(
+		    ecs::archetypes::CitadelArchetype::Create(position, command.player, command.amount, glm::vec3(1.0f)));
+		Log(fmt::format("{:.1f}s: a temple comes into being at ({:.0f}, {:.0f})", _seconds, at.x, at.y));
 		return true;
 	}
 	if (command.kind == Kind::LookAtTempleScroll)
