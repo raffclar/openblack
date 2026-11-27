@@ -71,7 +71,15 @@ EM_JS(double, openblack_user_folder_read, (uint32_t file, uint8_t* buffer, doubl
 		for (let block = first; block <= last; block += 1) {
 			const start = Math.max(0, offset + done - block * size);
 			const end = Math.min(size, offset + length - block * size);
-			const bytes = new FileReaderSync().readAsArrayBuffer(blocks[block].slice(start, end));
+			let bytes;
+			try {
+				bytes = new FileReaderSync().readAsArrayBuffer(blocks[block].slice(start, end));
+			} catch (error) {
+				// The page removes the blocks of a file when it keeps the whole file. The thread then asks for the
+				// bytes again, and the page gives the whole file.
+				blocks[block] = null;
+				return -2;
+			}
 			HEAPU8.set(new Uint8Array(bytes), buffer + done);
 			done += bytes.byteLength;
 			if (bytes.byteLength < end - start) {

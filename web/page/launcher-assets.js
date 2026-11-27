@@ -13,6 +13,14 @@
 // page does not have, the game waits, and the page gets that file first. After the phases, the page gets the files that
 // the game will probably read next, one at a time. A player can also get all the files before the start.
 //
+// When the land is ready, the page gets the other files in the background, one at a time, when nothing else waits: the
+// music banks, the other lands, the network maps and the files of the creature species. The player can turn this off.
+// The page does this only when the browser keeps the storage, and when the browser has the space for the files.
+//
+// The page keeps only one copy of each file. When it joins the blocks of a file, it removes the blocks. It tells the
+// browser not to keep a second copy of each file in its HTTP cache. When the browser has no more space, the game takes
+// the next files from memory for this visit.
+//
 // The file asset-tiers.json of the page gives the phase of the game in which the game first reads each file. The tool
 // tools/web-asset-tiers makes it from the traces of the game (launcher-asset-trace.js). With no correct file, the page
 // uses the rules below, and gets all the files of the start before the game starts.
@@ -94,7 +102,21 @@ const k_AssetSmallDownloads = 16;
 // The number of the other files and blocks of the phases that the page gets at the same time
 const k_AssetPhaseDownloads = 4;
 // The order of the queues of the store (AssetStore): a smaller rank goes first
-const k_AssetQueueRanks = { now: 0, phase: 1, later: 2 };
+const k_AssetQueueRanks = { now: 0, phase: 1, later: 2, background: 3 };
+// The number of files that the page gets at the same time in the background
+const k_AssetBackgroundDownloads = 1;
+// The groups of the files that the page gets in the background when the land is ready, in their order: the music banks,
+// the landscapes of the other lands and of the network maps, the network maps, and the files of the creature species.
+// All the other files come after these groups.
+const k_AssetBackgroundRules = [
+  /^audio\/music\//,
+  /^data\/landscape\//,
+  /^online maps\//,
+  /^(audio\/sfx\/creature\/|data\/ctr\/|data\/creaturemesh\/)/,
+];
+// The page gets the files in the background only when the free space of the browser is at least this number of times
+// the bytes of these files, so that the browser does not remove other data of the site
+const k_AssetBackgroundSpaceFactor = 2;
 // The time in milliseconds that a read of the game waits for the site, with no new frame on the screen, before the page
 // shows the map of the game files over the game. The game cannot draw its loading screen while its read waits.
 const k_AssetWaitPanelMs = 1000;
@@ -281,16 +303,112 @@ function hashedAssetAddress(sha256) {
 }
 
 /**
- * The address of a file of the list and the cache mode of the browser for it. The browser keeps a file at an address by
- * SHA-256 and gives it again with no request, because the site sends it with a long immutable cache. A file at an
- * address by path does not go in the cache of the browser, because a new version can put other bytes at that path. The
- * page keeps each file in OPFS in both cases.
+ * The address of a file of the list and the cache mode of the browser for it. The page keeps each file in OPFS, which
+ * is the only copy. Thus no file goes in the HTTP cache of the browser, also a file at an address by SHA-256 that the
+ * site sends with a long immutable cache. A second copy of 700 MB would use the space of the player for no gain.
  */
 function assetRequest(file) {
   return {
     address: file.address ?? assetAddress(file.path),
-    cache: file.hashed ? 'default' : 'no-store',
+    cache: 'no-store',
   };
+}
+
+/** True when the error is the error of the browser for storage with no more space */
+function isQuotaError(error) {
+  return error?.name === 'QuotaExceededError';
+}
+
+/**
+ * The free space in bytes that the browser gives to the site, from the result of navigator.storage.estimate(). Gives
+ * Infinity when the browser does not tell it.
+ */
+function assetFreeSpace(estimate) {
+  const { quota, usage } = estimate ?? {};
+  if (!Number.isFinite(quota) || !Number.isFinite(usage)) {
+    return Infinity;
+  }
+  return Math.max(0, quota - usage);
+}
+
+/**
+ * What the page gets in the background when the land is ready, in the order to get it: a list of { number, block },
+ * with block null for a whole file. The files are the files of the list in the order of their numbers, and have is a
+ * function that is true for the SHA-256 of each file and block that the page keeps. The groups of
+ * k_AssetBackgroundRules come first, in their order, then all the other files. A music bank in blocks comes in blocks,
+ * so that the music can read each block when it arrives. The page joins the blocks when it has all of them.
+ */
+function planAssetBackground(files, { have = () => false } = {}) {
+  const seen = new Set();
+  const items = [];
+  files.forEach((file, number) => {
+    const lower = file.path.toLowerCase();
+    if (have(file.sha256) || seen.has(file.sha256)) {
+      return;
+    }
+    seen.add(file.sha256);
+    const group = k_AssetBackgroundRules.findIndex((rule) => rule.test(lower));
+    const order = group < 0 ? k_AssetBackgroundRules.length : group;
+    if (file.blocks && k_AssetHeaderRules.some((rule) => rule.test(lower))) {
+      file.blocks.forEach((block, index) => {
+        if (!have(block) && !seen.has(block)) {
+          seen.add(block);
+          items.push({ number, block: index, order });
+        }
+      });
+    } else {
+      items.push({ number, block: null, order });
+    }
+  });
+  // The sort keeps the order of the list in each group
+  return items.sort((a, b) => a.order - b.order).map(({ number, block }) => ({ number, block }));
+}
+
+/** The bytes of the items of planAssetBackground */
+function assetItemBytes(files, items, blockSize) {
+  return items.reduce((sum, { number, block }) => {
+    if (block === null) {
+      return sum + files[number].size;
+    }
+    const bounds = assetBlockBounds(files[number], blockSize, block);
+    return sum + bounds.end - bounds.start;
+  }, 0);
+}
+
+/**
+ * The reason why the page does not get files in the background now, or null when it can. The argument has:
+ * - enabled: false when the player turned the background download off,
+ * - kept: true when the browser keeps the storage of the site (askToKeepStorage),
+ * - saveData: true when the browser asks the site to send less data,
+ * - hidden: true when the tab was hidden for a long time,
+ * - full: true when the browser has no more space for the game files,
+ * - free and rest: the free space of the browser and the bytes of the files that the page gets in the background.
+ */
+function assetBackgroundStop({ enabled, kept, saveData = false, hidden = false, full = false, free = Infinity, rest = 0 }) {
+  if (!enabled) {
+    return 'the player turned it off';
+  }
+  if (kept !== true) {
+    return 'the browser does not keep the storage of the site';
+  }
+  if (saveData) {
+    return 'the browser asks for less data';
+  }
+  if (full) {
+    return 'the browser has no more space';
+  }
+  if (free < k_AssetBackgroundSpaceFactor * rest) {
+    return `the browser has only ${megabytesOf(free)} of free space`;
+  }
+  if (hidden) {
+    return 'the tab is hidden';
+  }
+  return null;
+}
+
+/** The text of a number of bytes in megabytes, for the log and the messages of the page */
+function megabytesOf(bytes) {
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 /** The text of the bytes, two hexadecimal digits for each byte */
@@ -665,6 +783,22 @@ async function fetchAssetBlock(fetchFile, digest, file, blockSize, block) {
   return bytes;
 }
 
+/** Keeps the bytes in the folder as the file with the name, and gives the kept File */
+async function writeAsset(folder, name, bytes) {
+  const handle = await folder.getFileHandle(name, { create: true });
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(bytes);
+    await writable.close();
+  } catch (error) {
+    // A write that fails must not leave a part of the file in the folder
+    await Promise.resolve(writable.abort?.()).catch(() => {});
+    await Promise.resolve(folder.removeEntry(name)).catch(() => {});
+    throw error;
+  }
+  return handle.getFile();
+}
+
 /**
  * The page's store of the game files for one game. It keeps each whole file by its SHA-256 and each block by the
  * SHA-256 of the block, in the folder of kept files. It has three queues:
@@ -673,26 +807,37 @@ async function fetchAssetBlock(fetchFile, digest, file, blockSize, block) {
  *   k_AssetSmallDownloads at a time, and the others k_AssetPhaseDownloads at a time. While the game waits for a file,
  *   no other file of the phases starts, apart from the small files, so that the file of the game gets the network,
  * - later: the files that the game will probably read later, k_AssetPrefetchDownloads at a time, only when the other
- *   queues are empty.
- * A job that the game asks for goes to the queue now from the other queues. The options are:
+ *   queues are empty,
+ * - background: the other files when the land is ready (background), k_AssetBackgroundDownloads at a time, only when
+ *   the other queues are empty and backgroundAllowed() is true.
+ * A job that the game asks for goes to the queue now from the other queues. When the browser has no more space, the
+ * store keeps the next files in memory for this visit, and full becomes true. The options are:
  * - fetchFile, digest and folder: the fetch, the SHA-256 and the folder of the kept files (tests give fakes),
  * - blockSize: the size of the blocks of the list,
  * - kept: the kept File objects, by their names,
  * - share: a function that gets (number, block, file) for each file (block null) and each block that the page gets,
  * - log: a function that gets a line for the game log,
  * - watch: a function that gets (event, key, detail) for each change of a download (see safeWatch). It only
- *   observes: it does not change the order of the downloads.
+ *   observes: it does not change the order of the downloads,
+ * - onFull: a function that the store calls one time when the browser has no more space for the game files.
  */
 class AssetStore {
   constructor(files, {
     fetchFile, digest, folder, blockSize = 0, kept = new Map(), share = () => {}, log = () => {}, watch = () => {},
+    onFull = () => {},
   }) {
-    Object.assign(this, { files, fetchFile, digest, folder, blockSize, kept, share, log });
+    Object.assign(this, { files, fetchFile, digest, folder, blockSize, kept, share, log, onFull });
     this.watch = safeWatch(watch);
     this.jobs = new Map();
-    this.waiting = { now: [], phase: [], later: [] };
-    // The jobs that run in each lane: the queue now, the small files and the other files of the phases, and later
-    this.running = { now: 0, small: 0, phase: 0, later: 0 };
+    this.waiting = { now: [], phase: [], later: [], background: [] };
+    // The jobs that run in each lane: the queue now, the small files and the other files of the phases, later and the
+    // background
+    this.running = { now: 0, small: 0, phase: 0, later: 0, background: 0 };
+    // True when the browser has no more space for the game files
+    this.full = false;
+    // A function that is true when the store can start a job of the background queue. The caller can change it, and
+    // then calls pump.
+    this.backgroundAllowed = () => true;
     // The number of running jobs of the other queues that the game waits for
     this.wanted = 0;
     this.received = { files: 0, blocks: 0, bytes: 0 };
@@ -765,6 +910,17 @@ class AssetStore {
   }
 
   /**
+   * Puts the files and the blocks of the background (planAssetBackground) in the background queue, in their order. A
+   * failure goes only to the log: the game gets the file when it reads it.
+   */
+  background(items) {
+    for (const { number, block } of items) {
+      const job = block === null ? this.getWholeJob(number, 'background') : this.getBlockJob(number, block, 'background');
+      job.catch((error) => this.log(`The page cannot get ${this.files[number].path} in the background: ${error.message}`));
+    }
+  }
+
+  /**
    * Puts the files and the blocks of the phases of the start in the queues, in their order: the pre-intro, startup and
    * land-load phases in the queue of the phases, and the land-soon phase in the queue for later. The argument is the
    * result of planAssetTiers. The page has the files of the boot phase already, and gets the later files only when the
@@ -782,7 +938,10 @@ class AssetStore {
     queue(phases[k_AssetPhaseSoon] ?? [], 'later');
   }
 
-  /** Gives a promise that is done when no job waits or runs. A failed job does not make it fail. */
+  /**
+   * Gives a promise that is done when no job waits or runs. A failed job does not make it fail. A job of the background
+   * queue that waits while backgroundAllowed() is false keeps the promise open.
+   */
   async drained() {
     while (this.jobs.size > 0) {
       await Promise.allSettled([...this.jobs.values()].map((job) => job.promise));
@@ -805,7 +964,8 @@ class AssetStore {
   getBlockJob(number, block, priority, front = false) {
     const file = this.files[number];
     const sha256 = file.blocks[block];
-    if (this.kept.has(sha256)) {
+    // The page removes the blocks of a file that it keeps whole
+    if (this.kept.has(sha256) || this.fileOf(number)) {
       return Promise.resolve();
     }
     const { start, end } = assetBlockBounds(file, this.blockSize, block);
@@ -908,14 +1068,34 @@ class AssetStore {
     while (idle && this.running.later < k_AssetPrefetchDownloads && this.waiting.later.length > 0) {
       start(this.waiting.later.shift(), 'later');
     }
+    const quiet = idle && this.running.later === 0 && this.waiting.later.length === 0;
+    while (quiet && this.running.background < k_AssetBackgroundDownloads && this.waiting.background.length > 0 &&
+      this.backgroundAllowed()) {
+      start(this.waiting.background.shift(), 'background');
+    }
   }
 
+  /**
+   * Keeps the bytes in the folder with the name, and gives the kept File. When the browser has no more space, the store
+   * keeps the bytes in memory for this visit, and the next visit downloads them again.
+   */
   async write(name, bytes) {
-    const handle = await this.folder.getFileHandle(name, { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(bytes);
-    await writable.close();
-    const kept = await handle.getFile();
+    if (!this.full) {
+      try {
+        const kept = await writeAsset(this.folder, name, bytes);
+        this.kept.set(name, kept);
+        return kept;
+      } catch (error) {
+        if (!isQuotaError(error)) {
+          throw error;
+        }
+        this.full = true;
+        this.log('The browser has no more space for the game files. The page keeps the next files in memory for ' +
+          'this visit only.');
+        this.onFull();
+      }
+    }
+    const kept = new Blob([bytes]);
     this.kept.set(name, kept);
     return kept;
   }
@@ -950,13 +1130,15 @@ class AssetStore {
   }
 
   /**
-   * When the page has all the blocks of a file, it checks the whole file against the list and keeps it whole. The
-   * blocks stay in the folder until the next visit, because a game thread can still read them.
+   * When the page has all the blocks of a file, it checks the whole file against the list and keeps it whole. It then
+   * removes the blocks, so that the folder keeps only one copy. A game thread that reads a removed block asks for the
+   * bytes again, and gets the whole file (see src/Web/UserFolderBackend.cpp). With no more space in the browser, the
+   * page keeps the blocks and does not join them.
    */
   async joinBlocks(number) {
     const file = this.files[number];
     const blocks = this.blocksOf(number);
-    if (this.fileOf(number) || this.joining.has(file.sha256) || blocks.some((block) => block === null)) {
+    if (this.full || this.fileOf(number) || this.joining.has(file.sha256) || blocks.some((block) => block === null)) {
       return;
     }
     // Two blocks can arrive at the same time. Only one of them joins the file.
@@ -973,8 +1155,28 @@ class AssetStore {
       for (const user of this.users.get(file.sha256)) {
         this.share(user, null, kept);
       }
+      await this.removeJoinedBlocks(number);
     } finally {
       this.joining.delete(file.sha256);
+    }
+  }
+
+  /**
+   * Removes each block of the file from the folder, when each file that has the block is kept whole. A failure goes
+   * only to the log: the next visit removes the block.
+   */
+  async removeJoinedBlocks(number) {
+    for (const block of new Set(this.files[number].blocks)) {
+      const users = this.blockUsers.get(block) ?? [];
+      if (!this.kept.has(block) || users.some((user) => !this.fileOf(user.number))) {
+        continue;
+      }
+      this.kept.delete(block);
+      try {
+        await this.folder.removeEntry(block);
+      } catch (error) {
+        this.log(`The page cannot remove a block of ${this.files[number].path}: ${error.message}`);
+      }
     }
   }
 }
@@ -1054,10 +1256,17 @@ async function keepAssets(index, options) {
  * the next phases in their order, while the game starts and plays. The options are those of keepAssets, and also all,
  * share, log and watch (see AssetStore), tiers (see parseAssetTiers), and startPhases: false when the caller starts the
  * phases itself with store.queuePhases(phases), for example after the program of the game arrived.
+ * With the option estimate (a function that gives the result of navigator.storage.estimate()), the page checks the free
+ * space of the browser before it downloads:
+ * - when the free space is less than the files that the page does not keep, the page does not get all the files before
+ *   the start, also with the option all,
+ * - when the free space is less than the files of the start, the page stops with an error.
+ * The result also has all (true when the page got all the files) and space: { free, rest }, the free space and the
+ * bytes of the files that the page does not keep, before the download.
  */
 async function streamAssets(index, {
-  fetchFile, digest, root, wanted = () => true, progress = () => {}, all = false, share = () => {}, log = () => {},
-  watch = () => {}, tiers = null, startPhases = true,
+  fetchFile, digest, root, wanted = () => true, progress = () => {}, all: allAsked = false, share = () => {},
+  log = () => {}, watch = () => {}, tiers = null, startPhases = true, estimate = null, onFull = () => {},
 }) {
   const observe = safeWatch(watch);
   const files = index.files.filter((file) => wanted(file.path));
@@ -1071,6 +1280,20 @@ async function streamAssets(index, {
   const phases = planAssetTiers(files, tiers, blockSize);
   const boot = phases[k_AssetPhaseBoot];
   const startShas = new Set(boot.filter(({ block }) => block === null).map(({ number }) => files[number].sha256));
+  const space = { free: Infinity, rest: plan.download.reduce((sum, file) => sum + file.size, 0) };
+  let all = allAsked;
+  if (estimate !== null) {
+    try {
+      space.free = assetFreeSpace(await estimate());
+    } catch {
+      // The browser does not tell its space. The page tries to keep the files.
+    }
+    if (all && space.free < space.rest) {
+      all = false;
+      log(`The browser has ${megabytesOf(space.free)} of free space, but the game files need ` +
+        `${megabytesOf(space.rest)}. The page gets each file only when the game reads it.`);
+    }
+  }
   const download = all ? plan.download : plan.download.filter((file) => startShas.has(file.sha256));
   const blockNames = new Set();
   const startBlocks = all ? [] : boot.filter(({ block }) => block !== null)
@@ -1097,7 +1320,23 @@ async function streamAssets(index, {
     files: 0,
     totalFiles: download.length + startBlocks.length,
   };
+  if (space.free < state.totalBytes) {
+    throw new Error(`the browser has only ${megabytesOf(space.free)} of free space for the game files, and the start ` +
+      `needs ${megabytesOf(state.totalBytes)}`);
+  }
   progress({ ...state });
+  // A write before the start that finds no more space stops the start with a clear reason
+  const keep = async (name, bytes) => {
+    try {
+      await writeAsset(folder, name, bytes);
+    } catch (error) {
+      if (isQuotaError(error)) {
+        throw new Error('the browser has no more space for the game files. Free some space, or let the browser keep ' +
+          'more data for this site');
+      }
+      throw error;
+    }
+  };
   // The small files go in their own lanes, because their time is mostly the time of their requests
   const queues = {
     small: download.filter((file) => file.size < k_AssetSmallFile),
@@ -1126,9 +1365,7 @@ async function streamAssets(index, {
           }
         }
       }
-      const writable = await (await folder.getFileHandle(file.sha256, { create: true })).createWritable();
-      await writable.write(bytes);
-      await writable.close();
+      await keep(file.sha256, bytes);
       observe('done', key);
       state.files += 1;
       progress({ ...state });
@@ -1151,10 +1388,7 @@ async function streamAssets(index, {
           }
         }
       }
-      const handle = await folder.getFileHandle(next.file.blocks[next.block], { create: true });
-      const writable = await handle.createWritable();
-      await writable.write(bytes);
-      await writable.close();
+      await keep(next.file.blocks[next.block], bytes);
       observe('done', key);
       state.bytes += bytes.byteLength;
       state.files += 1;
@@ -1185,14 +1419,14 @@ async function streamAssets(index, {
       }
     }
   }
-  const store = new AssetStore(files, { fetchFile, digest, folder, blockSize, kept, share, log, watch });
+  const store = new AssetStore(files, { fetchFile, digest, folder, blockSize, kept, share, log, watch, onFull });
   const entries = files.map((file, number) => ({
     path: file.path, size: file.size, file: store.fileOf(number), blocks: file.blocks ? store.blocksOf(number) : null,
   }));
   if (!all && startPhases) {
     store.queuePhases(phases);
   }
-  return { entries, store, blockSize, phases: all ? null : phases };
+  return { entries, store, blockSize, phases: all ? null : phases, all, space };
 }
 
 if (typeof module !== 'undefined') {
@@ -1201,7 +1435,8 @@ if (typeof module !== 'undefined') {
     refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
     assetPhaseOf, parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
     assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange,
-    assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
+    assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore, isQuotaError, assetFreeSpace, planAssetBackground,
+    assetItemBytes, assetBackgroundStop, writeAsset,
     k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile, k_AssetSmallDownloads,
     k_AssetPhaseDownloads, k_AssetDownloads,
   };

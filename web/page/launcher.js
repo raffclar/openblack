@@ -111,6 +111,11 @@ function log(text) {
   }
   logLines.push(text);
   assetTrace?.log(text);
+  // The game writes the time of the land load when the land is ready. The page then gets the other files.
+  if (siteFiles && !backgroundLandReady && k_AssetPhases[assetPhaseOfLog(text)] === 'land-soon') {
+    backgroundLandReady = true;
+    startBackgroundFiles();
+  }
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
     // The box gets all its text again at the next update
@@ -695,6 +700,100 @@ function keepStorage() {
   return keptStorage;
 }
 
+// ------------------------------------------------------------------------------------------------ the background download
+
+// The choice of the player to get the other game files in the background when the land is ready. It is on by default.
+const k_BackgroundFilesKey = 'openblack.backgroundGameFiles';
+// The time in milliseconds that the tab is hidden before the background download pauses
+const k_BackgroundHiddenMs = 60000;
+// True when the land is ready, and when the page put the other files in the background queue in this visit
+let backgroundLandReady = false;
+let backgroundStarted = false;
+// True when the tab was hidden for k_BackgroundHiddenMs or more, and is still hidden
+let tabHiddenLong = false;
+
+/** True when the player wants the background download. A browser with no storage gives true, the default. */
+function wantsBackgroundFiles() {
+  try {
+    return localStorage.getItem(k_BackgroundFilesKey) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+function keepBackgroundFilesChoice(on) {
+  try {
+    localStorage.setItem(k_BackgroundFilesKey, on ? '1' : '0');
+  } catch {
+    // The browser keeps no storage for the page. The choice is only for this visit.
+  }
+}
+
+/** The free space and the use of the storage of the site, or null when the browser does not tell them */
+async function storageEstimate() {
+  try {
+    return await globalThis.navigator?.storage?.estimate?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The land is ready, or the player turned the background download on after that: the page puts the other game files in
+ * the background queue of the store. The store gets them one at a time, when nothing else waits, while
+ * assetBackgroundStop gives no reason to stop. The page queues nothing when the player turned the background download
+ * off, or when the browser does not keep the storage, so that the map does not show files that never come.
+ */
+async function startBackgroundFiles() {
+  const box = element('site-files-background');
+  if (backgroundStarted || !backgroundLandReady || !siteFiles || !box.checked) {
+    return;
+  }
+  backgroundStarted = true;
+  const { store, blockSize } = siteFiles;
+  const kept = await keepStorage();
+  if (kept !== true) {
+    log('The page does not get the other game files in the background: the browser does not keep the storage of ' +
+      'the site.');
+    return;
+  }
+  const items = planAssetBackground(store.files, { have: (sha256) => store.kept.has(sha256) });
+  const rest = assetItemBytes(store.files, items, blockSize);
+  const free = assetFreeSpace(await storageEstimate());
+  let shownReason;
+  store.backgroundAllowed = () => {
+    const reason = assetBackgroundStop({
+      enabled: box.checked, kept, saveData: globalThis.navigator?.connection?.saveData === true,
+      hidden: tabHiddenLong, full: store.full, free, rest,
+    });
+    if (reason !== shownReason) {
+      shownReason = reason;
+      log(reason === null
+        ? `The page gets the other ${items.length} game files and blocks in the background (${megabytes(rest)}).`
+        : `The page does not get the other game files in the background now: ${reason}.`);
+    }
+    return reason === null;
+  };
+  store.background(items);
+  store.pump();
+}
+
+/** Pauses the background download when the tab is hidden for a long time, and continues it when the tab shows again */
+function watchTabForBackground() {
+  let timer = null;
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(timer);
+    if (document.hidden) {
+      timer = setTimeout(() => {
+        tabHiddenLong = true;
+      }, k_BackgroundHiddenMs);
+    } else {
+      tabHiddenLong = false;
+      siteFiles?.store.pump();
+    }
+  });
+}
+
 // ------------------------------------------------------------------------------------------------ the map of the game files
 
 // The states of the game files on the map (launcher-map.js), while the page and the game get them from the site
@@ -794,8 +893,11 @@ async function useSiteGameFiles() {
     log('The site gives the game files, but this browser has no private storage for them.');
     return false;
   }
-  // The page asks before it keeps the game files, so that the browser does not remove them when it needs space
-  keepStorage();
+  // The page asks before it keeps the game files, so that the browser does not remove them when it needs space. When
+  // the browser does not promise it, the page tells the player how to keep the files.
+  keepStorage().then((kept) => {
+    element('site-files-keep').hidden = kept === true;
+  });
   element('site-files-intro').hidden = false;
   element('site-files').hidden = false;
   assetMap = showAssetMap(answer.index, await programBytes);
@@ -818,20 +920,39 @@ async function useSiteGameFiles() {
   const allBox = element('site-files-all');
   allBox.checked = wantsAllGameFiles();
   // A player who chooses it after the start of the download gets the other files after the start files
-  const getAll = () => siteFiles && allBox.checked && siteFiles.store.prefetch(siteFiles.store.files.map((_, number) => number));
+  const getAll = () => siteFiles && allBox.checked && siteFiles.space.free >= siteFiles.space.rest &&
+    siteFiles.store.prefetch(siteFiles.store.files.map((_, number) => number));
   allBox.addEventListener('change', () => {
     keepAllGameFilesChoice(allBox.checked);
     getAll();
   });
-  const all = allBox.checked;
+  const backgroundBox = element('site-files-background');
+  backgroundBox.checked = wantsBackgroundFiles();
+  backgroundBox.addEventListener('change', () => {
+    keepBackgroundFilesChoice(backgroundBox.checked);
+    startBackgroundFiles();
+    siteFiles?.store.pump();
+  });
+  const spaceText = element('site-files-space');
+  // The browser has no more space during play: the game takes the next files from memory
+  const onFull = () => {
+    spaceText.textContent = 'This browser has no more space for the game files. The game gets the next files from ' +
+      'the site for this visit only, and the next visit downloads them again.';
+    spaceText.hidden = false;
+  };
   try {
-    const { entries, store, blockSize, phases } = await streamAssets(answer.index, {
+    const { entries, store, blockSize, phases, all, space } = await streamAssets(answer.index, {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
-      wanted: isGameFile, progress: show, all, startPhases: false, tiers,
+      wanted: isGameFile, progress: show, all: allBox.checked, startPhases: false, tiers, estimate: storageEstimate,
       share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
-      log, watch: (event, key, detail) => assetMap.handle(event, key, detail),
+      log, watch: (event, key, detail) => assetMap.handle(event, key, detail), onFull,
     });
-    siteFiles = { store, blockSize, phases, tiers };
+    siteFiles = { store, blockSize, phases, tiers, space };
+    if (space.free < space.rest) {
+      spaceText.textContent = `This browser has ${megabytes(space.free)} of free space for the game files, but the ` +
+        `other files need ${megabytes(space.rest)}. The page gets each file only when the game reads it.`;
+      spaceText.hidden = false;
+    }
     getAll();
     log(`The page downloaded ${last.files} game files and blocks (${megabytes(last.bytes)}). The browser kept the ` +
       'other files.');
@@ -1321,6 +1442,9 @@ async function start(online = false) {
   }
   if (siteFiles && siteFiles.phases) {
     startAssetPhases(siteFiles);
+  }
+  if (siteFiles) {
+    watchTabForBackground();
   }
 }
 

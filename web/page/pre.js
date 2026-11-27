@@ -99,6 +99,10 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
           folder.blocks[given.file][given.block] = given.blob;
         } else if (given.blob) {
           folder.files[given.file] = given.blob;
+          // The page removes the blocks of a file that it keeps whole. The thread reads the whole file from now on.
+          if (folder.blocks && folder.blocks[given.file]) {
+            folder.blocks[given.file].fill(null);
+          }
         }
         answer(folder, given.file, !given.blob);
       }

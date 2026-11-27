@@ -9,7 +9,8 @@ const {
   parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetBlockBounds, assetBlockRange,
   parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange, AssetStore,
   k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile,
-  k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads,
+  k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads, planAssetBackground, assetItemBytes,
+  assetBackgroundStop, assetFreeSpace,
 } = require('../web/page/launcher-assets.js');
 
 let count = 0;
@@ -666,9 +667,9 @@ check('a list with hashed addresses gives each file at its address by SHA-256', 
   assert.throws(() => parseAssetIndex(indexText(files, { hashed_addresses: 'yes' })), /hashed_addresses/);
 });
 
-check('only a file at its address by SHA-256 can come from the cache of the browser', () => {
+check('no file goes in the HTTP cache of the browser, because OPFS keeps the only copy', () => {
   assert.deepEqual(assetRequest({ path: 'Data/a b.txt', address: '/assets/sha256/x', hashed: true }),
-    { address: '/assets/sha256/x', cache: 'default' });
+    { address: '/assets/sha256/x', cache: 'no-store' });
   assert.deepEqual(assetRequest({ path: 'Data/a b.txt', address: '/assets/files/Data/a%20b.txt', hashed: false }),
     { address: '/assets/files/Data/a%20b.txt', cache: 'no-store' });
   // A file that a test makes with no address has its address by path
@@ -690,7 +691,7 @@ check('with hashed addresses the page gets the files and the blocks at their add
   await store.obtain(numberOf(index.files, 'Data/Landscape/Land2.lnd'));
   assert.equal(site.requests.get(hashedAssetAddress(sha('land two'))), 1);
   for (const [key, cache] of site.caches) {
-    assert.equal(cache, key === k_AssetIndexAddress ? 'no-cache' : 'default', key);
+    assert.equal(cache, key === k_AssetIndexAddress ? 'no-cache' : 'no-store', key);
   }
 });
 
@@ -1009,6 +1010,200 @@ check('a caller can start the phases itself, for example after the program of th
   assert.equal(site.requests.get(assetAddress('Data/pre_intro.bik')), 1);
   const all = await streamAssets(index, { fetchFile: site.fetchFile, digest, root: new FakeFolder(), all: true });
   assert.equal(all.phases, null);
+});
+
+check('the page removes the blocks of a bank when it keeps the whole bank, and gets no block again', async () => {
+  const { store, site, root, index, shared } = await streamedSite();
+  const number = numberOf(index.files, 'Audio/Music/align/Good.sad');
+  const file = index.files[number];
+  await store.obtain(number, 0, 100);
+  await store.drained();
+  const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+  assert.equal(folder.children.has(file.sha256), true);
+  assert.deepEqual(file.blocks.filter((block) => folder.children.has(block)), []);
+  assert.deepEqual(store.blocksOf(number), file.blocks.map(() => null));
+  // A read of the bank after the join gets the whole bank, with no request for a block
+  const before = site.requests.size;
+  shared.length = 0;
+  await store.obtain(number, 8, 4);
+  store.background([{ number, block: 3 }]);
+  await store.drained();
+  assert.equal(site.requests.size, before);
+  assert.deepEqual(shared.map((given) => [given.number, given.block]), [[number, null]]);
+});
+
+check('a block that a bank that is not whole also has stays in the folder', async () => {
+  const files = { 'Audio/Music/one.sad': 'HEADfirst bank', 'Audio/Music/two.sad': 'HEADother bank' };
+  const site = fakeSite(files, { index: streamedText(files, Object.keys(files)) });
+  const root = new FakeFolder();
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  const { store } = await streamAssets(index, { fetchFile: site.fetchFile, digest, root });
+  await store.drained();
+  const one = numberOf(index.files, 'Audio/Music/one.sad');
+  await store.obtain(one, 0, 100);
+  await store.drained();
+  const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+  const head = sha('HEAD');
+  assert.equal(store.fileOf(one) !== null, true);
+  assert.equal(folder.children.has(head), true);
+  assert.equal(folder.children.has(index.files[one].blocks[1]), false);
+});
+
+check('the background plan gets the music in blocks, then the lands, the maps, the creatures and the rest', () => {
+  const block = (name) => sha(name);
+  const files = [
+    { path: 'Data/Misc.txt', sha256: sha('misc'), size: 4 },
+    { path: 'Data/CTR/cow.ctr', sha256: sha('cow'), size: 3 },
+    { path: 'Online Maps/mpm_2p_1.map', sha256: sha('map'), size: 3 },
+    { path: 'Data/Landscape/Land3.lnd', sha256: sha('land3'), size: 5 },
+    { path: 'Audio/Music/b.sad', sha256: sha('bank'), size: 8, blocks: [block('b0'), block('b1')] },
+    { path: 'Audio/Music/same.sad', sha256: sha('bank'), size: 8, blocks: [block('b0'), block('b1')] },
+    { path: 'Data/Landscape/Land2.lnd', sha256: sha('land2'), size: 5 },
+  ];
+  const kept = new Set([sha('land2'), block('b0')]);
+  const plan = planAssetBackground(files, { have: (sha256) => kept.has(sha256) });
+  assert.deepEqual(plan, [
+    { number: 4, block: 1 }, { number: 3, block: null }, { number: 2, block: null }, { number: 1, block: null },
+    { number: 0, block: null },
+  ]);
+  assert.equal(assetItemBytes(files, plan, 4), 4 + 5 + 3 + 3 + 4);
+});
+
+check('the page gets files in the background only when the player and the browser allow it', () => {
+  const ok = { enabled: true, kept: true, free: 1000, rest: 500 };
+  assert.equal(assetBackgroundStop(ok), null);
+  assert.match(assetBackgroundStop({ ...ok, enabled: false }), /turned it off/);
+  assert.match(assetBackgroundStop({ ...ok, kept: false }), /does not keep/);
+  assert.match(assetBackgroundStop({ ...ok, kept: null }), /does not keep/);
+  assert.match(assetBackgroundStop({ ...ok, saveData: true }), /less data/);
+  assert.match(assetBackgroundStop({ ...ok, full: true }), /no more space/);
+  assert.match(assetBackgroundStop({ ...ok, free: 999 }), /free space/);
+  assert.match(assetBackgroundStop({ ...ok, hidden: true }), /hidden/);
+  assert.equal(assetFreeSpace({ quota: 100, usage: 30 }), 70);
+  assert.equal(assetFreeSpace({ quota: 10, usage: 30 }), 0);
+  assert.equal(assetFreeSpace(null), Infinity);
+  assert.equal(assetFreeSpace({ usage: 30 }), Infinity);
+});
+
+check('a background job starts one at a time, only when nothing else waits and the background is allowed', async () => {
+  const { store, order, run, open } = gatedStore();
+  let allowed = false;
+  store.backgroundAllowed = () => allowed;
+  const jobs = [store.schedule('x', run('x'), 'background'), store.schedule('y', run('y'), 'background')];
+  assert.deepEqual(order, []);
+  allowed = true;
+  store.pump();
+  assert.deepEqual(order, ['x']);
+  // A file for later waits for the background job that runs, and then goes before the next background job
+  const later = store.schedule('l', run('l'), 'later');
+  await open('x');
+  assert.deepEqual(order, ['x', 'l']);
+  await open('l');
+  assert.deepEqual(order, ['x', 'l', 'y']);
+  await open('y');
+  await Promise.all([...jobs, later]);
+  // The game can ask for a background job that waits: it goes to the queue now at once
+  allowed = false;
+  const waiting = store.schedule('z', run('z'), 'background');
+  assert.deepEqual(order, ['x', 'l', 'y']);
+  store.schedule('z', run('z'), 'now');
+  assert.deepEqual(order, ['x', 'l', 'y', 'z']);
+  await open('z');
+  await waiting;
+});
+
+// A folder of the private storage that has space for a number of bytes only
+class SmallFolder extends FakeFolder {
+  constructor(space) {
+    super();
+    this.space = space;
+  }
+  async getDirectoryHandle(name, options = {}) {
+    if (!this.children.has(name) && options.create) {
+      this.children.set(name, new SmallFolder(this.space));
+    }
+    return super.getDirectoryHandle(name, options);
+  }
+  async getFileHandle(name, { create = false } = {}) {
+    if (!this.children.has(name) && create) {
+      const folder = this;
+      const file = new FakeFile();
+      const write = file.createWritable.bind(file);
+      file.createWritable = async () => {
+        const writable = await write();
+        return {
+          ...writable,
+          write: async (bytes) => {
+            const used = [...folder.children.values()].reduce((sum, child) => sum + (child.bytes?.length ?? 0), 0);
+            if (used + bytes.byteLength > folder.space) {
+              throw Object.assign(new Error('no space'), { name: 'QuotaExceededError' });
+            }
+            return writable.write(bytes);
+          },
+          abort: async () => {},
+        };
+      };
+      this.children.set(name, file);
+    }
+    return super.getFileHandle(name, { create });
+  }
+}
+
+check('with no more space the store keeps the next files in memory, tells it one time and joins no blocks', async () => {
+  const files = { 'Data/AllMeshes.g3d': 'meshes', 'Data/Landscape/Land2.lnd': 'land two',
+    'Data/Landscape/Land3.lnd': 'land three', 'Audio/Music/align/Good.sad': 'HEADmusic of the good god' };
+  const site = fakeSite(files, { index: streamedText(files, ['Audio/Music/align/Good.sad']) });
+  const root = new SmallFolder(12);
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  const logged = [];
+  let full = 0;
+  const shared = [];
+  const { store } = await streamAssets(index, {
+    fetchFile: site.fetchFile, digest, root, log: (line) => logged.push(line), onFull: () => { full += 1; },
+    share: (number, block, file) => shared.push({ number, block, file }),
+  });
+  await store.drained();
+  const land2 = numberOf(index.files, 'Data/Landscape/Land2.lnd');
+  const land3 = numberOf(index.files, 'Data/Landscape/Land3.lnd');
+  await store.obtain(land2);
+  await store.obtain(land3);
+  assert.equal(store.full, true);
+  assert.equal(full, 1);
+  assert.equal(logged.filter((line) => /no more space/.test(line)).length, 1);
+  assert.equal(Buffer.from(await store.fileOf(land3).arrayBuffer()).toString(), 'land three');
+  const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+  assert.equal(folder.children.has(sha('land three')), false);
+  // The blocks of the music come from memory, and the page does not join them
+  const music = numberOf(index.files, 'Audio/Music/align/Good.sad');
+  await store.obtain(music, 0, 100);
+  await store.drained();
+  assert.equal(store.fileOf(music), null);
+  assert.equal(store.blocksOf(music).every((block) => block !== null), true);
+});
+
+check('the page checks the free space before it downloads, and says why when the start has no space', async () => {
+  // The boot phase of the test tiers has the script, and Land 2 is a later file
+  const files = { 'Scripts/InfoScript2.txt': 'boot script', 'Data/Landscape/Land2.lnd': 'land two' };
+  const site = fakeSite(files);
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  // All the files need 19 bytes. With 15 bytes free the page gets only the start (11 bytes).
+  const logged = [];
+  const some = await streamAssets(index, { fetchFile: site.fetchFile, digest, root: new FakeFolder(), all: true,
+    estimate: async () => ({ quota: 115, usage: 100 }), log: (line) => logged.push(line) });
+  assert.equal(some.all, false);
+  assert.deepEqual(some.space, { free: 15, rest: 19 });
+  assert.equal(some.entries[numberOf(index.files, 'Data/Landscape/Land2.lnd')].file, null);
+  assert.ok(logged.some((line) => /free space/.test(line)), logged.join('\n'));
+  // With enough space the option all gets all the files
+  const every = await streamAssets(index, { fetchFile: site.fetchFile, digest, root: new FakeFolder(), all: true,
+    estimate: async () => ({ quota: 1000, usage: 0 }) });
+  assert.equal(every.all, true);
+  // With less space than the start, the page stops with the reason
+  await assert.rejects(streamAssets(index, { fetchFile: site.fetchFile, digest, root: new FakeFolder(),
+    estimate: async () => ({ quota: 5, usage: 0 }) }), /free space for the game files/);
+  // A write before the start that finds no space stops with the reason
+  await assert.rejects(streamAssets(index, { fetchFile: site.fetchFile, digest, root: new SmallFolder(3) }),
+    /no more space for the game files/);
 });
 
 check('the scripts of the page about the game files load in one scope with no name twice', () => {
