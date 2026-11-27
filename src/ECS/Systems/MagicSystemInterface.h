@@ -350,6 +350,9 @@ public:
 	/// Takes a dispenser away with its bubble and its swirl, or a bubble with the seed spinning in it; false for anything
 	/// else, which is left alone
 	virtual bool Remove(entt::entity entity) = 0;
+	/// Takes the bubble and the swirl of a dispenser away and leaves the dispenser itself, for a removal that goes on
+	/// through the world's own removal of a building
+	virtual void ReleaseDispenser(entt::entity /*dispenser*/) {}
 	/// A seed straight into the player's hand, fully charged and ready, as from a bubble, if the hand is free: the seed,
 	/// or none
 	virtual entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) = 0;

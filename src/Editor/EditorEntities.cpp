@@ -809,7 +809,18 @@ void Remove(entt::entity entity)
 	{
 		return;
 	}
-	// A dispenser goes with its bubble and swirl, a bubble with its seed
+	// A dispenser goes with its bubble and swirl, then as a building of its town: the town plans it again and the things
+	// round it go
+	if (registry.AllOf<SpellDispenser>(entity))
+	{
+		if (Locator::magicSystem::has_value())
+		{
+			Locator::magicSystem::value().ReleaseDispenser(entity);
+		}
+		ecs::world_objects::Remove(entity);
+		return;
+	}
+	// A bubble goes with its seed
 	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().Remove(entity))
 	{
 		return;
