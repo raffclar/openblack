@@ -17,6 +17,7 @@
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 
@@ -150,7 +151,7 @@ std::vector<uint8_t> KeepSummits(const Grid<float>& grid, std::vector<float>& un
 
 float cliffs::SteepestRiseAt(uint64_t seed, float u, float v, const FaceSettings& settings)
 {
-	const float wave = noise::Fractal(StageSeed(seed, 100), u * settings.frequency, v * settings.frequency, 2);
+	const float wave = noise::Fractal(StageSeed(seed, Stage::CliffWave), u * settings.frequency, v * settings.frequency, 2);
 	return settings.steepestLow + ((settings.steepestHigh - settings.steepestLow) * noise::SmoothStep(-0.5f, 0.5f, wave));
 }
 

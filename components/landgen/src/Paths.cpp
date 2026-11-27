@@ -19,6 +19,7 @@
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::paths;
@@ -40,7 +41,7 @@ Costs CostsOf(const Ground& ground, uint64_t seed, const Settings& settings)
 {
 	const int side = ground.heights.side;
 	Costs costs {.metres = Grid<float>(side, 0.0f), .wander = Grid<float>(side, 0.0f)};
-	const auto wanderSeed = StageSeed(seed, 80);
+	const auto wanderSeed = StageSeed(seed, Stage::PathWander);
 	for (int x = 0; x < side; ++x)
 	{
 		for (int z = 0; z < side; ++z)
@@ -375,7 +376,7 @@ std::vector<Path> paths::Lay(const Ground& ground, std::span<const Place> places
 {
 	const auto costs = CostsOf(ground, seed, settings);
 	Grid<uint8_t> laid(ground.heights.side, 0);
-	Random random(StageSeed(seed, 81));
+	Random random(StageSeed(seed, Stage::PathLay));
 	std::vector<Path> paths;
 	std::vector<Link> joined;
 	// The parts of the land, found only when a link has no way
@@ -547,7 +548,7 @@ std::vector<Lantern> paths::PlaceLanterns(std::span<const Path> paths, std::span
                                           const Grid<uint8_t>& water, std::span<const Clear> clear, uint64_t seed,
                                           const Settings& settings)
 {
-	Random random(StageSeed(seed, 82));
+	Random random(StageSeed(seed, Stage::PathLanterns));
 	std::vector<Lantern> lanterns;
 	const auto kindAt = [&](float x, float z) {
 		const float reach = settings.streetReach / k_MetresPerCorner;

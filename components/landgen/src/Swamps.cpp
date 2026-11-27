@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::swamps;
@@ -150,7 +151,7 @@ void PlaceSheets(const features::Ground& ground, uint64_t seed, const Settings& 
 	{
 		return;
 	}
-	const auto siteSeed = StageSeed(seed, 70);
+	const auto siteSeed = StageSeed(seed, Stage::SwampSheets);
 	const auto last = static_cast<float>(ground.biomes.side - 1);
 	const int points = static_cast<int>(last / settings.spacing);
 	// Only the points on a swamp can start a sheet
@@ -229,7 +230,7 @@ void PlaceCover(const features::Ground& ground, uint64_t seed, const Settings& s
 	{
 		return;
 	}
-	const auto coverSeed = StageSeed(seed, 71);
+	const auto coverSeed = StageSeed(seed, Stage::SwampCover);
 	const float extent = static_cast<float>(ground.biomes.side - 1) * k_MetresPerCorner;
 	const int points = static_cast<int>(extent / settings.coverSpacing);
 	const float clear = settings.coverSpacing * 0.5f;

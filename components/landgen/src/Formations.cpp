@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 #include "landgen/Terrain.h"
 
 using namespace openblack::landgen;
@@ -610,7 +611,7 @@ Result formations::Place(const features::Ground& ground, std::vector<Feature>& p
 {
 	Result result;
 	const float km2 = LandKm2(ground);
-	auto counts = Random(StageSeed(seed, 90));
+	auto counts = Random(StageSeed(seed, Stage::FormationCounts));
 	const float pick = counts.NextUnit();
 	const auto& story = k_StoryLands[std::min<size_t>(settings.land.value_or(DensityOf(pick).land), k_StoryLands.size() - 1)];
 	const auto rings = CountFor(settings.ringsPerKm2.value_or(story.rings), km2, counts.NextUnit());
@@ -622,7 +623,7 @@ Result formations::Place(const features::Ground& ground, std::vector<Feature>& p
 	const Site site(ground, placed, avoid);
 	const int side = ground.biomes.side;
 
-	const auto ringSeed = StageSeed(seed, 91);
+	const auto ringSeed = StageSeed(seed, Stage::FormationRings);
 	for (const auto& candidate : CandidatesOf(side, settings.spacing, ringSeed))
 	{
 		if (result.rings.size() >= rings)
@@ -642,7 +643,7 @@ Result formations::Place(const features::Ground& ground, std::vector<Feature>& p
 		result.rings.push_back({.x = x, .z = z, .stamp = static_cast<uint8_t>(ring)});
 	}
 
-	const auto pillarSeed = StageSeed(seed, 92);
+	const auto pillarSeed = StageSeed(seed, Stage::FormationPillars);
 	for (const auto& candidate : CandidatesOf(side, settings.spacing, pillarSeed))
 	{
 		if (result.pillarGroups.size() >= groups)
@@ -663,7 +664,7 @@ Result formations::Place(const features::Ground& ground, std::vector<Feature>& p
 		result.pillarGroups.push_back({.x = x, .z = z, .stamp = static_cast<uint8_t>(stamp)});
 	}
 
-	const auto clumpSeed = StageSeed(seed, 120);
+	const auto clumpSeed = StageSeed(seed, Stage::FormationClumps);
 	for (const auto& candidate : CandidatesOf(side, settings.spacing, clumpSeed))
 	{
 		if (result.clumps.size() >= clumps)

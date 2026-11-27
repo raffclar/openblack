@@ -22,6 +22,7 @@
 #include <utility>
 
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::settlement;
@@ -365,7 +366,7 @@ StartDraw DrawStart(Random& random)
 
 Site settlement::TownOfStart(float startX, float startZ, uint64_t seed, const Settings& settings)
 {
-	Random random(StageSeed(seed, 50));
+	Random random(StageSeed(seed, Stage::StartTown));
 	const auto start = DrawStart(random);
 	const float distance = settings.townDistance / k_MetresPerCorner;
 	return {.x = startX + (start.along.x * distance), .z = startZ + (start.along.z * distance)};
@@ -373,7 +374,7 @@ Site settlement::TownOfStart(float startX, float startZ, uint64_t seed, const Se
 
 Plan settlement::Make(float startX, float startZ, const Grid<uint8_t>& keepClear, uint64_t seed, const Settings& settings)
 {
-	Random random(StageSeed(seed, 50));
+	Random random(StageSeed(seed, Stage::StartTown));
 	Plan plan;
 	const auto start = DrawStart(random);
 	plan.town.tribe = start.tribe;
@@ -393,7 +394,7 @@ Plan settlement::Make(float startX, float startZ, const Grid<uint8_t>& keepClear
 Town settlement::MakeTown(Site site, Tribe tribe, const Grid<uint8_t>& keepClear, uint64_t seed, uint32_t number,
                           const Settings& settings, const TownMix& mix)
 {
-	Random random(StageSeed(StageSeed(seed, 54), number));
+	Random random(PartSeed(StageSeed(seed, Stage::Towns), number));
 	Town town;
 	town.tribe = tribe;
 	town.x = site.x * k_MetresPerCorner;
@@ -405,7 +406,7 @@ Town settlement::MakeTown(Site site, Tribe tribe, const Grid<uint8_t>& keepClear
 
 std::vector<Tribe> settlement::TribesOf(Tribe first, uint64_t seed, const SiteSettings& settings)
 {
-	Random random(StageSeed(seed, 52));
+	Random random(StageSeed(seed, Stage::LandTribes));
 	const auto count = settings.tribeCounts.at(random.NextBelow(static_cast<uint32_t>(settings.tribeCounts.size())));
 	std::vector<Tribe> tribes {first};
 	auto weights = settings.tribeWeights;
@@ -435,7 +436,7 @@ std::vector<Tribe> settlement::TribesOfTowns(std::span<const Tribe> landTribes, 
 	{
 		return result;
 	}
-	Random random(StageSeed(seed, 53));
+	Random random(StageSeed(seed, Stage::TownTribes));
 	for (size_t i = 1; i < landTribes.size() && result.size() < towns; ++i)
 	{
 		result.push_back(landTribes[i]);
@@ -537,7 +538,7 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 		}
 	}
 
-	Random random(StageSeed(seed, 51));
+	Random random(StageSeed(seed, Stage::TownSites));
 	// The towns of the other players come in addition to the neutral towns
 	const auto towns = std::min(settings.townCounts.at(random.NextBelow(static_cast<uint32_t>(settings.townCounts.size()))),
 	                            settings.mostNeutral + 1) +
@@ -651,7 +652,7 @@ std::vector<Field> settlement::FishFarms(const Town& town, const Grid<float>& ab
 	{
 		return farms;
 	}
-	Random random(StageSeed(StageSeed(seed, 55), number));
+	Random random(PartSeed(StageSeed(seed, Stage::FishFarms), number));
 	// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 	const auto centreX = std::clamp(static_cast<int>((town.x / k_MetresPerCorner) + 0.5f), 0, side - 1);
 	const auto centreZ = std::clamp(static_cast<int>((town.z / k_MetresPerCorner) + 0.5f), 0, side - 1);
