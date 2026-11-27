@@ -174,6 +174,13 @@ public:
 	}
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
+	/// At the turn: the computer mind of a player reports where its hand and its camera are. After a step, the report
+	/// also gives the place of the hand before the step. The frames then move what the hand holds from that place (see
+	/// HeldDrawTrack). The other reports of the mind do not change that movement.
+	virtual void ReportMind([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report,
+	                        [[maybe_unused]] std::optional<glm::vec3> stepStart)
+	{
+	}
 	/// The pass of this computer's hand at each turn: it keeps what the computer last sent of its hand (see
 	/// hand_report::OwnReporter). None where the hands send no reports.
 	[[nodiscard]] virtual hand_report::OwnReporter* GetOwnReporter() noexcept { return nullptr; }

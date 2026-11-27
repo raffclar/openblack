@@ -41,6 +41,7 @@
 #include "ECS/Components/HandLockEndSent.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
+#include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerHands.h"
 #include "ECS/Components/ReportedHand.h"
@@ -428,6 +429,33 @@ TEST_F(ReportedHands, TheGodOfAnotherPlayerGetsHandsOfItsOwnAndItsReportsMoveOnl
 	}
 	EXPECT_EQ(registry.Get<const ecs::components::HandStillness>(made[0]).stillTurns,
 	          registry.Get<const ecs::components::HandStillness>(_hand).stillTurns);
+}
+
+TEST_F(ReportedHands, TheReportOfAMindAfterAStepStartsTheMovementOfWhatItsHandHoldsAtTheHandBeforeTheStep)
+{
+	using ecs::components::HeldDrawTrack;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO)[static_cast<size_t>(ecs::systems::HandSystem::Side::Left)];
+	// A report in a step does not start a movement
+	_hands.ReportMind(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}), std::nullopt);
+	EXPECT_EQ(registry.Get<const ecs::components::ReportedHand>(hand).handPoint, glm::vec3(5.0f, 0.0f, 5.0f));
+	EXPECT_FALSE(registry.AllOf<HeldDrawTrack>(hand));
+	// The first report after a step has no time from an earlier report, so the frames draw the thing at the hand
+	_hands.ReportMind(PlayerNames::PLAYER_TWO, ReportAt({8.0f, 0.0f, 5.0f}), glm::vec3(5.0f, 0.0f, 5.0f));
+	ASSERT_TRUE(registry.AllOf<HeldDrawTrack>(hand));
+	EXPECT_EQ(registry.Get<const HeldDrawTrack>(hand).from, glm::vec3(5.0f, 0.0f, 5.0f));
+	EXPECT_EQ(registry.Get<const HeldDrawTrack>(hand).intervalMs, 0);
+	// The frames had 70 milliseconds. A report in the next step keeps them.
+	registry.Get<HeldDrawTrack>(hand).elapsedMs = 70;
+	_hands.ReportMind(PlayerNames::PLAYER_TWO, ReportAt({9.0f, 0.0f, 5.0f}), std::nullopt);
+	EXPECT_EQ(registry.Get<const HeldDrawTrack>(hand).elapsedMs, 70);
+	// The report at the end of that step starts the next movement, also in a game that is not a network game
+	_hands.ReportMind(PlayerNames::PLAYER_TWO, ReportAt({12.0f, 0.0f, 5.0f}), glm::vec3(8.0f, 0.0f, 5.0f));
+	const auto& track = registry.Get<const HeldDrawTrack>(hand);
+	EXPECT_EQ(track.from, glm::vec3(8.0f, 0.0f, 5.0f));
+	EXPECT_EQ(track.intervalMs, 70);
+	EXPECT_EQ(track.elapsedMs, 0);
+	EXPECT_EQ(registry.Get<const ecs::components::ReportedHand>(hand).handPoint, glm::vec3(12.0f, 0.0f, 5.0f));
 }
 
 // The left hand of a god has its grab from the start, so that the order of the hands in the world is the same on every

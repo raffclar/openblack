@@ -284,7 +284,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},
-    // The frames of this computer move what the hand of another player holds toward the reported place of that hand
+    // The frames of this computer move what the hand of another player holds toward the place of that hand in the turn
     {.component = "HeldDrawTrack", .field = "", .marker = ""},
     // A dead tree drops its roots the first time that a frame draws it. Only the frames read the mark.
     {.component = "DropsRoots", .field = "", .marker = ""},

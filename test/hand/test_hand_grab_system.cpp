@@ -2491,18 +2491,17 @@ TEST_F(HandGrabSystemWithWorld, TheTurnHasAThingInTheHandOfAComputerMindWhereThe
 	EXPECT_EQ(_world->registry.Get<const Transform>(rock).position, glm::vec3(30.0f, 6.0f, 20.0f) + _world->heldPlaceStep);
 }
 
-TEST_F(HandGrabSystemWithWorld, TheFramesDrawAThingInTheHandOfAComputerMindWithNoMovementBetweenTurns)
+TEST_F(HandGrabSystemWithWorld, TheFramesDrawAThingInTheHandOfAComputerMindWithNoMovementInATurnWithAStep)
 {
-	_world->networkGame = true;
 	auto& registry = _world->registry;
 	const auto rock = _world->AddRock({5.0f, 0.0f, 5.0f});
 	registry.Assign<InHand>(rock, InHand {.hand = _world->secondHand});
 	_world->otherHands.insert(_world->secondHand);
 	_world->reportedPlaces[_world->secondHand] = glm::vec3(40.0f, 5.0f, 60.0f);
+	// In a turn with a step, the world has the hand before the step, and the movement starts there too
 	_world->mindDrawnPlaces[_world->secondHand] = glm::vec3(20.0f, 5.0f, 30.0f);
-	// A report starts a movement for the hand of a person. The hand of a mind does not use it.
 	registry.Assign<HeldDrawTrack>(_world->secondHand,
-	                               HeldDrawTrack {.from = glm::vec3(0.0f), .elapsedMs = 0, .intervalMs = 100});
+	                               HeldDrawTrack {.from = glm::vec3(20.0f, 5.0f, 30.0f), .elapsedMs = 0, .intervalMs = 100});
 	for (int frame = 0; frame < 5; ++frame)
 	{
 		_system->PlaceOthersHeldForFrame(20);
@@ -2516,6 +2515,53 @@ TEST_F(HandGrabSystemWithWorld, TheFramesDrawAThingInTheHandOfAComputerMindWithN
 	registry.Assign<HandHeldSeed>(_world->secondHand, HandHeldSeed {.seed = seed});
 	_system->PlaceOthersHeldForFrame(20);
 	EXPECT_EQ(registry.Get<const Transform>(seed).position, glm::vec3(20.0f, 5.0f, 30.0f));
+}
+
+TEST_F(HandGrabSystemWithWorld, TheFramesMoveAThingInTheHandOfAComputerMindToThePlaceAfterTheStepInTheNextTurns)
+{
+	auto& registry = _world->registry;
+	const auto rock = _world->AddRock({5.0f, 0.0f, 5.0f});
+	registry.Assign<InHand>(rock, InHand {.hand = _world->secondHand});
+	_world->otherHands.insert(_world->secondHand);
+	// A turn with no step has the hand after the last step. The frames of the turn of the step had 60 milliseconds, and
+	// the frames between the two last steps had 100.
+	_world->mindDrawnPlaces[_world->secondHand] = glm::vec3(40.0f, 5.0f, 30.0f);
+	registry.Assign<HeldDrawTrack>(_world->secondHand,
+	                               HeldDrawTrack {.from = glm::vec3(20.0f, 5.0f, 30.0f), .elapsedMs = 60, .intervalMs = 100});
+	_system->PlaceOthersHeldForFrame(20);
+	EXPECT_EQ(registry.Get<const InHand>(rock).drawn->position, glm::vec3(36.0f, 5.0f, 30.0f));
+	_system->PlaceOthersHeldForFrame(20);
+	EXPECT_EQ(registry.Get<const InHand>(rock).drawn->position, glm::vec3(40.0f, 5.0f, 30.0f));
+	_system->PlaceOthersHeldForFrame(20);
+	EXPECT_EQ(registry.Get<const InHand>(rock).drawn->position, glm::vec3(40.0f, 5.0f, 30.0f));
+}
+
+TEST_F(HandGrabSystemWithWorld, TheFramesDrawAThingInTheHandOfAComputerMindAtItsPlaceBeforeTheFirstReport)
+{
+	auto& registry = _world->registry;
+	const auto rock = _world->AddRock({5.0f, 0.0f, 5.0f});
+	registry.Assign<InHand>(rock, InHand {.hand = _world->secondHand});
+	_world->otherHands.insert(_world->secondHand);
+	_world->mindDrawnPlaces[_world->secondHand] = glm::vec3(20.0f, 5.0f, 30.0f);
+	_system->PlaceOthersHeldForFrame(20);
+	EXPECT_EQ(registry.Get<const InHand>(rock).drawn->position, glm::vec3(20.0f, 5.0f, 30.0f));
+}
+
+TEST_F(HandGrabSystemWithWorld, AHandThatHoldsTwoThingsMovesOnceInAFrame)
+{
+	auto& registry = _world->registry;
+	const auto first = _world->AddRock({5.0f, 0.0f, 5.0f});
+	const auto second = _world->AddRock({6.0f, 0.0f, 5.0f});
+	registry.Assign<InHand>(first, InHand {.hand = _world->secondHand});
+	registry.Assign<InHand>(second, InHand {.hand = _world->secondHand});
+	_world->otherHands.insert(_world->secondHand);
+	_world->reportedPlaces[_world->secondHand] = glm::vec3(10.0f, 0.0f, 0.0f);
+	registry.Assign<HeldDrawTrack>(_world->secondHand,
+	                               HeldDrawTrack {.from = glm::vec3(0.0f), .elapsedMs = 0, .intervalMs = 100});
+	_system->PlaceOthersHeldForFrame(20);
+	EXPECT_EQ(registry.Get<const InHand>(first).drawn->position, glm::vec3(2.0f, 0.0f, 0.0f));
+	EXPECT_EQ(registry.Get<const InHand>(second).drawn->position, glm::vec3(2.0f, 0.0f, 0.0f));
+	EXPECT_EQ(registry.Get<const HeldDrawTrack>(_world->secondHand).elapsedMs, 20);
 }
 
 TEST_F(HandGrabSystemWithWorld, AVillagerOfTheHandsPlayerAlarmsThoseAboutIt)
