@@ -332,6 +332,38 @@ TEST(Startup, LogoStillFadesInHoldsAndFadesOut)
 	EXPECT_EQ(held.Frame(10, false), 255);
 }
 
+TEST(Startup, LogoFrameNeedsANewPictureOnlyWhenItChanges)
+{
+	const LogoFrame frame {.still = 0, .alpha = 255, .width = 1920, .height = 1080};
+	// The first frame always draws
+	EXPECT_TRUE(LogoNeedsNewPicture(std::nullopt, frame));
+	EXPECT_FALSE(LogoNeedsNewPicture(frame, frame));
+	EXPECT_TRUE(LogoNeedsNewPicture(frame, LogoFrame {.still = 1, .alpha = 255, .width = 1920, .height = 1080}));
+	EXPECT_TRUE(LogoNeedsNewPicture(frame, LogoFrame {.still = 0, .alpha = 254, .width = 1920, .height = 1080}));
+	EXPECT_TRUE(LogoNeedsNewPicture(frame, LogoFrame {.still = 0, .alpha = 255, .width = 1280, .height = 1080}));
+	EXPECT_TRUE(LogoNeedsNewPicture(frame, LogoFrame {.still = 0, .alpha = 255, .width = 1920, .height = 720}));
+}
+
+TEST(Startup, AHeldLogoStillNeedsNoNewPicture)
+{
+	// The frames of the hold give the same alpha, thus only the first frame of the hold draws
+	LogoStill still;
+	std::optional<LogoFrame> drawn;
+	int32_t pictures = 0;
+	int32_t frames = 0;
+	while (!still.Ended() && frames < 1000)
+	{
+		const LogoFrame next {.still = 0, .alpha = still.Frame(10, false), .width = 1920, .height = 1080};
+		if (LogoNeedsNewPicture(drawn, next))
+		{
+			drawn = next;
+			++pictures;
+		}
+		++frames;
+	}
+	EXPECT_LT(pictures, frames - 150);
+}
+
 TEST(Startup, PressingSkipsALogoStill)
 {
 	LogoStill still;

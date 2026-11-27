@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -59,6 +60,10 @@
 #include "Video/VideoRules.h"
 #include "Visual/RenderPass.h"
 #include "Windowing/WindowingInterface.h"
+
+#if defined(__EMSCRIPTEN__)
+#include "Web/WebPlatform.h"
+#endif
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -368,6 +373,9 @@ void LoadingScreenSystem::PlayLogoScreens()
 	// The game forgets the earlier keys and clicks before the first still and after the last
 	TakeStartupInput(_hooks);
 	startup::StartupKeys keys;
+#if defined(__EMSCRIPTEN__)
+	std::optional<startup::LogoFrame> drawnLogo;
+#endif
 	for (int32_t still = 0; still < startup::k_LogoStills && !QuitRequested(); ++still)
 	{
 		const auto picture = video::ReadStill(std::filesystem::path(k_LogoFilm), static_cast<uint32_t>(still));
@@ -379,6 +387,22 @@ void LoadingScreenSystem::PlayLogoScreens()
 			TakeStartupInput(_hooks, &keys);
 			const auto alpha = logo.Frame(static_cast<int32_t>(now - last), keys);
 			last = now;
+#if defined(__EMSCRIPTEN__)
+			// The browser keeps the canvas texture of each frame until its compositor shows it. A frame with the same
+			// picture as the last frame thus only uses graphics memory, and the canvas keeps the last frame.
+			_hooks.followWindowSize();
+			const auto size = Locator::windowing::value().GetSize();
+			const startup::LogoFrame frame {.still = still,
+			                                .alpha = alpha,
+			                                .width = static_cast<uint16_t>(size.x),
+			                                .height = static_cast<uint16_t>(size.y)};
+			if (!startup::LogoNeedsNewPicture(drawnLogo, frame))
+			{
+				web::WaitForDisplayFrame();
+				continue;
+			}
+			drawnLogo = frame;
+#endif
 			PresentStartupFrame([this, &picture, alpha](glm::u16vec2 resolution) {
 				if (picture)
 				{
