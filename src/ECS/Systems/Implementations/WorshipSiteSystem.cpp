@@ -581,8 +581,9 @@ void WorshipSiteSystem::AddMote(entt::entity site, glm::vec3 from, glm::vec3 to)
 	// The site's effect of motes is started with its first mote
 	if (registry.Get<const WorshipSite>(site).manaPath == 0)
 	{
-		const auto started = _world->StartMotes();
-		registry.Get<WorshipSite>(site).manaPath = started;
+		const auto& owner = registry.Get<const WorshipSite>(site);
+		const auto effect = _world->StartMotes(owner.player, owner.place);
+		registry.Get<WorshipSite>(site).manaPath = effect;
 	}
 	const auto& component = registry.Get<const WorshipSite>(site);
 	const auto rgb = ecs::game_players::Colour(component.player);

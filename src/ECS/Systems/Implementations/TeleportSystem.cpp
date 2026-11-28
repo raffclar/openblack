@@ -261,6 +261,7 @@ entt::entity TeleportSystem::RestoreStone(glm::vec3 point, PlayerNames player, e
 		    .synced = false,
 		    .step = EffectStep::Frame,
 		    .player = static_cast<int>(player),
+		    .drawnBy = particles::draw::ObjectEffect(stone),
 		});
 	}
 	// Then it shrinks to the size it keeps, which takes it out of the map's cells and puts it back in them

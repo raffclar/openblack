@@ -23,6 +23,7 @@
 #include "Enums.h"
 #include "Particles/ManaPathMaths.h"
 #include "Particles/ParticleDrawPath.h"
+#include "Particles/ParticleDrawer.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Particles/PlasmaCommand.h"
 
@@ -98,6 +99,9 @@ struct EffectRequest
 	/// The running state of the effect in a saved game of the game. The effect continues from that state instead of
 	/// from its start. When the state does not agree with the particle file, no effect starts.
 	std::shared_ptr<const particles::RestoredEffect> restored;
+	/// The thing that draws the effect in the game's frame. A spot visual is drawn with the other spot visuals when this
+	/// does not give a drawer.
+	particles::draw::DrawnBy drawnBy {};
 };
 
 /// The side that steps the effects tells the simulation when an effect starts and when it ends. The simulation keeps

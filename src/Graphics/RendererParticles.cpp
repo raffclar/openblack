@@ -53,6 +53,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -219,15 +220,17 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 	// What burns, among the other things that blend. The objects of the land's draw list draw their fires.
 	if (Locator::fireSystem::has_value())
 	{
-		const auto firstFire = particleFrame.groups.size();
 		Locator::fireSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), particleFrame);
-		particles::draw::SetStage(particleFrame, firstFire, particles::draw::DrawStage::ListedObjects);
 	}
+	// The puffs of smoke and dust. The land draws them after the reward chests and the piles of roots.
 	if (Locator::explosionSystem::has_value())
 	{
+		const auto firstPuff = particleFrame.groups.size();
 		Locator::explosionSystem::value().CollectDrawFrame(particleFrame);
+		particles::draw::SetDrawer(particleFrame, firstPuff, {.drawer = particles::draw::Drawer::LandStep}, 0);
+		particles::draw::SetStage(particleFrame, firstPuff, particles::draw::DrawStage::DustPuffs);
 	}
-	// The dust of a reward chest that fell
+	// The dust of a reward chest that fell, which the chest draws at its place in the land's draw list
 	if (Locator::rewardSystem::has_value())
 	{
 		Locator::rewardSystem::value().CollectDrawFrame(particleFrame);
@@ -238,13 +241,23 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 	{
 		const auto firstLiquid = particleFrame.groups.size();
 		Locator::liquidParticleSystem::value().CollectDrawFrame(particleFrame);
-		particles::draw::MoveGroupsToFront(particleFrame, firstLiquid);
+		particles::draw::SetDrawer(particleFrame, firstLiquid, {.drawer = particles::draw::Drawer::Liquids}, 0);
 	}
-	// The explorers' boat's wake
+	// The explorers' boat's wake. The land draws the boat after the light of the opening.
 	if (Locator::boatLaunchSystem::has_value())
 	{
+		const auto firstWake = particleFrame.groups.size();
 		Locator::boatLaunchSystem::value().CollectDrawFrame(particleFrame);
+		particles::draw::SetDrawer(particleFrame, firstWake, {.drawer = particles::draw::Drawer::LandStep}, 0);
+		particles::draw::SetStage(particleFrame, firstWake, particles::draw::DrawStage::Boat);
 	}
+	// Each effect takes its turn among the effects at an equal distance in the order of the things that draw it in the
+	// game's frame. The objects of the land's draw list draw in the order of the list.
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		particles::draw::PlaceListedObjects(particleFrame, Locator::objectDrawListSystem::value().GetList());
+	}
+	particles::draw::OrderByDrawer(particleFrame);
 	CollectTownBeliefParticles(effects);
 }
 

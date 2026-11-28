@@ -17,6 +17,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -931,19 +932,20 @@ TEST(ParticleDraw, EachStepOfTheFrameOrdersOnlyItsOwnGroups)
 	EXPECT_TRUE(commands.empty());
 }
 
-TEST(ParticleDraw, TheGroupsMovedToTheFrontComeFirstAtAnEqualDistance)
+TEST(ParticleDraw, TheLiquidsComeFirstAfterTheHandAtAnEqualDistance)
 {
 	auto frame = MakeFrame();
 	const glm::vec3 camera(0.0f);
 	const glm::vec3 point(0.0f, 0.0f, 30.0f);
-	// Two effects at one point, then a third added last, as the liquids are
+	// Two effects at one point, then the liquids added last
 	AddSprite(frame, point, 0);
 	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
 	AddSprite(frame, point, 0);
 	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 1);
 	AddSprite(frame, point, 1);
 	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 2);
-	MoveGroupsToFront(frame, 2);
+	SetDrawer(frame, 2, {.drawer = Drawer::Liquids}, 0);
+	OrderByDrawer(frame);
 	ASSERT_EQ(frame.groups.size(), 3u);
 	EXPECT_EQ(frame.groups[0].firstItem, 2u);
 	EXPECT_EQ(frame.groups[1].firstItem, 0u);
@@ -956,4 +958,225 @@ TEST(ParticleDraw, TheGroupsMovedToTheFrontComeFirstAtAnEqualDistance)
 	EXPECT_EQ(commands[0].material, 1u);
 	EXPECT_EQ(commands[1].material, 0u);
 	EXPECT_EQ(order, (std::vector<uint32_t> {2, 0, 1}));
+}
+
+TEST(ParticleDraw, TheDrawersComeInTheOrderOfTheGameFrame)
+{
+	// The things that draw effects after the hand, in the order of the game's frame
+	constexpr std::array k_Frame {Drawer::FightMarks, Drawer::Liquids,     Drawer::Arenas,       Drawer::VolumeGlows,
+	                              Drawer::Hand,       Drawer::LightSheets, Drawer::WorshipSites, Drawer::Shields,
+	                              Drawer::FireBalls,  Drawer::Spells,      Drawer::Containers,   Drawer::Players,
+	                              Drawer::Others};
+	auto frame = MakeFrame();
+	// One effect of each, added in the reverse order
+	for (const auto drawer : k_Frame | std::views::reverse)
+	{
+		const auto first = static_cast<uint32_t>(frame.items.size());
+		AddSprite(frame, glm::vec3(0.0f, 0.0f, 10.0f), 0);
+		AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), first);
+		SetDrawer(frame, frame.groups.size() - 1, {.drawer = drawer}, 0);
+	}
+	OrderByDrawer(frame);
+	ASSERT_EQ(frame.groups.size(), k_Frame.size());
+	for (size_t i = 0; i < k_Frame.size(); ++i)
+	{
+		EXPECT_EQ(frame.groups[i].drawer, k_Frame.at(i)) << i;
+		EXPECT_EQ(frame.groups[i].stage, DrawStage::AfterHand) << i;
+	}
+}
+
+TEST(ParticleDraw, TheLastingEffectsOfTheHandComeInTheirSlots)
+{
+	EXPECT_EQ(PlaceOf(HandEffect(HandSlot::Arcs), 9, std::nullopt), 0u);
+	EXPECT_EQ(PlaceOf(HandEffect(HandSlot::Selection), 0, std::nullopt), 9u);
+	EXPECT_LT(PlaceOf(HandEffect(HandSlot::Scoop), 5, std::nullopt), PlaceOf(HandEffect(HandSlot::Pour), 1, std::nullopt));
+	EXPECT_LT(PlaceOf(HandEffect(HandSlot::StormBolts), 0, std::nullopt),
+	          PlaceOf(HandEffect(HandSlot::GestureTrails), 7, std::nullopt));
+	EXPECT_LT(PlaceOf(HandEffect(HandSlot::GestureTrails), 0, std::nullopt),
+	          PlaceOf(HandEffect(HandSlot::Chain), 3, std::nullopt));
+}
+
+TEST(ParticleDraw, AMiracleDrawsItsCastEffectJustAfterItsOwnEffect)
+{
+	// The running effects, the newest first: a newer miracle (1), the swirl of the cast of an older miracle (0), the own
+	// effect of that miracle (3) and an even older miracle (5)
+	const DrawnBy newer {.drawer = Drawer::Spells};
+	const DrawnBy cast {.drawer = Drawer::Spells, .slot = 1, .after = 40};
+	const DrawnBy own {.drawer = Drawer::Spells};
+	const DrawnBy older {.drawer = Drawer::Spells};
+	const auto newerPlace = PlaceOf(newer, 1, std::nullopt);
+	const auto castPlace = PlaceOf(cast, 0, 3);
+	const auto ownPlace = PlaceOf(own, 3, std::nullopt);
+	const auto olderPlace = PlaceOf(older, 5, std::nullopt);
+	EXPECT_LT(newerPlace, ownPlace);
+	EXPECT_LT(ownPlace, castPlace);
+	EXPECT_LT(castPlace, olderPlace);
+	// When the own effect is gone, the swirl takes its own place
+	EXPECT_LT(PlaceOf(cast, 0, std::nullopt), newerPlace);
+}
+
+TEST(ParticleDraw, TheWorshipSitesDrawInTheOrderOfThePlayers)
+{
+	const auto first = WorshipSiteEffect(0, 0);
+	const auto neutral = WorshipSiteEffect(7, 0);
+	EXPECT_LT(PlaceOf(first, 20, std::nullopt), PlaceOf(neutral, 2, std::nullopt));
+	// The last place of a player comes before the first place of the next player
+	EXPECT_LT(PlaceOf(WorshipSiteEffect(0, 5), 20, std::nullopt), PlaceOf(WorshipSiteEffect(1, 0), 2, std::nullopt));
+}
+
+TEST(ParticleDraw, TheWorshipSitesOfATempleDrawInTheOrderOfTheirPlaces)
+{
+	// The site in the first place round the temple comes first, also when its effect started after the other
+	const auto firstPlace = WorshipSiteEffect(2, 0);
+	const auto fourthPlace = WorshipSiteEffect(2, 3);
+	EXPECT_LT(PlaceOf(firstPlace, 9, std::nullopt), PlaceOf(fourthPlace, 1, std::nullopt));
+	EXPECT_NE(firstPlace.slot, fourthPlace.slot);
+}
+
+TEST(ParticleDraw, TheSavedDrawersKeepTheirValues)
+{
+	// A save keeps the value of each drawer
+	EXPECT_EQ(static_cast<int>(Drawer::ListedObject), 0);
+	EXPECT_EQ(static_cast<int>(Drawer::Hand), 3);
+	EXPECT_EQ(static_cast<int>(Drawer::Containers), 8);
+	EXPECT_EQ(static_cast<int>(Drawer::Others), 10);
+	EXPECT_EQ(static_cast<int>(Drawer::LandStep), 11);
+	EXPECT_EQ(static_cast<int>(Drawer::Arenas), 12);
+	EXPECT_EQ(static_cast<int>(Drawer::FireBalls), 13);
+	EXPECT_EQ(static_cast<int>(Drawer::VolumeGlows), 14);
+}
+
+TEST(ParticleDraw, TheFiresOfTheFireBallsDrawTheNewestFirstBetweenTheShieldsAndTheSpells)
+{
+	EXPECT_LT(FireBallPlace(40), FireBallPlace(7));
+	EXPECT_LT(TurnOf(Drawer::Shields), TurnOf(Drawer::FireBalls));
+	EXPECT_LT(TurnOf(Drawer::FireBalls), TurnOf(Drawer::Spells));
+
+	auto frame = MakeFrame();
+	const DrawnBy spell {.drawer = Drawer::Spells};
+	const DrawnBy shield {.drawer = Drawer::Shields};
+	const DrawnBy ball {.drawer = Drawer::FireBalls};
+	const std::array<std::pair<DrawnBy, uint32_t>, 4> added {
+	    {{spell, 0}, {ball, FireBallPlace(3)}, {shield, 0}, {ball, FireBallPlace(9)}}};
+	for (uint32_t i = 0; i < added.size(); ++i)
+	{
+		AddSprite(frame, glm::vec3(0.0f, 0.0f, 10.0f), 0);
+		AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), i);
+		SetDrawer(frame, i, added.at(i).first, added.at(i).second);
+	}
+	OrderByDrawer(frame);
+	ASSERT_EQ(frame.groups.size(), 4u);
+	// The shield, the newer fireball, the older fireball, then the miracle
+	EXPECT_EQ(frame.groups[0].firstItem, 2u);
+	EXPECT_EQ(frame.groups[1].firstItem, 3u);
+	EXPECT_EQ(frame.groups[2].firstItem, 1u);
+	EXPECT_EQ(frame.groups[3].firstItem, 0u);
+}
+
+TEST(ParticleDraw, TheSheetsOfTheGestureTrailsComeBeforeTheSheetsOfTheObjects)
+{
+	const auto trail = SheetEffect(SheetList::GestureTrails);
+	const auto object = SheetEffect(SheetList::Objects);
+	EXPECT_LT(PlaceOf(trail, 30, std::nullopt), PlaceOf(object, 0, std::nullopt));
+	// The newest sheet of a list first
+	EXPECT_LT(PlaceOf(object, 1, std::nullopt), PlaceOf(object, 4, std::nullopt));
+	// The rings of the arenas come after the liquids and before the lasting effects of the hand
+	EXPECT_LT(TurnOf(Drawer::Liquids), TurnOf(Drawer::Arenas));
+	EXPECT_LT(TurnOf(Drawer::Arenas), TurnOf(Drawer::Hand));
+}
+
+TEST(ParticleDraw, TheShellsOfLightDrawAfterTheArenasWhateverEffectMadeThem)
+{
+	auto frame = MakeFrame();
+	// An effect of shells only that a spot visual drew, and an effect with a sprite
+	frame.items.push_back({.kind = ItemKind::Shell, .index = 0, .sortPoint = glm::vec3(0.0f, 0.0f, 10.0f)});
+	frame.shells.push_back({});
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	SetDrawer(frame, 0, {.drawer = Drawer::Containers}, 0);
+	AddSprite(frame, glm::vec3(0.0f, 0.0f, 10.0f), 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 1);
+	SetDrawer(frame, 1, {.drawer = Drawer::Containers}, 1);
+	EXPECT_EQ(frame.groups[0].drawer, Drawer::VolumeGlows);
+	EXPECT_EQ(frame.groups[0].stage, DrawStage::AfterHand);
+	EXPECT_EQ(frame.groups[1].drawer, Drawer::Containers);
+	EXPECT_LT(TurnOf(Drawer::Arenas), TurnOf(Drawer::VolumeGlows));
+	EXPECT_LT(TurnOf(Drawer::VolumeGlows), TurnOf(Drawer::Hand));
+	// A listed object does not take the shells into its step
+	SetDrawer(frame, 0, ObjectEffect(entt::entity {4}), 0);
+	EXPECT_EQ(frame.groups[0].drawer, Drawer::VolumeGlows);
+	EXPECT_EQ(frame.groups[0].stage, DrawStage::AfterHand);
+}
+
+TEST(ParticleDraw, TheStepsOfTheLandAfterItsListComeInTheirOrder)
+{
+	// The steps after the hand, the boat, the puffs, the learning marks and the listed objects, added in that order
+	constexpr std::array k_Added {DrawStage::AfterHand, DrawStage::Boat, DrawStage::DustPuffs, DrawStage::LearningMarks,
+	                              DrawStage::ListedObjects};
+	auto frame = MakeFrame();
+	for (uint32_t i = 0; i < k_Added.size(); ++i)
+	{
+		AddSprite(frame, glm::vec3(0.0f, 0.0f, 10.0f), 0);
+		AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), i);
+		SetDrawer(frame, i, {.drawer = Drawer::LandStep}, 0);
+		SetStage(frame, i, k_Added.at(i));
+	}
+	OrderByDrawer(frame);
+	constexpr std::array k_Frame {DrawStage::ListedObjects, DrawStage::DustPuffs, DrawStage::Boat, DrawStage::LearningMarks,
+	                              DrawStage::AfterHand};
+	ASSERT_EQ(frame.groups.size(), k_Frame.size());
+	for (size_t i = 0; i < k_Frame.size(); ++i)
+	{
+		EXPECT_EQ(frame.groups[i].stage, k_Frame.at(i)) << i;
+	}
+	// Each step submits only its own groups
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	OrderLists lists;
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order, lists, DrawStage::DustPuffs);
+	EXPECT_EQ(order, (std::vector<uint32_t> {2}));
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order, lists, DrawStage::Boat);
+	EXPECT_EQ(order, (std::vector<uint32_t> {1}));
+}
+
+TEST(ParticleDraw, TheEffectsOfTheListedObjectsDrawInTheOrderOfTheList)
+{
+	auto frame = MakeFrame();
+	const glm::vec3 camera(0.0f);
+	const glm::vec3 point(0.0f, 0.0f, 30.0f);
+	const auto a = entt::entity {3};
+	const auto b = entt::entity {8};
+	const auto gone = entt::entity {12};
+	// Added: an object that the list does not hold, the second effect of b, the first effect of b, then a
+	const std::array<std::pair<entt::entity, uint32_t>, 4> added {{{gone, 0}, {b, 1}, {b, 0}, {a, 0}}};
+	for (uint32_t i = 0; i < added.size(); ++i)
+	{
+		AddSprite(frame, point, 0);
+		AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), i);
+		auto by = ObjectEffect(added.at(i).first);
+		by.slot = added.at(i).second;
+		SetDrawer(frame, i, by, PlaceOf(by, i, std::nullopt));
+	}
+	// One effect after the hand
+	AddSprite(frame, point, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 4);
+	const std::array list {entt::entity {1}, a, entt::entity {5}, b};
+	PlaceListedObjects(frame, list);
+	OrderByDrawer(frame);
+	ASSERT_EQ(frame.groups.size(), 5u);
+	EXPECT_EQ(frame.groups[0].firstItem, 3u);
+	EXPECT_EQ(frame.groups[1].firstItem, 2u);
+	EXPECT_EQ(frame.groups[2].firstItem, 1u);
+	EXPECT_EQ(frame.groups[3].firstItem, 0u);
+	for (size_t i = 0; i < 4; ++i)
+	{
+		EXPECT_EQ(frame.groups[i].stage, DrawStage::ListedObjects) << i;
+	}
+	EXPECT_EQ(frame.groups[4].stage, DrawStage::AfterHand);
+
+	// At an equal distance, the step of the listed objects submits them in the order of the list
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	OrderLists lists;
+	Order(frame, camera, std::nullopt, commands, order, lists, DrawStage::ListedObjects);
+	EXPECT_EQ(order, (std::vector<uint32_t> {3, 2, 1, 0}));
 }

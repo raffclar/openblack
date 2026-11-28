@@ -2158,6 +2158,9 @@ void SaveGameSystem::ImportVanillaFireBalls(const gamesave::VanillaWorld& world,
 	const auto& info = Locator::infoConstants::value();
 	const auto data = world.GameData();
 	const uint32_t turn = data.has_value() ? data->gameTurn : 0;
+	// The file keeps the fireballs from the head of the game's list, the newest first
+	std::vector<entt::entity> balls;
+	std::vector<uint32_t> places;
 	for (const auto* record : world.OfType(gamesave::VanillaType::MagicFireBall))
 	{
 		const auto ball = world_import::ReadFireBall(world, *record);
@@ -2171,7 +2174,7 @@ void SaveGameSystem::ImportVanillaFireBalls(const gamesave::VanillaWorld& world,
 		const auto row =
 		    spell.has_value() ? magic::FireBallInfoRow(magic::GetPowerUpLevel(info, spell->magicType)) : size_t {0};
 		const auto entity = registry.Create();
-		ecs::archetypes::TakeThingMadePlace();
+		const auto place = ecs::archetypes::TakeThingMadePlace();
 		registry.Assign<Transform>(entity, GroundPosition(ball->position), glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<MagicFireBall>(entity, MagicFireBall {
 		                                           .strength = ball->strength,
@@ -2194,9 +2197,16 @@ void SaveGameSystem::ImportVanillaFireBalls(const gamesave::VanillaWorld& world,
 			continue;
 		}
 		fire->state.previous = ball->previous;
+		balls.push_back(entity);
+		places.push_back(place);
 		made.emplace(ball->number, entity);
 		SPDLOG_LOGGER_INFO(ImportLog(), "The fireball {} of the spell {} burns again at the temperature {}", ball->number,
 		                   ball->spell, ball->temperature);
+	}
+	// The newest fireball takes the last place in the order of the things made
+	for (size_t i = 0; i < balls.size(); ++i)
+	{
+		registry.Get<MagicFireBall>(balls[i]).made = places[places.size() - 1 - i];
 	}
 }
 

@@ -200,6 +200,8 @@ void WorshipSiteSystem::UpdateRing(entt::entity site, bool drawn, int32_t realMi
 	look.ring->SetStrength(strength);
 	look.ring->SetSlideSpeed(looks::RingSlideSpeed(chants->strain));
 	look.ring->SetHidden(false);
+	// The site draws its ring at its place in the land's draw list
+	look.ring->SetDrawnBy(particles::draw::ObjectEffect(site));
 	look.ring->Update(looks::FrameSeconds(realMilliseconds));
 	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
 	if (Locator::particleRuleSystem::has_value())

@@ -134,7 +134,8 @@ entt::entity ScriptHighlightSystem::Make(uint32_t kind, glm::vec3 at, const std:
 	if (info->glints != ParticleType::None)
 	{
 		auto& made = registry.Get<ScriptHighlight>(entity);
-		made.glints = _world->StartEffect(info->glints, ground);
+		// The highlight draws its glints before its effect of activity
+		made.glints = _world->StartEffect(info->glints, ground, entity, 0);
 		if (made.glints != 0)
 		{
 			_world->TargetEffect(made.glints, entity);
@@ -196,7 +197,7 @@ void ScriptHighlightSystem::SetActive(entt::entity entity, bool active)
 		const auto info = _world->InfoOf(static_cast<uint32_t>(highlight->kind));
 		if (info.has_value() && info->activeEffect != ParticleType::None)
 		{
-			highlight->activeEffect = _world->StartEffect(info->activeEffect, StandingPoint(entity, *highlight));
+			highlight->activeEffect = _world->StartEffect(info->activeEffect, StandingPoint(entity, *highlight), entity, 1);
 		}
 	}
 	ShowModel(entity, *highlight);

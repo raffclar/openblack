@@ -299,14 +299,16 @@ void GameWorshipSiteWorld::ArtefactsLeaveSite(entt::entity site)
 	});
 }
 
-uint32_t GameWorshipSiteWorld::StartMotes()
+uint32_t GameWorshipSiteWorld::StartMotes(PlayerNames player, uint8_t place)
 {
 	// The mana path's effect, at the middle of the world. The site steps it, not the turn.
-	return Locator::effectRequestSystem::has_value() ? Locator::effectRequestSystem::value().Start({
-	                                                       .type = ParticleType::ManaPath,
-	                                                       .ownerSteps = true,
-	                                                   })
-	                                                 : k_NoEffectHandle;
+	return Locator::effectRequestSystem::has_value()
+	           ? Locator::effectRequestSystem::value().Start({
+	                 .type = ParticleType::ManaPath,
+	                 .ownerSteps = true,
+	                 .drawnBy = particles::draw::WorshipSiteEffect(static_cast<uint32_t>(player), place),
+	             })
+	           : k_NoEffectHandle;
 }
 
 void GameWorshipSiteWorld::AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb)

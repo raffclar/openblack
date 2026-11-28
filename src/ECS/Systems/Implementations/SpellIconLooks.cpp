@@ -193,6 +193,12 @@ void SpellIconSystem::ShowCharge(entt::entity entity, const WorshipIcon* source,
 	look.ring->SetRgb(playerRgb);
 	look.ring->SetStrength(shown.fraction);
 	look.ring->SetHidden(false);
+	// The thing of the land's draw list draws the ring after the seed of the icon: an icon of a site draws its own, and
+	// a village centre draws the rings of its stone hands
+	const auto* hand = registry.TryGet<const TownCentreIcon>(entity);
+	auto ring = particles::draw::ObjectEffect(hand != nullptr ? hand->centre : entity);
+	ring.slot = 1;
+	look.ring->SetDrawnBy(ring);
 	look.ring->Update(static_cast<float>(gameMilliseconds) * k_SecondsPerMillisecond);
 	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
 	if (Locator::particleRuleSystem::has_value())
@@ -380,6 +386,10 @@ void SpellIconSystem::StepHolderEffect(entt::entity icon, bool drawn, std::optio
 			return;
 		}
 		particles.KeepOutOfSaves(effect);
+		// The icon draws the effect of its seed at its place in the land's draw list. A village centre draws the seeds of
+		// its stone hands.
+		const auto* hand = registry.TryGet<const TownCentreIcon>(icon);
+		particles.SetDrawnBy(effect, particles::draw::ObjectEffect(hand != nullptr ? hand->centre : icon));
 		// The seed draws its effect as the last frame step left it, not with the blend between the turns
 		particles.SetDrawnAtLastStep(effect);
 		// The effect acts on the model of the seed. The model has the bat or the dove of the player when the effect starts.

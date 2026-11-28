@@ -81,8 +81,9 @@ public:
 	/// True when a thing is on the screen this frame (see object_draw_list::SphereOnScreen)
 	[[nodiscard]] virtual bool OnScreen(glm::vec3 origin, glm::vec3 centre, float radius) const = 0;
 
-	/// A particle effect of a type at a point, at full strength; 0 for none
-	virtual uint32_t StartEffect(ParticleType type, glm::vec3 at) = 0;
+	/// A particle effect of a type at a point, at full strength; 0 for none. The highlight draws it in the place that the
+	/// slot gives among the effects of the highlight.
+	virtual uint32_t StartEffect(ParticleType type, glm::vec3 at, entt::entity highlight, uint32_t slot) = 0;
 	/// The effect is handed the highlight as its target
 	virtual void TargetEffect(uint32_t effect, entt::entity target) = 0;
 	/// A frame's step of the effect, which is stepped as it is drawn

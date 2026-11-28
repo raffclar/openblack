@@ -209,6 +209,8 @@ public:
 				world.AddLightSheet(data.sheet);
 			}
 			data.sheet->SetStrength(trail::SheetStrength(age, _sheetDieAge));
+			// The game draws the sheets of the gesture trails before the sheets of the objects
+			data.sheet->SetDrawnBy(draw::SheetEffect(draw::SheetList::GestureTrails));
 		}
 		return true;
 	}

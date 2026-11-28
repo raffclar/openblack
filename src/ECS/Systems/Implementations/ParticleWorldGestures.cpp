@@ -119,6 +119,7 @@ void ParticleRuleSystem::KeepGestureTrails()
 	}
 	// This computer's own: it draws on its own random numbers, in its player's colour
 	_gestureTrails = Start(ParticleType::Gesture, glm::vec3(0.0f), 1.0f, false);
+	SetDrawnBy(_gestureTrails, particles::draw::HandEffect(particles::draw::HandSlot::GestureTrails));
 	SetPlayer(_gestureTrails, static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
 	                                                                            : PlayerNames::PLAYER_ONE));
 }
@@ -143,6 +144,7 @@ void ParticleRuleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	if (!IsRunning(_gestureChain))
 	{
 		_gestureChain = Start(ParticleType::GestureLocal, glm::vec3(0.0f), 1.0f, false);
+		SetDrawnBy(_gestureChain, particles::draw::HandEffect(particles::draw::HandSlot::Chain));
 		SetPlayer(_gestureChain, static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
 		                                                                           : PlayerNames::PLAYER_ONE));
 		if (const auto it = FindRunning(_gestureChain); it != _effects.end())
@@ -219,6 +221,7 @@ void ParticleRuleSystem::StepSelectionEffect(float gameSeconds, const HandFrame&
 	if (!IsRunning(_selectionEffect))
 	{
 		_selectionEffect = Start(ParticleType::SpellSelection, glm::vec3(0.0f), 1.0f, false);
+		SetDrawnBy(_selectionEffect, particles::draw::HandEffect(particles::draw::HandSlot::Selection));
 		SetPlayer(_selectionEffect,
 		          static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
 		                                                            : PlayerNames::PLAYER_ONE));

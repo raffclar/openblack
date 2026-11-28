@@ -163,7 +163,7 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	vortex.altitude = altitude;
 	// Until a script says otherwise, the animals that come out gather at the vortex itself
 	vortex.arrival.gatheringPlace = centre;
-	StartEffects(vortex);
+	StartEffects(entity, vortex);
 	if (type == VortexType::In)
 	{
 		StartCrossingFile(entity);
@@ -175,7 +175,7 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	return entity;
 }
 
-void VortexSystem::StartEffects(Vortex& vortex)
+void VortexSystem::StartEffects(entt::entity entity, Vortex& vortex)
 {
 	if (!Locator::effectRequestSystem::has_value())
 	{
@@ -197,6 +197,7 @@ void VortexSystem::StartEffects(Vortex& vortex)
 		    .synced = true,
 		    .direction = glm::vec3(0.0f),
 		    .sink = &g_NoMiracle,
+		    .drawnBy = particles::draw::ObjectEffect(entity),
 		});
 		if (!effects.IsRunning(vortex.objectMoverEffect))
 		{
@@ -207,12 +208,13 @@ void VortexSystem::StartEffects(Vortex& vortex)
 	// frames of each computer do not change the world. A save does not keep them: the vortex starts them again after a
 	// load.
 	const auto startHere = [&effects](ParticleType type, glm::vec3 origin, bool ownerSteps,
-	                                  std::optional<particles::draw::DrawPath> path) {
+	                                  std::optional<particles::draw::DrawPath> path, particles::draw::DrawnBy by = {}) {
 		if (type == ParticleType::None)
 		{
 			return k_NoEffectHandle;
 		}
-		auto request = EffectRequest {.type = type, .position = origin, .synced = false, .drawPath = path, .saved = false};
+		auto request =
+		    EffectRequest {.type = type, .position = origin, .synced = false, .drawPath = path, .saved = false, .drawnBy = by};
 		if (ownerSteps)
 		{
 			request.direction = glm::vec3(0.0f);
@@ -222,7 +224,11 @@ void VortexSystem::StartEffects(Vortex& vortex)
 	};
 	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
 	vortex.beforeLandEffect = startHere(info->particleTypePreLandscape, onGround, true, particles::draw::DrawPath::BeforeLand);
-	vortex.afterLandEffect = startHere(info->particleTypePostLandscape, vortex.centre, true, std::nullopt);
+	// The vortex draws two effects at its place in the land's draw list: the effect that draws things in itself, then the
+	// effect over the land
+	auto afterMover = particles::draw::ObjectEffect(entity);
+	afterMover.slot = 1;
+	vortex.afterLandEffect = startHere(info->particleTypePostLandscape, vortex.centre, true, std::nullopt, afterMover);
 	vortex.lightMapEffect = startHere(info->particleTypeLightMap, vortex.centre, false, std::nullopt);
 }
 
@@ -927,13 +933,14 @@ entt::entity VortexSystem::Restore(const RestoredVortex& saved)
 		    .direction = glm::vec3(0.0f),
 		    .sink = &g_NoMiracle,
 		    .restored = saved.mover,
+		    .drawnBy = particles::draw::ObjectEffect(entity),
 		});
 		if (!effects.IsRunning(vortex.objectMoverEffect))
 		{
 			vortex.objectMoverEffect = k_NoEffectHandle;
 		}
 	}
-	StartEffects(vortex);
+	StartEffects(entity, vortex);
 	const auto path = CrossingFilePath();
 	if (saved.crossing.has_value() && path.has_value())
 	{
@@ -958,7 +965,7 @@ void VortexSystem::StartAgainAfterLoad()
 {
 	auto* effects = Locator::effectRequestSystem::has_value() ? &Locator::effectRequestSystem::value() : nullptr;
 	bool levelled = false;
-	Locator::entitiesRegistry::value().Each<Vortex>([&levelled, effects](Vortex& vortex) {
+	Locator::entitiesRegistry::value().Each<Vortex>([&levelled, effects](entt::entity entity, Vortex& vortex) {
 		if (const auto amount = vortex::LevelAfterLoad(vortex.type, vortex.levelApplied, vortex.groundHeights.size()))
 		{
 			// The things about the vortex came back where they were on the levelled land, so none of them moves
@@ -985,7 +992,7 @@ void VortexSystem::StartAgainAfterLoad()
 		{
 			vortex.objectMoverEffect = k_NoEffectHandle;
 		}
-		StartEffects(vortex);
+		StartEffects(entity, vortex);
 		// Each new effect takes the number that the save has for it, the last one made first, so that the numbers of
 		// the next effects are as before the load
 		const std::array made {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect};

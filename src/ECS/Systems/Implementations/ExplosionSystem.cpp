@@ -11,6 +11,8 @@
 
 #include "ExplosionSystem.h"
 
+#include <ranges>
+
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/L3DMesh.h"
@@ -233,7 +235,8 @@ void ExplosionSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 	particles::Effect::DrawWalk walk;
-	for (const auto& puff : _puffs)
+	// The game draws the newest puff first
+	for (const auto& puff : _puffs | std::views::reverse)
 	{
 		const auto rgb =
 		    std::array<uint8_t, 3> {static_cast<uint8_t>(puff.colour >> 16u), static_cast<uint8_t>((puff.colour >> 8u) & 0xFFu),

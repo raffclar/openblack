@@ -373,6 +373,8 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 			    }
 			    // What it acts on is the seed's model, for the glints a frozen creature's phial shows
 			    particles->AddTarget(effect, entity);
+			    // The globe draws the effect at its place in the land's draw list
+			    particles->SetDrawnBy(effect, particles::draw::ObjectEffect(entity));
 			    // The globe draws its effect as the last frame step left it, not with the blend between the turns
 			    particles->SetDrawnAtLastStep(effect);
 			    if (auto* running = particles->Find(effect))

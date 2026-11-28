@@ -208,14 +208,17 @@ bool GameScriptHighlightWorld::OnScreen(glm::vec3 origin, glm::vec3 centre, floa
 	return !view.has_value() || object_draw_list::SphereOnScreen(*view, origin, centre, radius);
 }
 
-uint32_t GameScriptHighlightWorld::StartEffect(ParticleType type, glm::vec3 at)
+uint32_t GameScriptHighlightWorld::StartEffect(ParticleType type, glm::vec3 at, entt::entity highlight, uint32_t slot)
 {
 	if (!Locator::effectRequestSystem::has_value())
 	{
 		return k_NoEffectHandle;
 	}
-	// The effect draws on the random numbers of this computer, and the frames that draw the highlight step it
-	return Locator::effectRequestSystem::value().Start({.type = type, .position = at, .synced = false});
+	// The effect draws on the random numbers of this computer, and the frames that draw the highlight step it. The
+	// highlight draws it at its place in the land's draw list.
+	auto by = particles::draw::ObjectEffect(highlight);
+	by.slot = slot;
+	return Locator::effectRequestSystem::value().Start({.type = type, .position = at, .synced = false, .drawnBy = by});
 }
 
 void GameScriptHighlightWorld::TargetEffect(uint32_t effect, entt::entity target)
