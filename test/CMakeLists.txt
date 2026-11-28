@@ -178,8 +178,32 @@ openblack_setup_and_add_test(test_hand_grab hand/test_hand_grab.cpp)
 openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
+openblack_setup_and_add_test(
+  test_hand_grab_system_tree hand/test_hand_grab_system_tree.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_giving hand/test_hand_grab_system_giving.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_clicks hand/test_hand_grab_system_clicks.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_pull hand/test_hand_grab_system_pull.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_scoop hand/test_hand_grab_system_scoop.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_turns hand/test_hand_grab_system_turns.cpp
+)
 if(MSVC)
   target_compile_options(test_hand_grab_system PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_tree PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_giving PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_clicks PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_pull PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_scoop PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_turns PRIVATE /bigobj)
 endif()
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
 openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
