@@ -609,6 +609,19 @@ TEST(SavedSystemState, EachVillageCentreKeepsTheEffectOfItsSymbols)
 	LoadInto(towns, out.Bytes());
 }
 
+TEST(SavedSystemState, TheVillageCentresLetTheirSymbolsGoToMakeThemAgain)
+{
+	const std::unordered_map<entt::entity, uint32_t> symbols {{static_cast<entt::entity>(5), 9u}};
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, symbols);
+	TownSystem towns;
+	LoadInto(towns, out.Bytes());
+	ASSERT_EQ(towns.BeliefSymbolsOf(static_cast<entt::entity>(5)), std::optional<uint32_t>(9u));
+	// Players joined after the land made its centres: each centre starts a new effect at the next frame
+	towns.MakeBeliefSymbolsAgain();
+	EXPECT_FALSE(towns.BeliefSymbolsOf(static_cast<entt::entity>(5)).has_value());
+}
+
 TEST(SavedSystemState, WhatTheCameraLetsThePlayerDoComesBack)
 {
 	CameraHelpSystem saved;

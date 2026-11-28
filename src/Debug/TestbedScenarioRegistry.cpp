@@ -333,7 +333,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
 	       kind == Kind::TempleFreeCamera || kind == Kind::InfiniteInfluenceCheat || kind == Kind::LoadGeneratedLand ||
 	       kind == Kind::LoadMapLand || kind == Kind::KillVillagers || kind == Kind::SetSkyPictures ||
-	       kind == Kind::MakeTemple || kind == Kind::StormBolt || IsPointerCommand(kind);
+	       kind == Kind::MakeTemple || kind == Kind::StormBolt || kind == Kind::HumansJoin || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -617,6 +617,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "load a land",
 	    "kill villagers",
 	    "set the sky pictures",
+	    "the humans join",
 	    "make a temple",
 	};
 	return k_Names.at(static_cast<size_t>(kind));

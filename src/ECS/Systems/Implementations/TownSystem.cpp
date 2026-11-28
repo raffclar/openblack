@@ -20,6 +20,7 @@
 #include <limits>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1455,6 +1456,12 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 		return;
 	}
 	auto& particles = Locator::particleRuleSystem::value();
+	// The old symbols of the centres that make their symbols again go
+	for (const auto effect : _oldBeliefSymbols)
+	{
+		particles.Delete(effect);
+	}
+	_oldBeliefSymbols.clear();
 	// A centre gone takes its symbols with it
 	std::erase_if(_beliefSymbols, [this, &particles](const auto& entry) {
 		if (_registry->Valid(entry.first))
@@ -1508,6 +1515,14 @@ const town_centre_links::Links* TownSystem::FrameLinks() const
 std::span<const entt::entity> TownSystem::CentresInDrawOrder() const
 {
 	return _centreDrawOrder;
+}
+
+void TownSystem::MakeBeliefSymbolsAgain()
+{
+	// The next frame removes the old effects and starts a new effect for each centre. A new effect makes a symbol for
+	// each player that is in the game at that time.
+	std::ranges::copy(_beliefSymbols | std::views::values, std::back_inserter(_oldBeliefSymbols));
+	_beliefSymbols.clear();
 }
 
 std::optional<uint32_t> TownSystem::BeliefSymbolsOf(entt::entity centre) const
