@@ -16,7 +16,7 @@
 // - boot: the start of the game, the logos and the front end,
 // - pre-intro: the film of the first run starts,
 // - startup: the tips screen starts while the game loads its data,
-// - land-load: the game reads the landscape of a land,
+// - land-load: the game reads the landscape of a land, or the file of the map for 32 gods,
 // - land-soon: the land is ready, and the player plays.
 // A phase never goes back to an earlier phase.
 'use strict';
@@ -36,9 +36,11 @@ const k_AssetPhaseReads = [
   [/^data\/tips\.bik$/, 2],
   [/^data\/landscape\/(.*\/)?[^/]+\.lnd$/, 3],
 ];
-// The line of the game log that starts a phase, as [rule of the line, phase]. The game writes the time of the land
-// load when the land is ready.
+// The line of the game log that starts a phase, as [rule of the line, phase]. The game reads the file of the map for
+// 32 gods from memory, not from the game folder, and then writes a line. The game writes the time of the land load when
+// the land is ready.
 const k_AssetPhaseLogs = [
+  [/Load land [^:]+: map file [\d.]+ ms/, 3],
   [/Load land [^:]+: [\d.]+ ms in all/, 4],
 ];
 

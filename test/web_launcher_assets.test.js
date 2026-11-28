@@ -11,7 +11,8 @@ const {
   parseAssetPathRecord, planAssetReuse,
   k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile,
   k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads, planAssetBackground, assetItemBytes,
-  assetBackgroundStop, assetFreeSpace, assetPackWorth, assetPackWatch, k_AssetPackShare,
+  assetBackgroundStop, assetFreeSpace, assetPackWorth, assetPackWatch, k_AssetPackShare, alignmentMusicName,
+  musicAlignmentsOfLog, assetLandOfLog,
 } = require('../web/page/launcher-assets.js');
 
 let count = 0;
@@ -597,6 +598,25 @@ check('with the tiers the plan for later gets the files of the next land of the 
     ['Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']);
 });
 
+check('a map that the game makes gets the files of its land in the tiers when the log names it', () => {
+  const { files } = parseAssetIndex(streamedText());
+  const paths = (numbers) => numbers.map((number) => files[number].path);
+  const tiers = parseAssetTiers(tiersText({ lands: { obm_32p_1: ['data/landscape/land2.fot', 'online maps/mpm_2p_1.map',
+    'data/not-in-the-list.txt'] } }));
+  const land = assetLandOfLog('[2026-11-28 10:00:00.000] [game] [info] Load land obm_32p_1: map file 3.2 ms');
+  assert.equal(land, 'obm_32p_1');
+  assert.deepEqual(paths(planAssetPrefetch(files, { land, tiers })),
+    ['Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']);
+  const have = (sha256) => sha256 === files.find((file) => file.path === 'Data/Landscape/land2.fot').sha256;
+  assert.deepEqual(paths(planAssetPrefetch(files, { land, have, tiers })), ['Online Maps/mpm_2p_1.map']);
+  // A land that the tiers do not give, or no tiers, gives nothing
+  assert.deepEqual(planAssetPrefetch(files, { land: 'obm_99p_1', tiers }), []);
+  assert.deepEqual(planAssetPrefetch(files, { land }), []);
+  assert.equal(assetLandOfLog('[game] [info] Load land Land2: 812.4 ms in all'), 'land2');
+  assert.equal(assetLandOfLog('[game] [info] Load landscape Land2: 10.0 ms in all'), null);
+  assert.equal(assetLandOfLog('[game] [info] Load startup: sound and music banks 527.1 ms'), null);
+});
+
 // A site for the second version of the list, and the store of the page with what it gave to the game threads
 const streamedSite = async (options = {}) => {
   const root = new FakeFolder();
@@ -1123,6 +1143,61 @@ check('the background plan gets the music in blocks, then the lands, the maps, t
     { number: 0, block: null },
   ]);
   assert.equal(assetItemBytes(files, plan, 4), 4 + 5 + 3 + 3 + 4);
+});
+
+check('the alignment music of the alignment that plays comes first in the background', () => {
+  const files = [
+    { path: 'Data/Landscape/Land2.lnd', sha256: sha('land2'), size: 5 },
+    { path: 'Audio/Music/Script/Hermit.sad', sha256: sha('hermit'), size: 3 },
+    { path: 'Audio/Music/Align/celt_evil.sad', sha256: sha('celt evil'), size: 3 },
+    { path: 'Audio/Music/Align/Good.sad', sha256: sha('good'), size: 3 },
+    { path: 'Audio/Music/Align/celt_good.sad', sha256: sha('celt good'), size: 3 },
+    { path: 'Audio/Music/Align/neutral.sad', sha256: sha('neutral'), size: 3 },
+  ];
+  const numbers = (plan) => plan.map(({ number }) => number);
+  assert.deepEqual(numbers(planAssetBackground(files)), [1, 2, 3, 4, 5, 0]);
+  assert.deepEqual(numbers(planAssetBackground(files, { alignments: ['good'] })), [3, 4, 1, 2, 5, 0]);
+  assert.deepEqual(numbers(planAssetBackground(files, { alignments: ['evil', 'neutral'] })), [2, 5, 1, 3, 4, 0]);
+});
+
+check('the version of the alignment music comes from the alignment in the seven steps of the game', () => {
+  // The steps 0 and 1 are evil, 2 to 4 are neutral, and 5 and 6 are good
+  assert.equal(alignmentMusicName(-1), 'evil');
+  assert.equal(alignmentMusicName(-0.43), 'evil');
+  assert.equal(alignmentMusicName(-0.42), 'neutral');
+  assert.equal(alignmentMusicName(0), 'neutral');
+  assert.equal(alignmentMusicName(0.42), 'neutral');
+  assert.equal(alignmentMusicName(0.43), 'good');
+  assert.equal(alignmentMusicName(1), 'good');
+  assert.equal(alignmentMusicName(-3), 'evil');
+  assert.equal(alignmentMusicName(3), 'good');
+  const line = (camera, player) => '[2026-11-28 10:00:00.000] [audio] [info] [GameMusic.cpp:390] Music Playing ' +
+    `MUSIC_TYPE_NORSE_TOWN_NEUTRAL (alignment at the camera ${camera}, the player's ${player})`;
+  assert.deepEqual(musicAlignmentsOfLog(line('0.00', '0.00')), ['neutral']);
+  assert.deepEqual(musicAlignmentsOfLog(line('-0.80', '0.90')), ['good', 'evil']);
+  assert.equal(musicAlignmentsOfLog('[game] [info] Load land land1: 812.4 ms in all'), null);
+});
+
+check('a new plan of the background puts the waiting background jobs in its order', async () => {
+  const files = [
+    { path: 'Audio/Music/Align/evil.sad', sha256: sha('evil'), size: 3 },
+    { path: 'Audio/Music/Align/good.sad', sha256: sha('good'), size: 8, blocks: [sha('g0'), sha('g1')] },
+    { path: 'Data/Landscape/Land2.lnd', sha256: sha('land2'), size: 5 },
+  ];
+  const store = new AssetStore(files, { fetchFile: null, digest, folder: new FakeFolder() });
+  store.backgroundAllowed = () => false;
+  const keys = () => store.waiting.background.map((job) => job.key);
+  const jobs = ['file ' + sha('evil'), 'block ' + sha('g0'), 'block ' + sha('g1'), 'file ' + sha('land2'), 'other']
+    .map((key) => store.schedule(key, async () => {}, 'background'));
+  store.reorderBackground(planAssetBackground(files, { alignments: ['good'] }));
+  assert.deepEqual(keys(), ['block ' + sha('g0'), 'block ' + sha('g1'), 'file ' + sha('evil'), 'file ' + sha('land2'),
+    'other']);
+  store.reorderBackground(planAssetBackground(files, { alignments: ['evil'] }));
+  assert.deepEqual(keys(), ['file ' + sha('evil'), 'block ' + sha('g0'), 'block ' + sha('g1'), 'file ' + sha('land2'),
+    'other']);
+  store.backgroundAllowed = () => true;
+  store.pump();
+  await Promise.all(jobs);
 });
 
 check('the page gets files in the background only when the player and the browser allow it', () => {
