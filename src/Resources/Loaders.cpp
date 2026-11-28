@@ -1288,7 +1288,33 @@ LandThumbnailLoader::result_type LandThumbnailLoader::operator()(FromDiskTag, co
 VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
 	std::string error;
+#if defined(__EMSCRIPTEN__)
+	// The site sends a large file in blocks, and the page gets each block when the game first reads it. The video thus
+	// streams: it reads its header and its tables now, and a thread reads the next blocks in order while it plays
+	constexpr uint32_t k_SiteBlockSize = 1024 * 1024;
+	std::shared_ptr<filesystem::Stream> stream = Locator::filesystem::value().Open(path, filesystem::Stream::Mode::Read);
+	const auto size = stream->Size();
+	auto read = [stream = std::move(stream)](uint64_t offset, std::span<uint8_t> out) {
+		try
+		{
+			stream->Seek(static_cast<size_t>(offset), filesystem::Stream::SeekMode::Begin);
+			stream->Read(out.data(), out.size());
+			return true;
+		}
+		catch (const std::exception& readError)
+		{
+			// The thread of the stream can still read while the game closes, after its log is gone
+			if (const auto logger = spdlog::get("game"))
+			{
+				logger->error("Can't read a block of a video: {}", readError.what());
+			}
+			return false;
+		}
+	};
+	auto file = bink::BinkFile::Stream(std::move(read), size, k_SiteBlockSize, &error);
+#else
 	auto file = bink::BinkFile::Parse(Locator::filesystem::value().ReadAll(path), &error);
+#endif
 	if (!file)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't play the video {}: {}", path.generic_string(), error);

@@ -17,6 +17,10 @@
 // music banks, the other lands, the network maps and the files of the creature species. The player can turn this off.
 // The page does this only when the browser keeps the storage, and when the browser has the space for the files.
 //
+// The list of the third version also gives packs: the bytes of two or more small files one after the other, at the
+// address of the pack by its SHA-256. The page gets a pack in one request, checks each file in it, and keeps each file
+// by its own SHA-256. Thus the start makes a small number of requests, and not one request for each small file.
+//
 // The page keeps only one copy of each file. When it joins the blocks of a file, it removes the blocks. It tells the
 // browser not to keep a second copy of each file in its HTTP cache. When the browser has no more space, the game takes
 // the next files from memory for this visit.
@@ -32,8 +36,12 @@ const k_AssetFilesAddress = '/assets/files/';
 // The start of the address of each file by its SHA-256, when the list gives these addresses
 const k_AssetHashedAddress = '/assets/sha256/';
 // The versions of the list that the page reads. The second version also gives the SHA-256 of each block of the large
-// files that the site sends with no compression, so that the page can get only the blocks that the game reads.
-const k_AssetIndexFormats = [1, 2];
+// files that the site sends with no compression, so that the page can get only the blocks that the game reads. The
+// third version also gives the packs of the small files.
+const k_AssetIndexFormats = [1, 2, 3];
+// The page gets a pack, and not its files alone, when the files that it wants have this part of the bytes of the pack
+// or more
+const k_AssetPackShare = 0.5;
 // The largest block of a file that the page accepts in the list
 const k_AssetMostBlockSize = 64 * 1024 * 1024;
 // The folder of the private storage of the site that keeps the files that the page got
@@ -80,6 +88,11 @@ const k_AssetSoonRules = [
 // before the start.
 const k_AssetHeaderRules = [
   /^audio\/music\/.*\.sad$/,
+];
+// With a tiers file: the films. The game plays a film while its blocks arrive (src/Resources/Loaders.cpp, VideoLoader),
+// thus the page gets each film in blocks, in the order of the film, in the phase of the film.
+const k_AssetFilmRules = [
+  /\.bik$/,
 ];
 // The number of blocks after a block that the game reads, which the page gets next, so that the music plays on
 const k_AssetReadAheadBlocks = 2;
@@ -217,7 +230,101 @@ function parseAssetIndex(text) {
   if (index.total_bytes !== undefined && index.total_bytes !== totalBytes) {
     throw new Error(`the list of the game files gives ${index.total_bytes} bytes, but its files have ${totalBytes}`);
   }
-  return { archive: typeof index.archive_sha256 === 'string' ? index.archive_sha256 : '', totalBytes, blockSize, files };
+  const packs = index.format >= 3 && index.packs !== undefined ? parseAssetPacks(index.packs, files, hashed) : [];
+  return {
+    archive: typeof index.archive_sha256 === 'string' ? index.archive_sha256 : '', totalBytes, blockSize, files, packs,
+  };
+}
+
+/**
+ * The packs of the list of the third version. A pack is the bytes of two or more files one after the other, at its
+ * address by its SHA-256. Gives a list of { sha256, size, address, members }, where each member has the sha256, the
+ * offset in the pack, the size and the first path of a file. Throws an error when a pack is not correct:
+ * - each member must be a content of the list, with its size,
+ * - the members must follow each other from the first byte of the pack to the last,
+ * - a content can be in one pack only.
+ */
+function parseAssetPacks(listed, files, hashed) {
+  if (!Array.isArray(listed) || listed.length > k_AssetMostFiles) {
+    throw new Error('the list of the game files has no correct packs');
+  }
+  if (listed.length > 0 && !hashed) {
+    throw new Error('the list of the game files has packs, but no addresses by SHA-256');
+  }
+  const contents = new Map();
+  for (const file of files) {
+    if (!contents.has(file.sha256)) {
+      contents.set(file.sha256, file);
+    }
+  }
+  const packed = new Set();
+  return listed.map((entry, number) => {
+    const problem = (reason) => new Error(`the list of the game files has an incorrect pack ${number}: ${reason}`);
+    if (entry === null || typeof entry !== 'object' || typeof entry.sha256 !== 'string' ||
+      !k_Sha256Pattern.test(entry.sha256) || !isFileSize(entry.size) || !Array.isArray(entry.members) ||
+      entry.members.length < 2) {
+      throw problem('it has no SHA-256, size or members');
+    }
+    let offset = 0;
+    const members = entry.members.map((member) => {
+      if (!Array.isArray(member) || member.length !== 3) {
+        throw problem('a member is not [SHA-256, offset, size]');
+      }
+      const [sha256, at, size] = member;
+      const file = contents.get(sha256);
+      if (file === undefined || size !== file.size || at !== offset) {
+        throw problem(`the member ${JSON.stringify(member)} is not a file of the list at the next offset`);
+      }
+      if (packed.has(sha256)) {
+        throw problem(`the content of ${file.path} is in two packs`);
+      }
+      packed.add(sha256);
+      offset += size;
+      return { sha256, offset: at, size, path: file.path };
+    });
+    if (offset !== entry.size) {
+      throw problem(`its members have ${offset} bytes, not ${entry.size}`);
+    }
+    return { sha256: entry.sha256, size: entry.size, address: hashedAssetAddress(entry.sha256), members };
+  });
+}
+
+/**
+ * True when the page gets the pack, and not its files alone: the files that the page wants (wanted gives true for
+ * their SHA-256) have k_AssetPackShare or more of the bytes of the pack.
+ */
+function assetPackWorth(pack, wanted) {
+  const bytes = pack.members.reduce((sum, member) => sum + (wanted(member.sha256) ? member.size : 0), 0);
+  return bytes > 0 && bytes >= pack.size * k_AssetPackShare;
+}
+
+/**
+ * Gives the changes of the download of a pack to watch as changes of its files, because the map of the downloads shows
+ * files. The function shown gives true for the SHA-256 of a file that the map shows as not kept. Gives:
+ * - event(name, detail): gives the change to each file that shown accepts,
+ * - bytes(count): gives the next bytes of the body to the files that have them, in their order.
+ */
+function assetPackWatch(pack, watch, shown) {
+  let at = 0;
+  return {
+    event(name, detail) {
+      for (const member of pack.members) {
+        if (shown(member.sha256)) {
+          watch(name, `file ${member.sha256}`, detail);
+        }
+      }
+    },
+    bytes(count) {
+      const end = at + count;
+      for (const member of pack.members) {
+        const part = Math.min(end, member.offset + member.size) - Math.max(at, member.offset);
+        if (part > 0) {
+          watch('bytes', `file ${member.sha256}`, part);
+        }
+      }
+      at = end;
+    },
+  };
 }
 
 /** The first byte and the byte after the last of a block of a file */
@@ -491,6 +598,26 @@ async function fetchAsset(fetchFile, digest, file, received) {
 }
 
 /**
+ * Gets one pack. The body must have the size and the SHA-256 of the list, and the SHA-256 of each file in it must agree
+ * with the list. Calls received with the number of bytes of each part that arrives. Gives { sha256, bytes } for each
+ * file of the pack, where bytes is a view of the body.
+ */
+async function fetchAssetPack(fetchFile, digest, pack, received) {
+  const whole = { path: `the pack ${pack.sha256}`, size: pack.size, sha256: pack.sha256, address: pack.address };
+  const body = await fetchAsset(fetchFile, digest, whole, received);
+  const parts = [];
+  for (const member of pack.members) {
+    const bytes = body.subarray(member.offset, member.offset + member.size);
+    const problem = await assetProblem(digest, member, bytes);
+    if (problem !== null) {
+      throw new Error(problem);
+    }
+    parts.push({ sha256: member.sha256, bytes });
+  }
+  return parts;
+}
+
+/**
  * The tiers of the game files in the text of the tiers file. Gives { phases, startPhases, blockSize, files, soon, lands }:
  * - phases: the names of the phases, in order; startPhases: the number of phases that come before the start,
  * - blockSize: the size of a block in the tiers file,
@@ -632,10 +759,17 @@ function planAssetTiers(files, tiers = null, blockSize = 0) {
         phases[soon < 0 ? k_AssetPhaseLater : k_AssetPhaseSoon].push({ number, block: null, order: k_AssetMostFiles + soon });
         return;
       }
-      // Only the music banks come in blocks. The page gets each other bank whole in its phase, so that no sample of
-      // the dialogue or of the sound effects waits for the site when it first plays.
+      // Only the music banks and the films come in blocks. The page gets each other bank whole in its phase, so that
+      // no sample of the dialogue or of the sound effects waits for the site when it first plays.
+      const lower = file.path.toLowerCase();
+      if (file.blocks && blockSize === tiers.blockSize && k_AssetFilmRules.some((rule) => rule.test(lower))) {
+        file.blocks.forEach((_, block) => {
+          phases[assetPhaseOf(tiers, tier.phase)].push({ number, block, order: tier.order });
+        });
+        return;
+      }
       const inBlocks = file.blocks && tier.blocks !== null && blockSize === tiers.blockSize &&
-        k_AssetHeaderRules.some((rule) => rule.test(file.path.toLowerCase()));
+        k_AssetHeaderRules.some((rule) => rule.test(lower));
       if (!inBlocks) {
         phases[assetPhaseOf(tiers, tier.phase)].push({ number, block: null, order: tier.order });
         return;
@@ -813,6 +947,8 @@ async function writeAsset(folder, name, bytes) {
  * store keeps the next files in memory for this visit, and full becomes true. The options are:
  * - fetchFile, digest and folder: the fetch, the SHA-256 and the folder of the kept files (tests give fakes),
  * - blockSize: the size of the blocks of the list,
+ * - packs: the packs of the list (parseAssetPacks). The store gets a small file in its pack when the pack is worth it
+ *   (assetPackWorth), apart from a file that the game waits for and no pack job brings,
  * - kept: the kept File objects, by their names,
  * - share: a function that gets (number, block, file) for each file (block null) and each block that the page gets,
  * - log: a function that gets a line for the game log,
@@ -822,8 +958,8 @@ async function writeAsset(folder, name, bytes) {
  */
 class AssetStore {
   constructor(files, {
-    fetchFile, digest, folder, blockSize = 0, kept = new Map(), share = () => {}, log = () => {}, watch = () => {},
-    onFull = () => {},
+    fetchFile, digest, folder, blockSize = 0, packs = [], kept = new Map(), share = () => {}, log = () => {},
+    watch = () => {}, onFull = () => {},
   }) {
     Object.assign(this, { files, fetchFile, digest, folder, blockSize, kept, share, log, onFull });
     this.watch = safeWatch(watch);
@@ -851,6 +987,72 @@ class AssetStore {
         this.blockUsers.set(block, [...(this.blockUsers.get(block) ?? []), { number, block: index }]);
       });
     });
+    // Each pack by its SHA-256, and the pack of each content of the files of the store that is in a pack
+    this.packs = new Map(packs.map((pack) => [pack.sha256, pack]));
+    this.packOf = new Map();
+    for (const pack of packs) {
+      for (const member of pack.members) {
+        if (this.users.has(member.sha256)) {
+          this.packOf.set(member.sha256, pack);
+        }
+      }
+    }
+    // The SHA-256 of each pack that the store did not get. The store then gets its files alone.
+    this.brokenPacks = new Set();
+  }
+
+  /**
+   * Gives a change of a download to watch. A change of a pack goes to each file of the pack that the page does not
+   * keep, because the map shows files. The pack tells the end of each file itself (getPack).
+   */
+  notify(event, key, detail) {
+    const pack = key.startsWith('pack ') ? this.packs.get(key.slice('pack '.length)) : undefined;
+    if (pack === undefined) {
+      this.watch(event, key, detail);
+    } else if (event !== 'done') {
+      assetPackWatch(pack, this.watch, (sha256) => !this.kept.has(sha256)).event(event, detail);
+    }
+  }
+
+  /**
+   * The pack that brings the content, or no value when the content comes alone. When a job gets the pack already, the
+   * pack brings the content. Else the content comes alone in these conditions:
+   * - the game waits for it (one small file comes faster than its pack),
+   * - a job gets it alone already,
+   * - the files of the pack that the page does not keep have less than k_AssetPackShare of the bytes of the pack.
+   */
+  packFor(sha256, priority) {
+    const pack = this.packOf.get(sha256);
+    if (pack === undefined || this.brokenPacks.has(pack.sha256)) {
+      return null;
+    }
+    if (this.jobs.has(`pack ${pack.sha256}`)) {
+      return pack;
+    }
+    if (priority === 'now' || this.jobs.has(`file ${sha256}`)) {
+      return null;
+    }
+    return assetPackWorth(pack, (member) => !this.kept.has(member)) ? pack : null;
+  }
+
+  /**
+   * The job that gets the whole file: its pack (packFor) or the file alone. When the pack fails, the store gets its
+   * files alone.
+   */
+  wholeJob(number, priority) {
+    const file = this.files[number];
+    const pack = this.packFor(file.sha256, priority);
+    if (pack === null) {
+      return this.schedule(`file ${file.sha256}`, () => this.getWhole(number), priority, { size: file.size });
+    }
+    return this.schedule(`pack ${pack.sha256}`, () => this.getPack(pack), priority, { size: pack.size })
+      .catch((error) => {
+        if (!this.brokenPacks.has(pack.sha256)) {
+          this.brokenPacks.add(pack.sha256);
+          this.log(`The page cannot get a pack of the game files, and gets its files alone: ${error.message}`);
+        }
+        return this.fileOf(number) ? undefined : this.wholeJob(number, priority);
+      });
   }
 
   /** The kept File of the whole file, or no value */
@@ -880,7 +1082,7 @@ class AssetStore {
     const range = file.blocks ? assetBlockRange(file, this.blockSize, offset, length) : null;
     // A file that a phase gets whole now or next comes whole to the game, and not a second time in blocks
     if (range === null || this.jobs.has(`file ${file.sha256}`)) {
-      await this.schedule(`file ${file.sha256}`, () => this.getWhole(number), 'now');
+      await this.wholeJob(number, 'now');
       return;
     }
     const wanted = [];
@@ -957,7 +1159,7 @@ class AssetStore {
     if (this.fileOf(number)) {
       return Promise.resolve();
     }
-    return this.schedule(`file ${file.sha256}`, () => this.getWhole(number), priority, { size: file.size });
+    return this.wholeJob(number, priority);
   }
 
   getBlockJob(number, block, priority, front = false) {
@@ -987,7 +1189,7 @@ class AssetStore {
         this.waiting[job.priority] = this.waiting[job.priority].filter((other) => other !== job);
         job.priority = priority;
         this.enqueue(job, front);
-        this.watch('queued', key, priority);
+        this.notify('queued', key, priority);
         this.pump();
       }
       return job.promise;
@@ -999,7 +1201,7 @@ class AssetStore {
     });
     this.jobs.set(key, job);
     this.enqueue(job, front);
-    this.watch('queued', key, priority);
+    this.notify('queued', key, priority);
     this.pump();
     return job.promise;
   }
@@ -1023,7 +1225,7 @@ class AssetStore {
       (async () => {
         for (let attempt = 1; ; attempt += 1) {
           try {
-            this.watch('started', job.key);
+            this.notify('started', job.key);
             return await job.run();
           } catch (error) {
             if (attempt >= k_AssetAttempts) {
@@ -1032,10 +1234,10 @@ class AssetStore {
           }
         }
       })().then((value) => {
-        this.watch('done', job.key);
+        this.notify('done', job.key);
         job.resolve(value);
       }, (error) => {
-        this.watch('failed', job.key);
+        this.notify('failed', job.key);
         job.reject(error);
       }).finally(() => {
         this.jobs.delete(job.key);
@@ -1112,6 +1314,28 @@ class AssetStore {
     // The page can keep blocks of the file from before, for example the first block of a music bank of the start
     if (file.blocks && !this.full) {
       await this.removeJoinedBlocks(number);
+    }
+  }
+
+  /**
+   * Gets a pack, and keeps each file of the pack that the page does not keep by its SHA-256. The files of a pack are
+   * small, thus they have no blocks.
+   */
+  async getPack(pack) {
+    const watch = assetPackWatch(pack, this.watch, () => false);
+    const parts = await fetchAssetPack(this.fetchFile, this.digest, pack, (count) => watch.bytes(count));
+    for (const { sha256, bytes } of parts) {
+      const users = this.users.get(sha256);
+      if (users === undefined || this.kept.has(sha256)) {
+        continue;
+      }
+      const kept = await this.write(sha256, bytes);
+      this.received.files += 1;
+      this.received.bytes += bytes.byteLength;
+      this.watch('done', `file ${sha256}`);
+      for (const user of users) {
+        this.share(user, null, kept);
+      }
     }
   }
 
@@ -1303,6 +1527,11 @@ async function streamAssets(index, {
     }
   }
   const download = all ? plan.download : plan.download.filter((file) => startShas.has(file.sha256));
+  // The packs that the start gets whole (assetPackWorth), and the files that it gets alone
+  const wantedShas = new Set(download.map((file) => file.sha256));
+  const packs = (index.packs ?? []).filter((pack) => assetPackWorth(pack, (sha256) => wantedShas.has(sha256)));
+  const packedShas = new Set(packs.flatMap((pack) => pack.members.map((member) => member.sha256)));
+  const alone = download.filter((file) => !packedShas.has(file.sha256));
   const blockNames = new Set();
   const startBlocks = all ? [] : boot.filter(({ block }) => block !== null)
     .map(({ number, block }) => ({ file: files[number], block }))
@@ -1323,7 +1552,7 @@ async function streamAssets(index, {
   };
   const state = {
     bytes: 0,
-    totalBytes: download.reduce((sum, file) => sum + file.size, 0) +
+    totalBytes: alone.reduce((sum, file) => sum + file.size, 0) + packs.reduce((sum, pack) => sum + pack.size, 0) +
       startBlocks.reduce((sum, next) => sum + blockBytes(next), 0),
     files: 0,
     totalFiles: download.length + startBlocks.length,
@@ -1345,37 +1574,81 @@ async function streamAssets(index, {
       throw error;
     }
   };
-  // The small files go in their own lanes, because their time is mostly the time of their requests
+  // The small files go in their own lanes, because their time is mostly the time of their requests. The packs go in
+  // the lanes of the large files.
   const queues = {
-    small: download.filter((file) => file.size < k_AssetSmallFile),
-    large: download.filter((file) => file.size >= k_AssetSmallFile),
+    small: alone.filter((file) => file.size < k_AssetSmallFile),
+    large: [...packs, ...alone.filter((file) => file.size >= k_AssetSmallFile)],
   };
-  const getNext = async (queue) => {
-    for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
-      const key = `file ${file.sha256}`;
-      let bytes;
-      for (let attempt = 1; ; attempt += 1) {
-        let got = 0;
+  const known = new Set(files.map((file) => file.sha256));
+  const downloadOf = new Map(download.map((file) => [file.sha256, file]));
+  // A file of a pack goes to the folder when the store uses its content and the folder does not keep it
+  const unkept = (sha256) => known.has(sha256) && !plan.ready.has(sha256);
+  // Gets one file or one pack, with k_AssetAttempts attempts. Gives the bytes of the file, or the parts of the pack.
+  const getUnit = async (unit) => {
+    const pack = unit.members ? assetPackWatch(unit, observe, unkept) : null;
+    const key = `file ${unit.sha256}`;
+    for (let attempt = 1; ; attempt += 1) {
+      let got = 0;
+      const received = (count) => {
+        got += count;
+        state.bytes += count;
+        if (pack) {
+          pack.bytes(count);
+        } else {
+          observe('bytes', key, count);
+        }
+        progress({ ...state });
+      };
+      if (pack) {
+        pack.event('started');
+      } else {
         observe('started', key);
-        try {
-          bytes = await fetchAsset(fetchFile, digest, file, (count) => {
-            got += count;
-            state.bytes += count;
-            observe('bytes', key, count);
-            progress({ ...state });
-          });
-          break;
-        } catch (error) {
-          state.bytes -= got;
-          if (attempt >= k_AssetAttempts) {
+      }
+      try {
+        return pack ? await fetchAssetPack(fetchFile, digest, unit, received) :
+          await fetchAsset(fetchFile, digest, unit, received);
+      } catch (error) {
+        state.bytes -= got;
+        if (attempt >= k_AssetAttempts) {
+          if (pack) {
+            pack.event('failed');
+          } else {
             observe('failed', key);
-            throw error;
           }
+          throw error;
         }
       }
-      await keep(file.sha256, bytes);
-      observe('done', key);
-      state.files += 1;
+    }
+  };
+  const getNext = async (queue) => {
+    for (let unit = queue.shift(); unit !== undefined; unit = queue.shift()) {
+      if (!unit.members) {
+        await keep(unit.sha256, await getUnit(unit));
+        observe('done', `file ${unit.sha256}`);
+        state.files += 1;
+        progress({ ...state });
+        continue;
+      }
+      let parts;
+      try {
+        parts = await getUnit(unit);
+      } catch (error) {
+        // The start then gets the files of the pack that it wants alone
+        log(`The page cannot get a pack of the game files, and gets its files alone: ${error.message}`);
+        const instead = unit.members.map((member) => downloadOf.get(member.sha256)).filter((file) => file);
+        state.totalBytes += instead.reduce((sum, file) => sum + file.size, 0) - unit.size;
+        queue.push(...instead);
+        progress({ ...state });
+        continue;
+      }
+      for (const { sha256, bytes } of parts) {
+        if (unkept(sha256)) {
+          await keep(sha256, bytes);
+          observe('done', `file ${sha256}`);
+          state.files += wantedShas.has(sha256) ? 1 : 0;
+        }
+      }
       progress({ ...state });
     }
   };
@@ -1427,7 +1700,9 @@ async function streamAssets(index, {
       }
     }
   }
-  const store = new AssetStore(files, { fetchFile, digest, folder, blockSize, kept, share, log, watch, onFull });
+  const store = new AssetStore(files, {
+    fetchFile, digest, folder, blockSize, packs: index.packs ?? [], kept, share, log, watch, onFull,
+  });
   const entries = files.map((file, number) => ({
     path: file.path, size: file.size, file: store.fileOf(number), blocks: file.blocks ? store.blocksOf(number) : null,
   }));
@@ -1444,8 +1719,8 @@ if (typeof module !== 'undefined') {
     assetPhaseOf, parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
     assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore, isQuotaError, assetFreeSpace, planAssetBackground,
-    assetItemBytes, assetBackgroundStop, writeAsset,
+    assetItemBytes, assetBackgroundStop, writeAsset, parseAssetPacks, assetPackWorth, assetPackWatch, fetchAssetPack,
     k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile, k_AssetSmallDownloads,
-    k_AssetPhaseDownloads, k_AssetDownloads,
+    k_AssetPhaseDownloads, k_AssetDownloads, k_AssetPackShare,
   };
 }

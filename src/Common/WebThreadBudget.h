@@ -56,6 +56,8 @@ inline constexpr std::array k_Parts {
     Part {.name = "the background jobs: creature blends, shadow bake, temple exterior", .threads = 3},
     Part {.name = "the save writers: saved game, creature carry over, creature page", .threads = 3},
     Part {.name = "the video frame queue", .threads = 1},
+    Part {.name = "the block readers of the videos that stream: the video that plays, the intro, the falling spell film",
+          .threads = 3},
     Part {.name = "the inspector, in builds with the inspector only", .threads = 1},
 };
 

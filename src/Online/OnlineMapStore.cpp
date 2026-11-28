@@ -93,6 +93,29 @@ void FolderMapStore::Write(std::string file, std::vector<uint8_t> bytes, Written
 	done(written);
 }
 
+void MemoryMapStore::Find(std::string file, uint64_t checksum, FoundCallback done)
+{
+	const auto bytes = Read(file);
+	done(bytes.has_value() && start_rules::LandChecksum(*bytes) == checksum);
+}
+
+std::optional<std::vector<uint8_t>> MemoryMapStore::Read(std::string_view file) const
+{
+	const auto found = _files.find(file);
+	return found != _files.end() ? std::optional(found->second) : std::nullopt;
+}
+
+void MemoryMapStore::Write(std::string file, std::vector<uint8_t> bytes, WrittenCallback done)
+{
+	// The store takes the same names as the folder store, so that a world state finds the land by the same name
+	const bool written = IsStoreFileName(file);
+	if (written)
+	{
+		_files.insert_or_assign(std::move(file), std::move(bytes));
+	}
+	done(written);
+}
+
 std::optional<std::vector<uint8_t>> ReadStartLand(std::string_view wireName, const OnlineMapStoreInterface* store,
                                                   filesystem::FileSystemInterface& files)
 {

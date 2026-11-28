@@ -109,7 +109,8 @@ public:
 
 	/// Decodes `frame`. The next frame in order decodes one packet; any other goes back to the key frame at or before
 	/// it (or carries on forwards when no key frame lies in between) and decodes up to it. False when the frame failed
-	/// or is past the end: the picture is then the last good one
+	/// or is past the end: the picture is then the last good one. For a file that streams, it waits for each packet that
+	/// it decodes, and a packet that does not arrive fails
 	[[nodiscard]] bool DecodeFrame(uint32_t frame);
 
 	/// The frame DecodeFrame decodes with one packet

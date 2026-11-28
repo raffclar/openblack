@@ -297,7 +297,8 @@ public:
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
-	/// plan's desire opposes are held back.
+	/// plan's desire opposes are held back. When the action makes no steps, the creature keeps the plan with no agenda.
+	/// Then the result is true when openblack's creatures can do the action.
 	virtual bool ForceActivity(entt::entity /*creature*/, const ForcedActivity& /*plan*/) { return false; }
 	/// The hand of a player gives the creature a thing: it drops what it was doing and keeps the player as its giver.
 	/// It turns to the camera of the giver, curious, and reaches to take the thing from the hand, with its left hand
@@ -428,7 +429,8 @@ public:
 	/// about to already
 	virtual void AteMagicMushroom(entt::entity /*creature*/) {}
 	/// The creature gives up what it was doing for the plan, which nothing it wants replaces until it is done. Returns
-	/// whether it could be carried out.
+	/// whether it could be carried out. When the action makes no steps, the creature keeps the plan with no agenda. Then
+	/// the result is true when openblack's creatures can do the action.
 	virtual bool ForcePlan(entt::entity /*creature*/, const ForcedPlan& /*plan*/) { return false; }
 	/// The creature's desires choose something to do to a thing, as its planner would with that thing the only one
 	/// about, and it is made to do it. The desire it acts on, if its desires found anything. The walk that it makes now

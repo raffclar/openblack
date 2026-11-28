@@ -560,7 +560,8 @@ async function gameCrashed(name) {
 }
 
 // The time without a game frame, while the page shows its display frames, after which the page tells the player that
-// the game does not answer. A load of a land or of a saved world draws its loading screen, so it counts frames too.
+// the game does not answer. A load of a land or of a saved world draws its loading screen, so it counts frames too. The
+// start-up screens count each frame that they draw, and each display frame that a logo still holds its picture.
 const k_GameStallMs = 60000;
 const k_GameStallCheckMs = 5000;
 

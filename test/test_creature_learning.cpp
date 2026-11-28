@@ -1002,6 +1002,39 @@ TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 	EXPECT_TRUE(creature_planner::Choose(state).has_value());
 }
 
+TEST(CreaturePlanner, AnOrderWithNoStepsHoldsTheFirstChoiceAfterTheOrder)
+{
+	// An eat from a pile while the creature holds food that it can eat makes no steps. The order stays as the plan, with
+	// the forced score.
+	creature_planner::PlannerState state;
+	state.current = creature_planner::Plan {
+	    .desire = Desire::ObeyPlayer, .action = 157, .object = 12u, .priority = creature_planner::k_ForcedScore};
+	state.best.at(static_cast<size_t>(Desire::Hunger)) =
+	    creature_planner::Plan {.desire = Desire::Hunger, .action = 2, .priority = 1e30f};
+	// The first choice after the order cannot replace the order
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	// That turn runs no agenda, so the next choice takes the most pressing plan
+	creature_planner::NoPlanRuns(state);
+	const auto choice = creature_planner::Choose(state);
+	ASSERT_TRUE(choice.has_value());
+	EXPECT_EQ(choice->desire, Desire::Hunger);
+}
+
+TEST(CreaturePlanner, AForcedPlanWithNoStepsKeepsItsOwnPriorityForTheFirstChoice)
+{
+	// A forced plan that is not forced to the end, such as the plan of a fight's winner, keeps its own priority
+	creature_planner::PlannerState state;
+	state.current = creature_planner::Plan {.desire = Desire::ObeyPlayer, .action = 30, .priority = 0.5f};
+	state.best.at(static_cast<size_t>(Desire::Hunger)) =
+	    creature_planner::Plan {.desire = Desire::Hunger, .action = 2, .priority = 0.9f};
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	state.best.at(static_cast<size_t>(Desire::Hunger))->priority = 1.1f;
+	EXPECT_TRUE(creature_planner::Choose(state).has_value());
+	state.best.at(static_cast<size_t>(Desire::Hunger))->priority = 0.9f;
+	creature_planner::NoPlanRuns(state);
+	EXPECT_TRUE(creature_planner::Choose(state).has_value());
+}
+
 TEST(CreaturePlanner, APlanKeptWhenNoAgendaRunsLetsTheNextChoiceTakeAnyPlan)
 {
 	// After a faint, the plan to lie dead stays with the highest priority and no agenda in the mind

@@ -13,6 +13,8 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -29,8 +31,15 @@
 ///
 /// The game's videos are all revision 'i' with no audio track. INTRO, pre_intro and fall have a single key frame (the
 /// first), so they can only be decoded from the start; logo and tips are all key frames.
+///
+/// A file can also stream: it has its header and its tables at once, and a thread of its own reads the packets in
+/// order while the video plays.
 namespace openblack::bink
 {
+
+/// A read of a file that streams. It fills `out` with the bytes at `offset`, and waits until it has them. It gives
+/// false when it cannot read them.
+using ReadBytes = std::function<bool(uint64_t offset, std::span<uint8_t> out)>;
 
 /// The 44-byte header
 struct Header
@@ -74,6 +83,17 @@ public:
 	[[nodiscard]] static std::optional<BinkFile> Parse(std::vector<uint8_t> data, std::string* error = nullptr);
 	/// Reads a file from disk, then parses it
 	[[nodiscard]] static std::optional<BinkFile> Open(const std::filesystem::path& path, std::string* error = nullptr);
+	/// Reads the header and the tables of a file of `fileSize` bytes, and does the checks of Parse on them. A thread then
+	/// reads the packets in order, `chunkSize` bytes at a time, on chunk bounds, and checks each packet when it arrives.
+	/// None when the start of the file is not valid; `error`, when given, says why
+	[[nodiscard]] static std::optional<BinkFile> Stream(ReadBytes read, uint64_t fileSize, uint32_t chunkSize,
+	                                                    std::string* error = nullptr);
+
+	~BinkFile();
+	BinkFile(const BinkFile&) = delete;
+	BinkFile& operator=(const BinkFile&) = delete;
+	BinkFile(BinkFile&& other) noexcept;
+	BinkFile& operator=(BinkFile&& other) noexcept;
 
 	[[nodiscard]] const Header& GetHeader() const noexcept { return _header; }
 	[[nodiscard]] uint32_t FrameCount() const noexcept { return _header.frameCount; }
@@ -95,12 +115,41 @@ public:
 	[[nodiscard]] std::span<const uint8_t> VideoPacket(uint32_t frame) const noexcept;
 	/// A track's audio packet in a frame, without its size; empty when the track has nothing in that frame
 	[[nodiscard]] std::span<const uint8_t> AudioPacket(uint32_t frame, uint32_t track) const noexcept;
-	[[nodiscard]] size_t Size() const noexcept { return _data.size(); }
+	[[nodiscard]] size_t Size() const noexcept { return _size; }
+
+	/// The bytes from the start of the file that the file has now. A file that does not stream has all its bytes
+	[[nodiscard]] uint64_t BytesRead() const noexcept;
+	/// True when the file has all its bytes, which is always so for a file that does not stream
+	[[nodiscard]] bool IsComplete() const noexcept { return BytesRead() == _size; }
+	/// True when a stream stopped before the end: a read failed or a packet was not valid
+	[[nodiscard]] bool HasFailed() const noexcept;
+	/// True when the file has the whole packet of `frame`, and for each frame past the last
+	[[nodiscard]] bool HasFrame(uint32_t frame) const noexcept;
+	/// Waits until the file has the whole packet of `frame`. False when the stream stopped before it
+	[[nodiscard]] bool WaitForFrame(uint32_t frame) const;
+	/// The mean speed of the stream since its thread started, in bytes a second. None for a file that does not stream,
+	/// and before the thread read its first chunk
+	[[nodiscard]] std::optional<double> ReadSpeed() const;
 
 private:
+	struct StreamState;
+
 	BinkFile() = default;
+	/// Reads the header and the tables from the start of a file of `fileSize` bytes, and checks them
+	[[nodiscard]] static std::optional<BinkFile> ParseTables(std::span<const uint8_t> bytes, uint64_t fileSize,
+	                                                         std::string* error);
+	/// Checks each packet that ends at or before `end` and that is not checked yet. False at the first bad packet
+	static bool CheckPackets(StreamState& state, uint64_t end, std::string* error);
+	/// The thread of a stream: reads the chunks in order until the end, a stop or a failure
+	static void Fill(StreamState& state);
+	[[nodiscard]] std::span<const uint8_t> Bytes() const noexcept;
+	[[nodiscard]] uint32_t VideoStart(uint32_t frame) const noexcept;
 
 	std::vector<uint8_t> _data;
+	size_t _size {0};
+	/// The bytes and the thread of a file that streams. The thread keeps the state while it reads, also after the file
+	/// is gone
+	std::shared_ptr<StreamState> _stream;
 	Header _header;
 	std::vector<AudioTrack> _audioTracks;
 	/// Frame count + 1 entries as in the file, bit 0 the key frame flag

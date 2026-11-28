@@ -428,6 +428,19 @@ CreatureMindState* MindOf(Registry& registry, entt::entity creature)
 	return registry.TryGet<CreatureMindState>(creature);
 }
 
+/// After an order with the leash, the leash leads the creature, also when the creature refused the order
+void LeadByOrder(Registry& registry, entt::entity creature)
+{
+	auto* mind = MindOf(registry, creature);
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (mind == nullptr || leashes == nullptr)
+	{
+		return;
+	}
+	const bool on = leashes->worn.has_value();
+	mind->leashLead = leash::LeadAfterOrder(mind->leashLead, on, on && leashes->worn->works);
+}
+
 /// How full a need flag of a worship site is, as a share of the need that flies it at its full height. None for a thing
 /// that is not the need flag of a worship site that is still there.
 std::optional<float> SiteFlagFill(const Registry& registry, entt::entity thing)
@@ -611,6 +624,19 @@ void HurryFor(entt::entity creature, const orders::Interruption& interruption)
 	{
 		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
+}
+
+/// What the order knows about the mind of the creature after the order
+leash::OrderAgenda AgendaAfterOrder(const CreatureMindState& mind, const CreatureLeash::Order& order)
+{
+	return {
+	    .orderSerial = order.serial,
+	    .agendaSerial = mind.idle.serial,
+	    .step = mind.idle.step,
+	    .steps = mind.idle.agenda.size(),
+	    .planKept = !mind.planActive && mind.planner.current.has_value(),
+	    .ledByLeash = leash::LeadsPlan(mind.leashLead),
+	};
 }
 
 /// Whether the creature walks to a point now, as the step of a forced plan
@@ -1275,6 +1301,7 @@ bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSour
 	if (effects.actsOnThing)
 	{
 		TakeThingOrder(creature, object);
+		LeadByOrder(registry, creature);
 	}
 	return true;
 }
@@ -1873,6 +1900,7 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	    .leashed = leashes.worn.has_value(),
 	    .leashWorks = !leashes.worn.has_value() || leashes.worn->works,
 	    .orderInForce = OrderInForce(creature),
+	    .lead = mind != nullptr ? mind->leashLead : leash::Lead::None,
 	    .mimicking = mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value(),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .teleporting = TravelsByTeleport(registry, creature),
@@ -1917,7 +1945,7 @@ void LeashSystem::WalkBack(entt::entity creature)
 	// While the leash is on, the leash leads the walk back
 	if (auto* led = MindOf(registry, creature))
 	{
-		led->ledByLeash = leashes.worn.has_value();
+		led->leashLead = leashes.worn.has_value() ? leash::Lead::Pull : leash::Lead::None;
 	}
 	// The creature keeps the place until the action of the walk ends
 	leashes.returnTo = leashes.confinementCentre;
@@ -1961,7 +1989,7 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		return;
 	}
 	// An order's marker goes once the creature finishes or gives up what it was told, or the thing is gone
-	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderInForce(entity))
+	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderMarked(entity))
 	{
 		EndOrder(entity);
 	}
@@ -2597,17 +2625,24 @@ bool LeashSystem::OrderAt(PlayerNames player, const glm::vec3& place)
 	{
 		return false;
 	}
-	return TakeGroundOrder(*creature, place);
+	const bool taken = TakeGroundOrder(*creature, place);
+	LeadByOrder(Locator::entitiesRegistry::value(), *creature);
+	return taken;
 }
 
 bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 {
 	const auto creature = PlayersCreature(player);
-	if (!creature.has_value() || !IsLeashed(*creature))
+	auto& registry = Locator::entitiesRegistry::value();
+	// The order needs a thing in the world
+	if (!creature.has_value() || !IsLeashed(*creature) || !registry.Valid(object) ||
+	    registry.TryGet<const Transform>(object) == nullptr)
 	{
 		return false;
 	}
-	return TakeThingOrder(*creature, object);
+	const bool taken = TakeThingOrder(*creature, object);
+	LeadByOrder(registry, *creature);
+	return taken;
 }
 
 bool LeashSystem::AskedForFight(entt::entity creature) const
@@ -2814,11 +2849,6 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} couldn't carry out the order", entt::to_integral(creature));
 		return false;
 	}
-	// The leash leads the order that the player gave
-	if (auto* led = MindOf(registry, creature))
-	{
-		led->ledByLeash = true;
-	}
 	if (desire.has_value())
 	{
 		leashes.help = CreatureLeash::Help::CurrentDesire;
@@ -2984,11 +3014,6 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	leashes.helpDesire = desire;
 	TellHelp(creature,
 	         {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .thing = object});
-	// The leash leads the order that the player gave
-	if (mind != nullptr)
-	{
-		mind->ledByLeash = true;
-	}
 	MarkOrder(creature, object, objectAt, fight);
 	// What it is shown on the aggression and compassion leashes teaches it which desire to act on such things with
 	if (auto lessons = leash::LessonsFor(type, isCreature); mind != nullptr && !lessons.empty())
@@ -3113,7 +3138,24 @@ bool LeashSystem::OrderInForce(entt::entity creature) const
 		return Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature);
 	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	return mind != nullptr && mind->idle.serial == order.serial && mind->idle.step < mind->idle.agenda.size();
+	return mind != nullptr && leash::OrderInForce(AgendaAfterOrder(*mind, order));
+}
+
+bool LeashSystem::OrderMarked(entt::entity creature) const
+{
+	if (OrderInForce(creature))
+	{
+		return true;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& order = *registry.Get<const CreatureLeash>(creature).order;
+	if (order.fight || (order.object.has_value() &&
+	                    (!registry.Valid(*order.object) || registry.TryGet<const Transform>(*order.object) == nullptr)))
+	{
+		return false;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return mind != nullptr && leash::OrderMarked(AgendaAfterOrder(*mind, order));
 }
 
 std::optional<glm::vec3> LeashSystem::OrderTarget(entt::entity creature) const
