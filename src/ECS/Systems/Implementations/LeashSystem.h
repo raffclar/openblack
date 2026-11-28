@@ -84,6 +84,7 @@ public:
 	void DropRope(PlayerNames player) override;
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
+	void HangPostsOf(entt::entity temple) override;
 	bool TapPost(PlayerNames player, entt::entity post) override;
 	bool PickType(PlayerNames player, LeashType type) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
@@ -114,8 +115,10 @@ private:
 	/// Carries out what a shortcut does to the player's creature
 	bool Carry(PlayerNames player, entt::entity creature, const creature_leash::KeyCommand& command);
 	void Refuse(PlayerNames player, entt::entity creature, creature_leash::Refusal why);
-	/// The player's leash on their temple that matches the worn leash becomes the picked one
+	/// The player's leash on their own temple that matches the worn leash becomes the picked one
 	void PickPost(PlayerNames owner, LeashType worn);
+	/// The player's own temple while it stands, else null
+	[[nodiscard]] entt::entity OwnTempleOf(PlayerNames owner) const;
 	/// Whether the player can change the leash of the creature now: not while a nice or nasty spell is on it
 	[[nodiscard]] bool PlayerCanChangeType(entt::entity creature) const;
 	/// Changes the worn and the picked leash. A change by the player needs a leash that the creature knows.
@@ -124,6 +127,10 @@ private:
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
 	/// Hangs the posts of each temple that has none, when its heart mesh has the three points to hang them at
 	void PlacePostsAtTemples();
+	/// The three points on the temple that its leashes hang at, when its mesh has them
+	[[nodiscard]] std::optional<std::array<glm::vec3, 3>> PostPointsOf(entt::entity temple) const;
+	/// The temple hangs its posts, or takes the unlinked posts of its player at its points
+	void HangPostsAtPoints(entt::entity temple, const std::array<glm::vec3, 3>& points);
 	/// Hangs a player's three leash posts at three points, on the temple when it is not null. They replace the old posts
 	/// of that temple, or the player's old posts at points of their own.
 	void HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple);

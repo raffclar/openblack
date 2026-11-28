@@ -417,8 +417,7 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .name = "A temple made after the land starts hangs its leashes",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger knows all three leashes, and no temple stands at the start. Three seconds after the "
-	                   "start, a temple comes into being in front of the camera, as a land script, the editor or an "
-	                   "undo of a removal makes it.",
+	                   "start, a temple comes into being in front of the camera, as a land script makes it.",
 	    .expected = "No leash hangs before the temple comes. Then the new temple hangs its three leashes at once: the "
 	                "spiked blade, the twisted rope and the rainbow fur, each one tumbling in its glow of smoke.",
 	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
@@ -440,6 +439,46 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	                .afterTurns = 35,
 	                .byTurn = 80,
 	                .atLeast = 3.0}},
+	});
+
+	all.push_back({
+	    .id = "leash.own_temple_pick",
+	    .name = "Only the own temple picks the leash that goes on",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes and your first temple stands in front of the camera. The "
+	                   "learning, aggression and compassion leashes go on in turn, and then the leash comes off. Then a "
+	                   "second temple of yours comes into being to the left, as a land script makes it. Last, the "
+	                   "aggression leash goes on.",
+	    .expected = "The second temple hangs its three leashes at once. When the aggression leash goes on, its glow at "
+	                "the second temple turns orange and the hand carries the spiked blade. The first temple keeps the "
+	                "compassion leash as its pick.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-340.0f, 110.0f, -110.0f}, .look = {-340.0f, 10.0f, 80.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Leash(0, LeashType::Evil, 0.5f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::MakeTemple, .delaySeconds = 1.0f, .point = {-380.0f, 60.0f}, .amount = 36.0f},
+	                 Leash(0, LeashType::Evil, 1.0f)},
+	    .checks = {{.label = "the second temple hangs its three leashes at once",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "leash posts",
+	                .afterTurns = 32,
+	                .byTurn = 40,
+	                .atLeast = 6.0},
+	               {.label = "the second temple picks the aggression leash",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "picked aggression leashes on the own temple",
+	                .afterTurns = 45,
+	                .byTurn = 100,
+	                .atLeast = 1.0},
+	               {.label = "the first temple keeps its own pick",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "picked aggression leashes on other temples",
+	                .afterTurns = 45,
+	                .atMost = 0.0}},
 	});
 
 	all.push_back({
