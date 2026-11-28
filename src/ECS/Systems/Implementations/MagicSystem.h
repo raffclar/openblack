@@ -197,6 +197,7 @@ public:
 	void SetDispenserActive(entt::entity dispenser, bool active) override;
 	void SetDispenserTurns(entt::entity dispenser, uint32_t turns) override;
 	bool Remove(entt::entity entity) override;
+	void ReleaseDispenser(entt::entity dispenser) override;
 	entt::entity CreateOneOffSeed(glm::vec3 position, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity CreateOneOffSeedFor(glm::vec3 position, MagicType type) override;
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;

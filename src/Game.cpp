@@ -1314,6 +1314,12 @@ bool Game::RunFrame() noexcept
 			}
 			// The draw reads the world only through the drawn copy
 			FillDrawnFrame(*_drawnFrame, config, drawMs);
+			// A frame that only draws a picture of a held run gives no real time to the steps of the draw, so that the
+			// next stepped frame shows the same as without the picture
+			if (_onlyDrawsHeldFrame)
+			{
+				_drawnFrame->clock.frameRealTime = std::chrono::milliseconds(0);
+			}
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
 			auto drawDesc = SceneDrawDesc(config, *_drawnFrame, IsHandDrawn());
 			// The main pass submits the labels in the world among its draws, at the points where the game adds them
