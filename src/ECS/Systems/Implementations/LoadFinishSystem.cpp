@@ -25,6 +25,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Systems/CreatureArtSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -83,6 +84,12 @@ void LoadFinishSystem::FinishBehindScreen()
 	if (Locator::creatureAudioSystem::has_value())
 	{
 		Locator::creatureAudioSystem::value().AskForVoiceBanks();
+	}
+	// The web game holds back the art of the species. The art of each species in the world loads with the other
+	// resources, so that the first frame of a creature does not wait for it.
+	if (Locator::creatureArtSystem::has_value())
+	{
+		Locator::creatureArtSystem::value().AskForWorld();
 	}
 	const auto count = resources.LoadingCount();
 	while (resources.LoadingCount() > 0 && !_hooks.quitRequested())

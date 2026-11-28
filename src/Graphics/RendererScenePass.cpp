@@ -1213,11 +1213,12 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 	if (_warmingUp && _warmUpInstances.has_value())
 	{
 		const RenderContext::InstancedDrawDesc placers {0, 1, false};
-		const auto loaded = [&meshManager](entt::id_type id) { return meshManager.Contains(id); };
+		// The web game holds back the meshes of the species that are not in the world. The warm-up does not load them.
+		const auto loaded = [&meshManager](entt::id_type id) { return meshManager.IsLoaded(id); };
 		for (auto type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
 		{
 			const auto ids = creature_morph::MeshesOf(static_cast<CreatureType>(type), creature_morph::Morph {}, loaded);
-			if (!meshManager.Contains(ids.base))
+			if (!meshManager.IsLoaded(ids.base))
 			{
 				continue;
 			}

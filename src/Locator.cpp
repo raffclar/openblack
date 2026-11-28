@@ -69,6 +69,7 @@
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
+#include "ECS/Systems/Implementations/CreatureArtSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
 #include "ECS/Systems/Implementations/CreatureCaveSystem.h"
@@ -264,6 +265,7 @@ using openblack::ecs::systems::ClanCreatureSystem;
 using openblack::ecs::systems::ComputerPlayerSystem;
 using openblack::ecs::systems::ComputerSettingsSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
+using openblack::ecs::systems::CreatureArtSystem;
 using openblack::ecs::systems::CreatureAudioSystem;
 using openblack::ecs::systems::CreatureCarryOverSystem;
 using openblack::ecs::systems::CreatureCaveSystem;
@@ -820,6 +822,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
 	Locator::creatureAudioSystem::emplace<CreatureAudioSystem>();
+	Locator::creatureArtSystem::emplace<CreatureArtSystem>();
 	Locator::creatureObjectActionSystem::emplace<CreatureObjectActionSystem>();
 	Locator::creatureHandSystem::emplace<CreatureHandSystem>();
 	Locator::footprintSystem::emplace<FootprintSystem>();
@@ -1225,6 +1228,7 @@ void openblack::ShutDownServices()
 	Locator::footprintSystem::reset();
 	Locator::footpathSystem::reset();
 	Locator::creatureAudioSystem::reset();
+	Locator::creatureArtSystem::reset();
 	Locator::creatureObjectActionSystem::reset();
 	Locator::creatureHandSystem::reset();
 	Locator::creatureAnimationSystem::reset();

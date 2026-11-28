@@ -21,6 +21,13 @@
 using namespace openblack;
 using namespace openblack::creature_skin;
 
+TEST(CreatureSkin, TheIdOfAMeshFileIgnoresTheCase)
+{
+	EXPECT_EQ(MeshFileId("c_ape_Boned_Base"), MeshFileId("C_Ape_Boned_Base"));
+	EXPECT_EQ(MeshFileId("A_tiger2_base"), MeshFileId("a_tiger2_base"));
+	EXPECT_NE(MeshFileId("c_cow_boned"), MeshFileId("c_cow_evil"));
+}
+
 TEST(CreatureSkin, NeutralShowsNoVariant)
 {
 	EXPECT_EQ(BlendWeight(0.0f), 0);

@@ -76,6 +76,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
+#include "ECS/Systems/CreatureArtSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -1280,6 +1281,11 @@ bool Game::RunFrame() noexcept
 		// What the loading threads finished goes into the caches, and they're given a little more
 		auto& resources = Locator::resources::value();
 		resources.UpdateLoading(k_FrameLoadBudget, k_FrameUploads);
+		// The web game asks for the art of the species that the scripts which started can make
+		if (Locator::creatureArtSystem::has_value())
+		{
+			Locator::creatureArtSystem::value().Update();
+		}
 		if (auto& screens = Locator::loadingScreenSystem::value();
 		    screens.TimesPrefetch() && resources.PendingCount() == resources.HeldCount())
 		{

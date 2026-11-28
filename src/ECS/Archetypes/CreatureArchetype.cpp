@@ -37,6 +37,7 @@
 #include "ECS/CreatureNaming.h"
 #include "ECS/LivingBirth.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureArtSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -194,6 +195,12 @@ bool CreatureArchetype::MorphStep(Registry& registry, entt::entity creature)
 entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
                                        entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body)
 {
+	// The web game asks for the art of a new species now. The game reads the base mesh at once, and the loading threads
+	// read the other art.
+	if (Locator::creatureArtSystem::has_value())
+	{
+		Locator::creatureArtSystem::value().AskFor(creatureType);
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	// It takes its place in the order of the things made

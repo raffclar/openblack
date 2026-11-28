@@ -390,6 +390,7 @@ openblack_setup_and_add_test(test_creature_route test_creature_route.cpp)
 openblack_setup_and_add_test(
   test_creature_obstacles test_creature_obstacles.cpp
 )
+openblack_setup_and_add_test(test_creature_art test_creature_art.cpp)
 openblack_setup_and_add_test(test_creature_audio test_creature_audio.cpp)
 openblack_setup_and_add_test(
   test_creature_interaction test_creature_interaction.cpp

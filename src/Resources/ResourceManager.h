@@ -275,11 +275,10 @@ public:
 	/// How many registered resources have not been loaded yet
 	[[nodiscard]] size_t PendingCount() const { return _deferred.size(); }
 
-	/// How many registered resources are held (see Hold) and are not asked for yet
+	/// How many registered resources are held (see Hold) and are not loaded yet, also when Prefetch asked for them
 	[[nodiscard]] size_t HeldCount() const
 	{
-		return static_cast<size_t>(
-		    std::ranges::count_if(_deferred, [](const auto& entry) { return entry.second.held && !entry.second.wanted; }));
+		return static_cast<size_t>(std::ranges::count_if(_deferred, [](const auto& entry) { return entry.second.held; }));
 	}
 
 	/// How many prefetched resources are waiting for a loading thread or on one
@@ -322,12 +321,13 @@ public:
 	}
 
 	/// Loads each registered resource that is not loaded yet and that is not held (see Hold). Returns how many it loaded.
+	/// A held resource that Prefetch asked for stays with the loading threads, so that this call does not wait for it.
 	size_t LoadPending()
 	{
 		std::vector<entt::id_type> pending;
 		for (const auto& [identifier, deferred] : _deferred)
 		{
-			if (!deferred.held || deferred.wanted)
+			if (!deferred.held)
 			{
 				pending.push_back(identifier);
 			}

@@ -57,6 +57,7 @@
 #include "Common/Platform.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Creature/CreatureArt.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
@@ -73,6 +74,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/CreatureArtSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -179,6 +181,97 @@ constexpr std::array<std::string_view, 1> k_DecodedAheadBanks = {"InGame.sad"};
 /// the species at the start: a bank loads when a creature of its species is in the world (see
 /// CreatureAudioSystemInterface::AskForVoiceBanks). The desktop game reads all the banks at the start.
 constexpr bool k_HoldsSpeciesVoiceBanks = k_Platform == Platform::Web;
+
+/// For the same reason, the web game does not read the art of the creature species at the start: the animations, the
+/// meshes and the files that the creatures paint their skins from. The art of a species loads when the game knows the
+/// species (see CreatureArtSystemInterface). The desktop game reads all the art at the start.
+constexpr bool k_HoldsCreatureArt = k_Platform == Platform::Web;
+
+/// The bytes of the Creature block of a file of creature animations
+std::vector<uint8_t> ReadCreatureBlock(const std::filesystem::path& path, const pack::UnreadBlock& block)
+{
+	const auto file = Locator::filesystem::value().GetData(path);
+	std::vector<uint8_t> bytes(block.size);
+	file->seekg(static_cast<std::streamoff>(block.offset));
+	file->read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	if (!*file)
+	{
+		throw std::runtime_error("Unable to read the Creature block of " + path.string());
+	}
+	return bytes;
+}
+
+/// Holds a creature mesh back from the start. A mesh that the species paints its skins from also registers its file
+/// for the skins, which the game holds back too.
+void HoldCreatureMesh(const std::string& name, entt::id_type meshId, const std::filesystem::path& path)
+{
+	auto& resources = Locator::resources::value();
+	resources.GetMeshes().Hold(meshId);
+	const auto species = creature::GetSpeciesFromMeshName(name);
+	if (species == CreatureType::Unknown || !Locator::creatureArtSystem::has_value())
+	{
+		return;
+	}
+	auto& art = Locator::creatureArtSystem::value();
+	art.HoldSpecies(species);
+	const auto look = std::ranges::find_if(creature_art::k_MeshLooks, [species, meshId](auto meshLook) {
+		return creature::GetIdFromType(species, meshLook) == meshId;
+	});
+	if (look == creature_art::k_MeshLooks.end() || !creature_art::PaintsSkinsFrom(*look))
+	{
+		return;
+	}
+	auto& files = resources.GetL3DFiles();
+	const auto fileId = creature_skin::MeshFileId(name);
+	RegisterFile(files, fileId, path, resources::L3DFileLoader::FromDiskTag {}, path);
+	if (files.Hold(fileId))
+	{
+		art.HoldSkinFile(species, fileId);
+	}
+}
+
+/// Registers the animations of a species and holds them back from the start. The species comes from the name of the
+/// file, thus the game does not read the file until it asks for the species.
+void HoldCreatureRig(const std::filesystem::path& path, const std::filesystem::path& specDirectory,
+                     const std::filesystem::path& meshDirectory)
+{
+	const auto species = creature_art::SpeciesOfAnimationFile(path.stem().string());
+	const auto bytes = GameFileBytes(path);
+	if (species == CreatureType::Unknown || !bytes.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "No creature species has the animations of {}", path.string());
+		return;
+	}
+	auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(species);
+	rigs.Register(
+	    rigId,
+	    [path, species, specDirectory, meshDirectory] {
+		    pack::PackFile pack;
+		    const auto stream = Locator::filesystem::value().GetData(path);
+		    const auto block = pack.ReadFile(*stream, {"Creature"}) == pack::PackResult::Success
+		                           ? pack.GetUnreadBlock("Creature")
+		                           : std::nullopt;
+		    if (!block.has_value())
+		    {
+			    throw std::runtime_error("Unable to read the Creature block of " + path.string());
+		    }
+		    auto rig = resources::CreatureRigLoader {}(resources::CreatureRigLoader::FromBufferTag {},
+		                                               ReadCreatureBlock(path, *block), specDirectory, meshDirectory);
+		    // The base mesh that the file names tells the species, as the desktop game reads it
+		    if (creature::GetSpeciesFromMeshName(rig->baseMeshName) != species)
+		    {
+			    throw std::runtime_error("The animations of " + path.string() + " are not of the species of the file name");
+		    }
+		    return rig;
+	    },
+	    *bytes);
+	rigs.Hold(rigId);
+	if (Locator::creatureArtSystem::has_value())
+	{
+		Locator::creatureArtSystem::value().HoldSpecies(species);
+	}
+}
 } // namespace
 
 void StartLogs(const std::string& logFile, const LogLevels& levels)
@@ -494,6 +587,10 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 
 			const auto meshId = creature::GetIdFromMeshName(fileName);
 			RegisterFile(meshManager, meshId, f, resources::L3DLoader::FromDiskTag {}, f);
+			if constexpr (k_HoldsCreatureArt)
+			{
+				HoldCreatureMesh(fileName, meshId, f);
+			}
 		}
 		catch (std::runtime_error& err)
 		{
@@ -1030,6 +1127,11 @@ void LoadCreatureRigs()
 		{
 			return;
 		}
+		if constexpr (k_HoldsCreatureArt)
+		{
+			HoldCreatureRig(path, specDirectory, meshDirectory);
+			return;
+		}
 		// Only the header of the species' animations is read now, for which species they are; the rest when the species
 		// is first wanted
 		pack::PackFile pack;
@@ -1074,16 +1176,8 @@ void LoadCreatureRigs()
 		rigs.Register(
 		    creature::GetRigId(species),
 		    [path, block = *block, specDirectory, meshDirectory] {
-			    const auto file = Locator::filesystem::value().GetData(path);
-			    std::vector<uint8_t> bytes(block.size);
-			    file->seekg(static_cast<std::streamoff>(block.offset));
-			    file->read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-			    if (!*file)
-			    {
-				    throw std::runtime_error("Unable to read the Creature block of " + path.string());
-			    }
-			    return resources::CreatureRigLoader {}(resources::CreatureRigLoader::FromBufferTag {}, bytes, specDirectory,
-			                                           meshDirectory);
+			    return resources::CreatureRigLoader {}(resources::CreatureRigLoader::FromBufferTag {},
+			                                           ReadCreatureBlock(path, block), specDirectory, meshDirectory);
 		    },
 		    block->size);
 	});

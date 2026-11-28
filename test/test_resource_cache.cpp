@@ -195,9 +195,9 @@ TEST(ResourceCache, AHeldResourceLoadsOnlyWhenItIsAskedFor)
 	EXPECT_EQ(cache.LoadingCount(), 1);
 	EXPECT_EQ(cache.StartLoads(queue, 1000), 10);
 
-	// Prefetch asks for it, and then it does not count as held
+	// Prefetch asks for it. It counts as held until it is loaded.
 	cache.Prefetch(k_Second);
-	EXPECT_EQ(cache.HeldCount(), 0);
+	EXPECT_EQ(cache.HeldCount(), 1);
 	// The first resource still runs, and the second one waits
 	EXPECT_EQ(cache.LoadingCount(), 2);
 	EXPECT_EQ(cache.StartLoads(queue, 1000), 10);
@@ -418,4 +418,12 @@ TEST(ResourceCache, LoadPendingLoadsAllButTheHeldResources)
 	EXPECT_FALSE(cache.IsLoaded(k_Third));
 	EXPECT_EQ(cache.PendingCount(), cache.HeldCount());
 	EXPECT_EQ(cache.LoadPending(), 0);
+
+	// A held resource that Prefetch asked for stays with the loading threads
+	cache.Prefetch(k_Third);
+	EXPECT_EQ(cache.LoadPending(), 0);
+	EXPECT_FALSE(cache.IsLoaded(k_Third));
+	EXPECT_EQ(cache.PendingCount(), cache.HeldCount());
+	EXPECT_EQ(cache.Handle(k_Third)->value, 3);
+	EXPECT_EQ(cache.HeldCount(), 0);
 }

@@ -10,6 +10,7 @@
 #include "CreatureSkin.h"
 
 #include <cassert>
+#include <cctype>
 #include <cmath>
 
 #include <algorithm>
@@ -51,7 +52,10 @@ uint32_t TexelAlong(uint32_t cut, uint32_t side)
 
 entt::id_type creature_skin::MeshFileId(std::string_view meshName)
 {
-	const auto name = "creature/skins/" + std::string(meshName);
+	// The animation file of a species and the name of its mesh file can use other cases of the same name
+	auto name = "creature/skins/" + std::string(meshName);
+	std::ranges::transform(name, name.begin(),
+	                       [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
 	return entt::hashed_string(name.c_str()).value();
 }
 
