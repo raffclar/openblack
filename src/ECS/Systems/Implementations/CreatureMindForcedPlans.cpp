@@ -463,14 +463,26 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			activity = executor->activity;
 		}
 	}
-	if (!agenda.has_value())
+	const auto action = creature_mind_tables::FindAction(*tables, plan.action);
+	const auto object = plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt;
+	if (!agenda.has_value() || agenda->empty())
 	{
-		return false;
+		// The action makes no steps. The creature stops what it does and keeps the plan with no agenda.
+		if (!action.has_value())
+		{
+			return false;
+		}
+		KeepForcedPlanWithNoSteps(creature,
+		                          {.desire = plan.desire,
+		                           .action = *action,
+		                           .object = object,
+		                           .priority = plan.priority.value_or(std::numeric_limits<float>::max())},
+		                          plan.forced);
+		return creature_plan_actions::For(plan.action) != nullptr;
 	}
 	// The area that holds the creature checks each walk of the new agenda. An agenda that the action makes fails when the
 	// area refuses one of its walks, and the creature does not want the action while the area holds it. An agenda that
 	// the forced plan gives itself only loses the walks that the area refuses.
-	const auto action = creature_mind_tables::FindAction(*tables, plan.action);
 	bool refused = false;
 	if (const auto area = AgendaAreaOf(registry, creature, plan.action, plan.walksBack); area.has_value())
 	{
@@ -510,7 +522,6 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                    entt::to_integral(creature), plan.action);
 		return true;
 	}
-	const auto object = plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt;
 	mind->planner.current = creature_planner::Plan {.desire = plan.desire,
 	                                                .action = *action,
 	                                                .object = object,

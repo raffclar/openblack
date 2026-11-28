@@ -29,6 +29,7 @@
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
@@ -215,10 +216,12 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 		}
 		return;
 	}
-	// What burns, among the other things that blend
+	// What burns, among the other things that blend. The objects of the land's draw list draw their fires.
 	if (Locator::fireSystem::has_value())
 	{
+		const auto firstFire = particleFrame.groups.size();
 		Locator::fireSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), particleFrame);
+		particles::draw::SetStage(particleFrame, firstFire, particles::draw::DrawStage::ListedObjects);
 	}
 	if (Locator::explosionSystem::has_value())
 	{
@@ -229,10 +232,13 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 	{
 		Locator::rewardSystem::value().CollectDrawFrame(particleFrame);
 	}
-	// The drops, the dust, the smoke and the motes
+	// The drops, the dust, the smoke and the motes. The game draws them after the hand and before the particle effects,
+	// so they come first after the hand.
 	if (Locator::liquidParticleSystem::has_value())
 	{
+		const auto firstLiquid = particleFrame.groups.size();
 		Locator::liquidParticleSystem::value().CollectDrawFrame(particleFrame);
+		particles::draw::MoveGroupsToFront(particleFrame, firstLiquid);
 	}
 	// The explorers' boat's wake
 	if (Locator::boatLaunchSystem::has_value())
@@ -499,13 +505,11 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	}
 	// A model that faces the camera can beat with the scrolls' highlights
 	auto alpha = draw.colour.a;
-	if (creator.faceCamera && creator.scriptHighlightPulse && Locator::scriptHighlightSystem::has_value())
+	if (const auto& share = desc.frame->effects.highlightPulseShare;
+	    creator.faceCamera && creator.scriptHighlightPulse && share.has_value())
 	{
-		const float turnFraction = desc.frame->clock.turnFraction;
-		const float share =
-		    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
 		const auto byte = static_cast<uint8_t>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
-		alpha = static_cast<float>(creator.PulsedAlpha(byte, share)) / 255.0f;
+		alpha = static_cast<float>(creator.PulsedAlpha(byte, *share)) / 255.0f;
 	}
 	// Those drawn in their atom's alpha, added to what is behind or kept out of the lights take their atom's colour
 	// unlit; the others are lit
@@ -643,20 +647,26 @@ const VolumeGlowShell* Renderer::GlowShellOf(entt::id_type meshId, uint32_t subM
 	return _glowShells.emplace(key, std::move(shell)).first->second.get();
 }
 
+void Renderer::NameShellMeshes(particles::draw::Frame& frame, const ecs::Registry& registry)
+{
+	for (auto& shell : frame.shells)
+	{
+		const auto* mesh = registry.TryGet<const ecs::components::Mesh>(shell.object);
+		shell.mesh = mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
+		shell.meshCopied = true;
+	}
+}
+
 void Renderer::CollectShellMeshes(DrawnEffects& effects, const ecs::Registry& registry)
 {
-	const auto name = [&registry](particles::draw::Frame& frame) {
-		for (auto& shell : frame.shells)
-		{
-			const auto* mesh = registry.TryGet<const ecs::components::Mesh>(shell.object);
-			shell.mesh = mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
-			shell.meshCopied = true;
-		}
-	};
-	name(effects.particles);
+	NameShellMeshes(effects.particles, registry);
 	for (auto& belief : std::span(effects.townBeliefs).first(effects.townBeliefCount))
 	{
-		name(belief.frame);
+		NameShellMeshes(belief.frame, registry);
+	}
+	for (auto& [magic, frame] : effects.hintEffects)
+	{
+		NameShellMeshes(frame, registry);
 	}
 }
 
@@ -666,12 +676,11 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 	{
 		return;
 	}
-	// The fill copied the mesh of the object of each shell of its frames. A frame that the draw makes has no copy.
-	auto meshId = shell.mesh;
-	if (!shell.meshCopied && Locator::entitiesRegistry::has_value())
+	// The fill copied the mesh of the object of each shell of its frames. The draw makes no frame of its own.
+	const auto meshId = shell.meshCopied ? shell.mesh : std::nullopt;
+	if (!shell.meshCopied)
 	{
-		const auto* meshComponent = Locator::entitiesRegistry::value().TryGet<const ecs::components::Mesh>(shell.object);
-		meshId = meshComponent != nullptr ? std::optional(meshComponent->id) : std::nullopt;
+		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "The draw has a glow shell with no copy of its mesh");
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -804,13 +813,9 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 	};
 	const auto& textures = Locator::resources::value().GetTextures();
 
-	// The motes and the other puffs, and the stars, sorted by how far they are from the film's camera
+	// The motes and the other puffs, which the fill collected, and the stars, sorted by how far they are from the film's
+	// camera
 	auto& frame = _filmParticleFrame;
-	frame.Clear();
-	if (Locator::liquidParticleSystem::has_value())
-	{
-		Locator::liquidParticleSystem::value().CollectDrawFrame(frame);
-	}
 	if (!film.stars.empty())
 	{
 		static constexpr auto k_Smoke = entt::hashed_string("raw/smoke");
@@ -853,9 +858,9 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 				*out++ = frame.sprites[index];
 			}
 			glm::vec4 islandExtent(0.0f);
-			if (Locator::terrainSystem::has_value())
+			if (_drawnFrame != nullptr && _drawnFrame->land.extent.has_value())
 			{
-				const auto extent = Locator::terrainSystem::value().GetExtent();
+				const auto& extent = *_drawnFrame->land.extent;
 				islandExtent = glm::vec4(extent.minimum, extent.maximum);
 			}
 			const auto* program = _shaderManager->GetShader("ParticleInstanced");
@@ -937,14 +942,15 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 	}
 }
 
-void Renderer::DrawParticles(const DrawSceneDesc& desc) const
+void Renderer::DrawParticles(const DrawSceneDesc& desc, particles::draw::DrawStage stage) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
 	if (desc.viewId != RenderPass::Main && !reflection)
 	{
 		return;
 	}
-	if (_warmingUp)
+	const bool afterHand = stage == particles::draw::DrawStage::AfterHand;
+	if (_warmingUp && afterHand)
 	{
 		WarmUpParticles(desc);
 	}
@@ -957,11 +963,11 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	                                                                 : Profiler::Stage::MainPassDrawParticles);
 	const auto origin = desc.camera->GetOrigin();
 	particles::draw::Order(particleFrame, origin, reflection ? std::nullopt : HandPoint(*desc.frame), _particleCommands,
-	                       _particleSpriteOrder, _particleOrderLists);
+	                       _particleSpriteOrder, _particleOrderLists, stage);
 	// A vortex's swirl is drawn before the land, after the sea in the sky's pass, which keeps its order. Its sprites
 	// follow the others' in the one buffer of instances.
 	_particleBeforeLandCommands.clear();
-	if (!reflection)
+	if (!reflection && afterHand)
 	{
 		particles::draw::OrderBeforeLand(particleFrame, _particleBeforeLandCommands, _particleBeforeLandSprites);
 		const auto offset = static_cast<uint32_t>(_particleSpriteOrder.size());
@@ -974,6 +980,10 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		}
 		_particleSpriteOrder.insert(_particleSpriteOrder.end(), _particleBeforeLandSprites.begin(),
 		                            _particleBeforeLandSprites.end());
+	}
+	if (_particleCommands.empty() && _particleBeforeLandCommands.empty())
+	{
+		return;
 	}
 	SubmitParticleFrame(desc, particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
 }
@@ -1172,6 +1182,11 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto& textures = Locator::resources::value().GetTextures();
+	// Only the kinds that the commands draw go to the GPU
+	const auto draws = [&commands, &beforeLand](ItemKind kind) {
+		const auto ofKind = [kind](const particles::draw::Command& command) { return command.kind == kind; };
+		return std::ranges::any_of(commands, ofKind) || std::ranges::any_of(beforeLand, ofKind);
+	};
 
 	// Every sprite of the pass in one buffer of instances, in the order drawn
 	bgfx::InstanceDataBuffer instances {};
@@ -1192,7 +1207,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 	bgfx::TransientVertexBuffer chainVertices {};
 	bgfx::TransientIndexBuffer chainIndices {};
 	bool haveChains = false;
-	if (!frame.chains.empty())
+	if (!frame.chains.empty() && draws(ItemKind::Chain))
 	{
 		const auto layout = ChainLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.chainVertices.size());
@@ -1234,7 +1249,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 	bgfx::TransientVertexBuffer surfaceVertices {};
 	bgfx::TransientIndexBuffer surfaceIndices {};
 	bool haveSurfaces = false;
-	if (!frame.surfaces.empty())
+	if (!frame.surfaces.empty() && draws(ItemKind::Surface))
 	{
 		const auto layout = SurfaceLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.surfaceVertices.size());
@@ -1474,13 +1489,12 @@ void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 
 void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::introSystem::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->effects.introLight.has_value())
 	{
 		return;
 	}
-	const auto& intro = Locator::introSystem::value();
-	const auto* frame = intro.GetLightFrame();
-	if (frame == nullptr || frame->drawn.empty())
+	const auto* frame = &*desc.frame->effects.introLight;
+	if (frame->drawn.empty())
 	{
 		return;
 	}
@@ -1537,5 +1551,5 @@ void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
 	bgfx::setInstanceDataBuffer(&instances, 0, count);
 	// Among what blends, by how far its head is from the camera
 	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
-	                zsort::Depth(intro.GetLightSortPoint(), desc.camera->GetOrigin()));
+	                zsort::Depth(desc.frame->effects.introLightSortPoint, desc.camera->GetOrigin()));
 }

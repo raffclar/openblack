@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
+#include <span>
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
@@ -149,5 +151,42 @@ enum class TempleState : uint8_t
 {
 	return temple == TempleState::Gone;
 }
+
+/// What a temple does about its leashes when it hangs them. Each temple makes its own three leashes as it comes into
+/// being, by all paths: the land, a script, or the construction of a temple.
+enum class TempleSet : uint8_t
+{
+	/// The temple has its leashes
+	Has,
+	/// A game saved before the leashes kept the link to their temple has the leashes of the temple's player at its
+	/// points, with no link. The temple takes these leashes.
+	TakesUnlinked,
+	/// The temple has no leashes. It makes them.
+	Makes,
+};
+[[nodiscard]] constexpr TempleSet SetFor(bool hasOwn, bool unlinkedAtItsPoints)
+{
+	if (hasOwn)
+	{
+		return TempleSet::Has;
+	}
+	return unlinkedAtItsPoints ? TempleSet::TakesUnlinked : TempleSet::Makes;
+}
+
+/// Whether a leash takes the pick of the leash that goes on. Only the leashes on the player's own temple take it: the
+/// temple that the player got last, while it stands. A leash at points of its own takes it too.
+[[nodiscard]] constexpr bool TakesPick(bool onTemple, bool onOwnTemple)
+{
+	return !onTemple || onOwnTemple;
+}
+
+/// The three points on a temple that its leashes hang at, in the world: the first three extra points of the temple's
+/// mesh, moved as the temple is. A mesh with fewer points hangs no leashes.
+[[nodiscard]] std::optional<std::array<glm::vec3, 3>> PointsOn(const glm::mat4& temple, std::span<const glm::mat4> points);
+
+/// A leash with no link hangs at a point of a temple when it is nearer than this many metres to the point
+constexpr float k_SamePoint = 0.01f;
+/// Whether a leash at `leash` hangs at the point `point` of a temple
+[[nodiscard]] bool HangsAt(const glm::vec3& leash, const glm::vec3& point);
 
 } // namespace openblack::temple_leashes

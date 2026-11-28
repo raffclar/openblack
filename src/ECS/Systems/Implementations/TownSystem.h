@@ -90,6 +90,7 @@ public:
 	void StoragePitGone(entt::entity town, entt::entity pit) override;
 	void UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn) override;
 	[[nodiscard]] std::optional<uint32_t> BeliefSymbolsOf(entt::entity centre) const override;
+	void MakeBeliefSymbolsAgain() override;
 	[[nodiscard]] std::span<const entt::entity> CentresInDrawOrder() const override;
 	[[nodiscard]] const town_centre_links::Links* FrameLinks() const override;
 	void SaveState(reflection::BinaryWriter& out) const override;
@@ -120,6 +121,8 @@ private:
 	std::vector<entt::connection> _connections;
 	/// Each village centre's effect of its symbols of belief
 	std::unordered_map<entt::entity, uint32_t> _beliefSymbols;
+	/// The effects of the symbols that the next frame removes, because the centres make their symbols again
+	std::vector<uint32_t> _oldBeliefSymbols;
 	/// The village centres in the order that they draw, the newest first, and the centres present at the last frame
 	std::vector<entt::entity> _centreDrawOrder;
 	std::vector<entt::entity> _presentCentres;

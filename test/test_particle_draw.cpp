@@ -858,10 +858,13 @@ TEST(ParticleDraw, TheLearningBulbIsDrawnWithTheWordsAndItsGlowIsSorted)
 	                                           .bulbColour = glm::vec4(1.0f),
 	                                           .bulbMesh = 7}}};
 	AddLearningMarks(frame, marks);
-	// Only the glow goes among the sorted things
+	// Only the glow goes among the sorted things, with the learning marks
 	std::vector<Command> commands;
 	std::vector<uint32_t> order;
-	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order);
+	OrderLists lists;
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order, lists);
+	EXPECT_TRUE(commands.empty());
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order, lists, DrawStage::LearningMarks);
 	ASSERT_EQ(commands.size(), 1u);
 	EXPECT_EQ(commands[0].kind, ItemKind::Sprite);
 	EXPECT_EQ(commands[0].depth, graphics::zsort::Depth({0.0f, 2.0f, 50.0f}, glm::vec3(0.0f)));
@@ -873,4 +876,84 @@ TEST(ParticleDraw, TheLearningBulbIsDrawnWithTheWordsAndItsGlowIsSorted)
 	EXPECT_EQ(bulb.mesh, 7u);
 	EXPECT_EQ(bulb.scale, 0.25f);
 	EXPECT_FALSE(static_cast<const MeshCreator&>(*bulb.creator).neverClip);
+}
+
+TEST(ParticleDraw, TheFightSparklesAreDrawnAtOnceBeforeTheForceField)
+{
+	auto frame = MakeFrame();
+	const glm::vec3 camera(0.0f);
+	const std::array<FightMark, 1> marks {
+	    {{.position = {0.0f, 0.0f, 20.0f}, .halfSize = 1.0f, .uv = glm::vec4(0.0f), .colour = glm::vec4(1.0f)}}};
+	AddFightMarks(frame, marks);
+	const std::vector<particles::LightSheet::Vertex> vertices(3);
+	const std::vector<uint32_t> triangles {0, 1, 2};
+	AddLightSheet(frame, vertices, triangles, {0.0f, 0.0f, 100.0f}, particles::LightSheet::Look::ForceField);
+	// A sorted sprite farther away than the sparkle
+	const auto first = static_cast<uint32_t>(frame.items.size());
+	AddSprite(frame, {0.0f, 0.0f, 500.0f}, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), first);
+
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, camera, std::nullopt, commands, order);
+	ASSERT_EQ(commands.size(), 3u);
+	// The sorted sprite draws over the sparkle, as the game draws the sparkle before it sorts anything
+	EXPECT_EQ(commands[0].kind, ItemKind::Sprite);
+	EXPECT_EQ(commands[0].depth, graphics::zsort::Depth({0.0f, 0.0f, 500.0f}, camera));
+	EXPECT_EQ(commands[1].kind, ItemKind::Sprite);
+	EXPECT_EQ(commands[1].depth, graphics::zsort::k_AtOnceAfterLand);
+	EXPECT_EQ(commands[2].kind, ItemKind::Surface);
+	EXPECT_EQ(commands[2].depth, graphics::zsort::k_AtOnceAfterLand);
+}
+
+TEST(ParticleDraw, EachStepOfTheFrameOrdersOnlyItsOwnGroups)
+{
+	auto frame = MakeFrame();
+	const glm::vec3 camera(0.0f);
+	AddSprite(frame, {0.0f, 0.0f, 10.0f}, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	AddSprite(frame, {0.0f, 0.0f, 20.0f}, 1);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 1);
+	SetStage(frame, 1, DrawStage::ListedObjects);
+	ASSERT_EQ(frame.groups[0].stage, DrawStage::AfterHand);
+	ASSERT_EQ(frame.groups[1].stage, DrawStage::ListedObjects);
+
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	OrderLists lists;
+	Order(frame, camera, std::nullopt, commands, order, lists, DrawStage::ListedObjects);
+	ASSERT_EQ(commands.size(), 1u);
+	EXPECT_EQ(commands[0].material, 1u);
+	Order(frame, camera, std::nullopt, commands, order, lists, DrawStage::AfterHand);
+	ASSERT_EQ(commands.size(), 1u);
+	EXPECT_EQ(commands[0].material, 0u);
+	Order(frame, camera, std::nullopt, commands, order, lists, DrawStage::LearningMarks);
+	EXPECT_TRUE(commands.empty());
+}
+
+TEST(ParticleDraw, TheGroupsMovedToTheFrontComeFirstAtAnEqualDistance)
+{
+	auto frame = MakeFrame();
+	const glm::vec3 camera(0.0f);
+	const glm::vec3 point(0.0f, 0.0f, 30.0f);
+	// Two effects at one point, then a third added last, as the liquids are
+	AddSprite(frame, point, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	AddSprite(frame, point, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 1);
+	AddSprite(frame, point, 1);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 2);
+	MoveGroupsToFront(frame, 2);
+	ASSERT_EQ(frame.groups.size(), 3u);
+	EXPECT_EQ(frame.groups[0].firstItem, 2u);
+	EXPECT_EQ(frame.groups[1].firstItem, 0u);
+	EXPECT_EQ(frame.groups[2].firstItem, 1u);
+
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, camera, std::nullopt, commands, order);
+	ASSERT_EQ(commands.size(), 2u);
+	EXPECT_EQ(commands[0].material, 1u);
+	EXPECT_EQ(commands[1].material, 0u);
+	EXPECT_EQ(order, (std::vector<uint32_t> {2, 0, 1}));
 }

@@ -21,6 +21,7 @@
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 #include "landgen/Terrain.h"
 
 using namespace openblack::landgen;
@@ -838,7 +839,7 @@ private:
 /// is low
 float WoodsAt(uint64_t seed, float x, float z, float last)
 {
-	const float woods = noise::Fractal(StageSeed(seed, 41), x / last * 14.0f, z / last * 14.0f, 3);
+	const float woods = noise::Fractal(StageSeed(seed, Stage::Woods), x / last * 14.0f, z / last * 14.0f, 3);
 	return std::max(noise::SmoothStep(-0.15f, 0.35f, woods), 0.15f);
 }
 
@@ -850,7 +851,7 @@ Random RandomAt(uint64_t stageSeed, int i, int j)
 
 void PlaceBigForests(Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
 {
-	const auto stageSeed = StageSeed(seed, 42);
+	const auto stageSeed = StageSeed(seed, Stage::BigForests);
 	const auto last = static_cast<float>(placement.Side() - 1);
 	const int points = static_cast<int>(last / settings.bigForestSpacing);
 	constexpr float k_Gap = k_BigForestGap / k_MetresPerCorner;
@@ -977,7 +978,7 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 	{
 		fill = StandFill(placement.GroundOf());
 	}
-	const auto standSeed = StageSeed(seed, 43);
+	const auto standSeed = StageSeed(seed, Stage::TreeStands);
 	const auto last = static_cast<float>(placement.Side() - 1);
 	// A higher density puts the points closer together. Each point keeps the chance of a stand of the usual spacing, so
 	// the land has that many times more stands.
@@ -1022,7 +1023,7 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 
 void PlaceDeadTrees(const Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
 {
-	const auto pointSeed = StageSeed(seed, 40);
+	const auto pointSeed = StageSeed(seed, Stage::DeadTrees);
 	const int points = static_cast<int>(static_cast<float>(placement.Side() - 1) / settings.spacing);
 	for (int i = 0; i < points; ++i)
 	{
@@ -1158,7 +1159,7 @@ RockClass MemberClass(RockClass main, float slope, float height, Random& random)
 void PlaceRockClumps(RockPlaces& places, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
 {
 	const auto& placement = places.placement;
-	const auto clumpSeed = StageSeed(seed, 45);
+	const auto clumpSeed = StageSeed(seed, Stage::RockClumps);
 	const auto last = static_cast<float>(placement.Side() - 1);
 	const int points = static_cast<int>(last / settings.rockSpacing);
 	const float squareSide = settings.rockSpacing * k_MetresPerCorner;
@@ -1278,7 +1279,7 @@ bool RingSuits(const Placement& placement, float x, float z, const Ring& ring)
 void PlaceStoneRing(RockPlaces& places, uint64_t seed, std::vector<Feature>& placed)
 {
 	const auto& placement = places.placement;
-	const auto ringSeed = StageSeed(seed, 46);
+	const auto ringSeed = StageSeed(seed, Stage::StoneRing);
 	const int points = static_cast<int>(static_cast<float>(placement.Side() - 1) / k_RingSpacing);
 	std::optional<std::pair<uint32_t, std::pair<int, int>>> best;
 	for (int i = 0; i < points; ++i)
@@ -1328,7 +1329,7 @@ void PlaceStoneRing(RockPlaces& places, uint64_t seed, std::vector<Feature>& pla
 /// Groups of three to seven spiky pillars on the beaches, as the sea stacks of the story. No two groups stand near.
 void PlaceSeaStacks(const Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
 {
-	const auto stackSeed = StageSeed(seed, 47);
+	const auto stackSeed = StageSeed(seed, Stage::SeaStacks);
 	const int points = static_cast<int>(static_cast<float>(placement.Side() - 1) / settings.stackSpacing);
 	std::vector<std::pair<float, float>> groups;
 	PointSquares pillars;
@@ -1505,7 +1506,7 @@ std::vector<Feature> features::Place(const Ground& ground, uint64_t seed, const 
 	                  .trees = trees,
 	                  .woods = woods,
 	                  .rocks = PointSquares {},
-	                  .plain = Random(StageSeed(seed, 44)).NextUnit() < k_PlainRockShare};
+	                  .plain = Random(StageSeed(seed, Stage::PlainRocks)).NextUnit() < k_PlainRockShare};
 	PlaceStoneRing(rocks, seed, placed);
 	PlaceRockClumps(rocks, seed, settings, placed);
 	PlaceSeaStacks(placement, seed, settings, placed);

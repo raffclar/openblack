@@ -15,6 +15,7 @@
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::climate;
@@ -66,9 +67,9 @@ Grid<float> climate::Temperature(const Grid<float>& heights, uint64_t seed, cons
 {
 	Grid<float> temperature(heights.side, 0.0f);
 	const float last = static_cast<float>(std::max(heights.side - 1, 1));
-	const auto variation = StageSeed(seed, 20);
+	const auto variation = StageSeed(seed, Stage::Temperature);
 	// A finer noise bends the lines between warm and cold land, so no biome ends on a straight line
-	const auto edges = StageSeed(seed, 22);
+	const auto edges = StageSeed(seed, Stage::TemperatureEdges);
 	for (int x = 0; x < heights.side; ++x)
 	{
 		for (int z = 0; z < heights.side; ++z)
@@ -165,7 +166,7 @@ Grid<float> climate::Moisture(const Grid<float>& heights, const Grid<uint8_t>& w
 	rain = Blur(rain, 6);
 
 	const auto distance = DistanceToWater(water);
-	const auto variation = StageSeed(seed, 21);
+	const auto variation = StageSeed(seed, Stage::Moisture);
 	const float last = static_cast<float>(std::max(side - 1, 1));
 	Grid<float> moisture(side, 0.0f);
 	for (int x = 0; x < side; ++x)

@@ -875,6 +875,75 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromStoragePit"}},
 	});
 
+	// A built temple stands west of the middle, at the angle of the temple of Land 1. A pile of magic food is in its pen.
+	constexpr glm::vec2 k_PenTemple {-300.0f, 100.0f};
+	constexpr float k_PenTempleTurn = 36.0f;
+	constexpr glm::vec2 k_PenHome {-319.0f, 112.0f};
+	constexpr glm::vec2 k_PenPile {-309.0f, 106.0f};
+	constexpr glm::vec2 k_OutsideThePen {-250.0f, 60.0f};
+	// The second order comes while the creature holds the food that the first order tells it to eat and looks it over
+	constexpr float k_SecondOrderSeconds = 2.0f;
+	all.push_back({
+	    .id = "objects.magic_food_in_pen",
+	    .name = "Creature eats from a pile of magic food in its temple pen",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger of size 2 stands in the pen of its temple, next to a pile of magic food. A mobile "
+	                   "object of magic food stands outside the pen. The player's hand takes the mobile object. Then a "
+	                   "script tells the tiger to eat from the pile.",
+	    .expected = "In the pen the tiger is shown at a newborn's size. It takes a handful of grain from the pile, sized by "
+	                "the size that it shows, holds it in its hand and eats it. The mobile object of magic food shows the "
+	                "model that the game gives it, on the land and in the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.0f},
+	    .creatures = {[home = k_PenHome] {
+		    auto tiger = Content(CreatureType::Tiger, home, 90.0f);
+		    tiger.size = 2.0f;
+		    tiger.needs = {.energy = 0.3f, .dehydration = 0.0f, .poo = 0.0f};
+		    return tiger;
+	    }()},
+	    .objects = {{.type = PotInfo::MagicFood, .offset = k_PenPile, .amount = 300},
+	                {.type = MobileObjectInfo::MagicFood, .offset = k_OutsideThePen}},
+	    .temples = {{.offset = k_PenTemple, .angle = k_PenTempleTurn}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "EatFromFoodPile"}},
+	    .checks = {{.label = "the handful takes 1000 times the shown size of 0.22 from the pile",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = 0,
+	                .afterTurns = 30,
+	                .byTurn = 200,
+	                .atLeast = 80.0,
+	                .atMost = 80.0}},
+	});
+
+	all.push_back({
+	    .id = "objects.script_order_with_no_steps",
+	    .name = "Script order with no steps while the creature holds food",
+	    .facet = Facet::Objects,
+	    .description = "A tiger stands next to a pile of magic food and a mobile object of magic food. A script tells it to "
+	                   "look over the mobile object and eat it. While it holds the object and looks it over, a second "
+	                   "order tells it to eat from the pile.",
+	    .expected = "With food in its hand, the eat from the pile makes no steps. The tiger stops the first order, keeps "
+	                "the food in its hand and does not eat it. It stands under the control of the script, and the pile "
+	                "stays as it was.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.0f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = PotInfo::MagicFood, .offset = {10.0f, -15.0f}, .amount = 300},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -8.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "EatAfterExamining"},
+	                 {.kind = Kind::DoAction, .delaySeconds = k_SecondOrderSeconds, .object = 0, .action = "EatFromFoodPile"}},
+	    .checks = {{.label = "the mobile object of magic food is not eaten",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 400,
+	                .atLeast = 2.0},
+	               {.label = "the pile keeps its 300 food",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = 0,
+	                .afterTurns = 400,
+	                .atLeast = 300.0,
+	                .atMost = 300.0}},
+	});
+
 	all.push_back({
 	    .id = "needs.eats_from_tree",
 	    .name = "Creature eats from a tree",

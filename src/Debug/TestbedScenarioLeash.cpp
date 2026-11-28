@@ -197,6 +197,30 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.refused_order_leads",
+	    .name = "A refused order with the leash still leads the creature",
+	    .facet = Facet::Leash,
+	    .description = "A young, wholly exhausted tiger is on the learning leash. After one second the hand ties the "
+	                   "leash to a rock next to the tiger, and three seconds later the tiger is told to go to a point "
+	                   "to the east. It refuses the tie and the order. Then the testbed walks it far to the west, past "
+	                   "the length of the rope, while its mind sleeps.",
+	    .expected = "It takes no order: no nod, no marker. It sleeps on the spot. The refused orders still lead it while "
+	                "it sleeps, so it does not walk back to the rock. It walks far past the length of the rope. Before, "
+	                "it turned back to the rock at the length of the rope.",
+	    .framing = {.shot = Shot::Overview, .include = {{20.0f, 20.0f}, {-260.0f, 20.0f}}},
+	    .creatures = {exhausted},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {5.0f, 20.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 0.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 3.0f, false),
+	                 Go(Kind::WalkTo, 0, {-260.0f, 20.0f}, 1.0f, false)},
+	    .checks = {{.label = "it walks far out of the area of the tied leash",
+	                .quantity = checks::Quantity::CreatureOutOfLeashArea,
+	                .afterTurns = 100,
+	                .byTurn = 2000,
+	                .atLeast = 40.0}},
+	});
+
+	all.push_back({
 	    .id = "leash.order_hurries",
 	    .name = "An order with the leash hurries what the body does",
 	    .facet = Facet::Leash,
@@ -409,6 +433,75 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	                .quantity = checks::Quantity::Entities,
 	                .kind = "leash posts",
 	                .afterTurns = 400,
+	                .atMost = 0.0}},
+	});
+
+	all.push_back({
+	    .id = "leash.late_temple",
+	    .name = "A temple made after the land starts hangs its leashes",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes, and no temple stands at the start. Three seconds after the "
+	                   "start, a temple comes into being in front of the camera, as a land script makes it.",
+	    .expected = "No leash hangs before the temple comes. Then the new temple hangs its three leashes at once: the "
+	                "spiked blade, the twisted rope and the rainbow fur, each one tumbling in its glow of smoke.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Leash(0, LeashType::Evil, 0.5f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::MakeTemple, .delaySeconds = 1.0f, .point = {-300.0f, 100.0f}, .amount = 36.0f}},
+	    .checks = {{.label = "no leash hangs before the temple comes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "leash posts",
+	                .afterTurns = 15,
+	                .atMost = 0.0},
+	               {.label = "the new temple hangs its three leashes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "hung leash posts",
+	                .afterTurns = 35,
+	                .byTurn = 80,
+	                .atLeast = 3.0}},
+	});
+
+	all.push_back({
+	    .id = "leash.own_temple_pick",
+	    .name = "Only the own temple picks the leash that goes on",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes and your first temple stands in front of the camera. The "
+	                   "learning, aggression and compassion leashes go on in turn, and then the leash comes off. Then a "
+	                   "second temple of yours comes into being to the left, as a land script makes it. Last, the "
+	                   "aggression leash goes on.",
+	    .expected = "The second temple hangs its three leashes at once. When the aggression leash goes on, its glow at "
+	                "the second temple turns orange and the hand carries the spiked blade. The first temple keeps the "
+	                "compassion leash as its pick.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-340.0f, 110.0f, -110.0f}, .look = {-340.0f, 10.0f, 80.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Leash(0, LeashType::Evil, 0.5f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::MakeTemple, .delaySeconds = 1.0f, .point = {-380.0f, 60.0f}, .amount = 36.0f},
+	                 Leash(0, LeashType::Evil, 1.0f)},
+	    .checks = {{.label = "the second temple hangs its three leashes at once",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "leash posts",
+	                .afterTurns = 32,
+	                .byTurn = 40,
+	                .atLeast = 6.0},
+	               {.label = "the second temple picks the aggression leash",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "picked aggression leashes on the own temple",
+	                .afterTurns = 45,
+	                .byTurn = 100,
+	                .atLeast = 1.0},
+	               {.label = "the first temple keeps its own pick",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "picked aggression leashes on other temples",
+	                .afterTurns = 45,
 	                .atMost = 0.0}},
 	});
 

@@ -143,10 +143,11 @@ struct CreatureMindState
 	/// An order forced the plan. A forced plan counts at its end only when the order said so.
 	bool planForced {false};
 	bool forcedPlanCounts {false};
-	/// The leash leads the plan: an order on the leash, or a walk back into its area while the leash is on. A forced
-	/// plan that the leash leads does not stop the creature from taking up reactions. The mark goes when the creature
-	/// stops what it does, or when the leash comes off.
-	bool ledByLeash {false};
+	/// How the leash leads the plan: by an order on the leash (also an order that the creature refused), or by a walk
+	/// back into its area while the leash is on. A forced plan that the leash leads does not stop the creature from
+	/// taking up reactions. The lead goes at a turn with no plan, when the creature stops what it does, or when the
+	/// leash comes off.
+	creature_leash::Lead leashLead {creature_leash::Lead::None};
 	/// An emergency started, and the creature did not stop what it does since then. It does not react to things then.
 	bool emergencyRunning {false};
 

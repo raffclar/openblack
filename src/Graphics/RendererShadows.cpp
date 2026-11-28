@@ -134,8 +134,8 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 		return;
 	}
 
-	BakeLandShadows(drawDesc.drawVegetation);
-	_landShadowsBaked = _landShadowBake->GetTexture() != nullptr;
+	// The fill baked the shadows of the things into the land
+	_landShadowsBaked = _landShadowBake && _landShadowBake->GetTexture() != nullptr;
 	const bool movingTrees = drawDesc.drawVegetation && Locator::config::value().dynamicTreeShadows;
 	if (!movingTrees)
 	{
@@ -155,7 +155,7 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 	staticShader->SetUniformValue("u_shadowSun", &sun);
 
 	const auto& meshManager = Locator::resources::value().GetMeshes();
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	const auto& renderCtx = *drawDesc.frame->models;
 	L3DMeshSubmitDesc submitDesc = {};
 	submitDesc.viewId = RenderPass::ObjectShadow;
 	// Overlapping shadows cover the same texels, both sides of every triangle cast
@@ -398,6 +398,20 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 	auto& morphs = _groundShadowMorphs;
 	morphs.clear();
 	morphs.reserve(renderCtx.entityDraws.size() + 1);
+	// The copies of the poses of the things of the world. The workers make the shadows while the draw continues, and
+	// the world can change then, thus a caster points only to these copies or to the poses of the models. Each copy
+	// keeps its memory from frame to frame. A copy keeps its place in memory when the list grows.
+	auto& poses = _groundShadowPoses;
+	size_t posesUsed = 0;
+	const auto own = [&poses, &posesUsed](std::span<const glm::mat4> pose) {
+		if (posesUsed == poses.size())
+		{
+			poses.emplace_back();
+		}
+		auto& kept = poses[posesUsed++];
+		kept.assign(pose.begin(), pose.end());
+		return std::span<const glm::mat4>(kept);
+	};
 
 	if (casts)
 	{
@@ -542,7 +556,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 					    .mesh = handMesh,
 					    .model = model,
 					    .pose = hand->boneMatrices.empty() ? std::span<const glm::mat4>(handMesh->GetBoneMatrices())
-					                                       : std::span<const glm::mat4>(hand->boneMatrices),
+					                                       : own(hand->boneMatrices),
 					    .morph = handMorph,
 					    .secondRowsOnly = true,
 					};
@@ -555,7 +569,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 						if (const auto* villagerPose = registry.TryGet<const ecs::components::VillagerPose>(held->entity);
 						    villagerPose != nullptr && villagerPose->bones.size() == pose.size())
 						{
-							pose = villagerPose->bones;
+							pose = own(villagerPose->bones);
 						}
 						caster.bodies.at(1) = {.mesh = heldMesh,
 						                       .model = *heldModel,
@@ -599,7 +613,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			}
 			const auto* animation = drawDesc.entities.TryGet<const ecs::components::CreatureAnimation>(entity);
 			const auto pose = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size()
-			                      ? std::span<const glm::mat4>(animation->boneMatrices)
+			                      ? own(animation->boneMatrices)
 			                      : std::span<const glm::mat4>(body->GetBoneMatrices());
 			const auto* creature = drawDesc.entities.TryGet<const ecs::components::Creature>(entity);
 			const auto* morph = drawDesc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
@@ -656,11 +670,11 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			{
 				if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
 				{
-					pose = villagerPose->clipBones;
+					pose = own(villagerPose->clipBones);
 				}
 				else if (villagerPose->bones.size() == rest.size())
 				{
-					pose = villagerPose->bones;
+					pose = own(villagerPose->bones);
 				}
 			}
 			Caster caster {
@@ -720,17 +734,17 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			{
 				if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
 				{
-					pose = villagerPose->clipBones;
+					pose = own(villagerPose->clipBones);
 				}
 				else if (villagerPose->bones.size() == rest.size())
 				{
-					pose = villagerPose->bones;
+					pose = own(villagerPose->bones);
 				}
 			}
 			else if (const auto* animalPose = registry.TryGet<const ecs::components::AnimalPose>(lead->entity);
 			         animalPose != nullptr && animalPose->bones.size() == rest.size())
 			{
-				pose = animalPose->bones;
+				pose = own(animalPose->bones);
 			}
 			leadCaster = Caster {
 			    .bodies = {},
@@ -780,11 +794,11 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				    }
 				    if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
 				    {
-					    pose = villagerPose->clipBones;
+					    pose = own(villagerPose->clipBones);
 				    }
 				    else if (villagerPose->bones.size() == rest.size())
 				    {
-					    pose = villagerPose->bones;
+					    pose = own(villagerPose->bones);
 				    }
 			    }
 			    else if (const auto* animalPose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity))
@@ -795,7 +809,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				    }
 				    if (animalPose->bones.size() == rest.size())
 				    {
-					    pose = animalPose->bones;
+					    pose = own(animalPose->bones);
 				    }
 			    }
 			    const auto model = glm::translate(glm::mat4(1.0f), drawn.origin) * glm::mat4(drawn.axes);

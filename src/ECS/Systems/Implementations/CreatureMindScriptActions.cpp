@@ -40,6 +40,8 @@ namespace
 constexpr std::string_view k_FightAction = "Fight";
 /// The action of a dead creature. When a script orders it, the creature faints where it stands.
 constexpr std::string_view k_DieAction = "Die";
+/// The action that the script gives the creature before each order
+constexpr std::string_view k_FollowPlayerAction = "FollowPlayer";
 } // namespace
 
 bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object)
@@ -105,6 +107,22 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 		ComeAcross(creature, mind, *with);
 	}
 	const auto& name = tables->actions[action].name;
+	const bool done = DoForScript(creature, name, target, with);
+	// The script first gives the creature the plan to follow the player, and the forced action then stops that plan.
+	// Thus each order of a script sets the count of the turns since the creature followed the player to 0.
+	auto* after = registry.TryGet<CreatureMindState>(creature);
+	if (const auto follow = creature_mind_tables::FindAction(*tables, k_FollowPlayerAction);
+	    after != nullptr && follow.has_value() && after->learnt.has_value() && *follow < after->learnt->turnsSinceDone.size())
+	{
+		after->learnt->turnsSinceDone[*follow] = 0;
+	}
+	return done;
+}
+
+bool CreatureMindSystem::DoForScript(entt::entity creature, std::string_view name, entt::entity target,
+                                     std::optional<entt::entity> with)
+{
+	auto& mind = Locator::entitiesRegistry::value().Get<CreatureMindState>(creature);
 	if (name == k_FightAction)
 	{
 		return FightForScript(creature, target);
@@ -120,7 +138,9 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 		return true;
 	}
 	// The order of the script is not a forced plan. When the script lets the creature go, it can take up reactions while
-	// it does the order
+	// it does the order. An order whose action makes no steps stops what the creature did, and the creature keeps the
+	// order as its plan with no agenda. For example, an eat from a pile makes no steps while the creature holds food that
+	// it can eat: it keeps what it holds and does not eat it. Under the control of the script it stands still.
 	if (!ForcePlan(creature, {.desire = Desire::ObeyPlayer,
 	                          .action = name,
 	                          .object = target,
@@ -131,7 +151,10 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 		return false;
 	}
 	// The order of a script counts at the end of the plan, as the creature's own plans do
-	mind.forcedPlanCounts = true;
+	if (mind.planActive)
+	{
+		mind.forcedPlanCounts = true;
+	}
 	// When it falls dead, the faint step itself makes the reaction to the death. The order makes no other reaction.
 	return true;
 }

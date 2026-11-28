@@ -718,7 +718,7 @@ constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Ca
 // NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct Command
 {
-	enum class Kind : uint8_t
+	enum class Kind : uint16_t
 	{
 		/// Going to the point, by walking or running; following the other creature; running away from the point;
 		/// turning to face the point, or the camera; stopping
@@ -1395,6 +1395,13 @@ struct Command
 		/// The dome of the sky shows the larger pictures of the sky pack (value 1) or the game's own pictures (value 0), as
 		/// the debug menu's choice does. Value 1 does nothing when no pack loaded. Needs no creature
 		SetSkyPictures,
+		/// The land waits for the humans of a network session, and then player one joins as the only human. The slots
+		/// with no player fill as they fill in a network game. Needs no creature
+		HumansJoin,
+		/// A temple of the player comes into being at the point, turned by the amount in degrees, after the land started.
+		/// This is as a land script, the editor or an undo of a removal makes it. It joins the scenario's temples. Needs
+		/// no creature
+		MakeTemple,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1849,6 +1856,8 @@ void AddFootballScenarios(std::vector<Scenario>& all);
 /// Villagers walking side by side, each at the speed its life, load, town and state give
 void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
+/// The artefacts of a town: the dance that charges them, their glow and symbol, and how they impress another town
+void AddArtefactScenarios(std::vector<Scenario>& all);
 /// The labels over the villagers' heads: the names display as it grows in and out
 void AddVillagerLabelScenarios(std::vector<Scenario>& all);
 /// The temple key and the realm key of the world camera

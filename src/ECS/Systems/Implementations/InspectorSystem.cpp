@@ -579,6 +579,9 @@ void InspectorSystem::AnswerRequests()
 
 void InspectorSystem::DoFrameWork()
 {
+	// A frame that only draws a picture while the run holds after a fixed step must not change what the next stepped
+	// frame shows. The input that is due then waits for that frame.
+	const bool onlyDraws = _game->HoldsFixedStep();
 	_game->Frame();
 	// The fight transcript stamps its records with this frame and the game time so far
 	if (Locator::fightTranscript::has_value())
@@ -589,10 +592,13 @@ void InspectorSystem::DoFrameWork()
 	}
 	// The run record writes its record of the turns before this frame
 	_sim->Frame(_game->FrameNumber());
-	// The fight autopilot gives its input for this frame before the game reads its input
-	_autopilot->Frame(_game->FrameNumber());
-	// The input due this frame is made before the game reads its input
-	_input->Frame(_game->FrameNumber());
+	if (!onlyDraws)
+	{
+		// The fight autopilot gives its input for this frame before the game reads its input
+		_autopilot->Frame(_game->FrameNumber());
+		// The input due this frame is made before the game reads its input
+		_input->Frame(_game->FrameNumber());
+	}
 	// The pictures due this frame are asked for before it is drawn
 	_screenshots->Frame(_game->FrameNumber());
 }

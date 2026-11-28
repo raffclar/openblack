@@ -24,12 +24,14 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
@@ -90,6 +92,13 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	const auto rotation = Rotation(yAngle);
 	registry.Assign<Transform>(entity, position, rotation, size);
 	registry.Assign<Temple>(entity, Temple {.owner = playerOwner, .yAngle = yAngle});
+	// The new temple becomes its player's own temple, also when the player has an older temple
+	registry.Each<Player>([entity, playerOwner](Player& player) {
+		if (player.name == playerOwner)
+		{
+			player.temple = entity;
+		}
+	});
 	const auto meshId = entt::hashed_string("temple/b_first_temple_l3d");
 	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	// Its outside is blended for its player's alignment, each vertex then set on the land
@@ -125,6 +134,11 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	// its player's temple has stood fully built
 	// NOLINTNEXTLINE(readability-suspicious-call-argument): the argument order is correct
 	registry.Assign<UndrawnPickModel>(entrance, entt::hashed_string("temple/entrance_l3d").value(), entity, false);
+	// The heart hangs its three leashes as it is made, each with its own random start
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().HangPostsOf(entity);
+	}
 	// It takes its worship sites' places; standing built, its player's towns are given their sites at once, and one
 	// under construction gives them once it is finished
 	if (Locator::worshipSiteSystem::has_value())

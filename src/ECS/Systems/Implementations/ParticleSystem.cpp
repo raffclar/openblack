@@ -236,15 +236,16 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 			}
 			AddDrawn(drawn, turnFraction, frame, sources);
 		});
-		// The light sheets of the land and the symbols of the players over their artefacts are of the world
+		// The light sheets of the land and the symbols of the players over their artefacts are of the world. The game
+		// draws the fight sparkles at once before the force field of the fence, which is one of the light sheets.
 		if (!inTemple)
 		{
+			particles::draw::AddFightMarks(frame, rules->FightMarks());
 			AddLightSheets(*rules, frame);
 			for (const auto& symbol : rules->PlayerSymbols())
 			{
 				particles::draw::AddPlayerSymbol(frame, symbol, sources);
 			}
-			particles::draw::AddFightMarks(frame, rules->FightMarks());
 		}
 	}
 	if (!inTemple)

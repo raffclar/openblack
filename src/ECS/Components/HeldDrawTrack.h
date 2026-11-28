@@ -16,12 +16,13 @@
 namespace openblack::ecs::components
 {
 
-/// On the hand of another player of a network game: how the frames of this computer move what that hand holds. They
-/// move it in a straight line from the place of the hand before its last report to the reported place, in as much
-/// game time as passed between the last two reports. Only the draw of this computer reads it.
+/// On the hand of another player: how the frames of this computer move what that hand holds. They move it in a straight
+/// line from the place of the hand before its last report to the place of the turn, in as much game time as the frames
+/// had between the last two reports. A person of a network game reports each turn. A computer mind reports after each
+/// step, and the movement starts at the hand before the step. Only the draw of this computer reads it.
 struct HeldDrawTrack
 {
-	/// The place of the hand before the last report
+	/// The place of the hand before the last report (for a computer mind, before the last step)
 	glm::vec3 from {0.0f};
 	/// The game milliseconds of the frames since the last report
 	int32_t elapsedMs {0};

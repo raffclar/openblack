@@ -17,6 +17,7 @@
 #include <limits>
 #include <numbers>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -77,6 +78,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
@@ -427,6 +429,19 @@ CreatureMindState* MindOf(Registry& registry, entt::entity creature)
 	return registry.TryGet<CreatureMindState>(creature);
 }
 
+/// After an order with the leash, the leash leads the creature, also when the creature refused the order
+void LeadByOrder(Registry& registry, entt::entity creature)
+{
+	auto* mind = MindOf(registry, creature);
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (mind == nullptr || leashes == nullptr)
+	{
+		return;
+	}
+	const bool on = leashes->worn.has_value();
+	mind->leashLead = leash::LeadAfterOrder(mind->leashLead, on, on && leashes->worn->works);
+}
+
 /// How full a need flag of a worship site is, as a share of the need that flies it at its full height. None for a thing
 /// that is not the need flag of a worship site that is still there.
 std::optional<float> SiteFlagFill(const Registry& registry, entt::entity thing)
@@ -610,6 +625,19 @@ void HurryFor(entt::entity creature, const orders::Interruption& interruption)
 	{
 		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
+}
+
+/// What the order knows about the mind of the creature after the order
+leash::OrderAgenda AgendaAfterOrder(const CreatureMindState& mind, const CreatureLeash::Order& order)
+{
+	return {
+	    .orderSerial = order.serial,
+	    .agendaSerial = mind.idle.serial,
+	    .step = mind.idle.step,
+	    .steps = mind.idle.agenda.size(),
+	    .planKept = !mind.planActive && mind.planner.current.has_value(),
+	    .ledByLeash = leash::LeadsPlan(mind.leashLead),
+	};
 }
 
 /// Whether the creature walks to a point now, as the step of a forced plan
@@ -841,9 +869,12 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 
 void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
 {
-	// A player with no temple has no posts, and nothing changes
-	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn](LeashPost& post) {
-		if (post.owner != owner)
+	// A player with no own temple has no posts that take the pick, and nothing changes. The other temples of the player
+	// keep their picks.
+	const auto own = OwnTempleOf(owner);
+	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn, own](LeashPost& post) {
+		if (post.owner != owner ||
+		    !temple_leashes::TakesPick(post.temple != entt::null, own != entt::null && post.temple == own))
 		{
 			return;
 		}
@@ -852,6 +883,25 @@ void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
 			post.selected = *picked;
 		}
 	});
+}
+
+entt::entity LeashSystem::OwnTempleOf(PlayerNames owner) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	entt::entity own = entt::null;
+	registry.Each<const Player>([&registry, owner, &own](const Player& player) {
+		if (player.name != owner || !registry.Valid(player.temple))
+		{
+			return;
+		}
+		// The link goes with the temple
+		const auto* temple = registry.TryGet<const Temple>(player.temple);
+		if (temple != nullptr && temple->owner == owner)
+		{
+			own = player.temple;
+		}
+	});
+	return own;
 }
 
 bool LeashSystem::PlayerCanChangeType(entt::entity creature) const
@@ -1274,6 +1324,7 @@ bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSour
 	if (effects.actsOnThing)
 	{
 		TakeThingOrder(creature, object);
+		LeadByOrder(registry, creature);
 	}
 	return true;
 }
@@ -1476,10 +1527,10 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 void LeashSystem::HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// A player has one set of posts
+	// Each temple has one set of posts, and a player has one set at points of its own
 	std::vector<entt::entity> old;
-	registry.Each<const LeashPost>([&old, owner](entt::entity entity, const LeashPost& post) {
-		if (post.owner == owner)
+	registry.Each<const LeashPost>([&old, owner, temple](entt::entity entity, const LeashPost& post) {
+		if (post.owner == owner && post.temple == temple)
 		{
 			old.push_back(entity);
 			if (post.glow != entt::null)
@@ -1530,7 +1581,6 @@ void LeashSystem::HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& p
 		registry.Assign<LeashPost>(entity, post);
 	}
 	registry.SetDirty();
-	_postsPlaced = true;
 }
 
 temple_leashes::TempleState LeashSystem::TempleOf(const LeashPost& post) const
@@ -1667,8 +1717,9 @@ bool LeashSystem::TapPost(PlayerNames player, entt::entity post)
 		return true;
 	}
 	PlaySound(audio::SoundId::G_ClickOnSpell_01, std::nullopt);
+	// Each temple keeps its own picked leash
 	registry.Each<LeashPost>([tapped](LeashPost& other) {
-		if (other.owner == tapped->owner)
+		if (other.owner == tapped->owner && other.temple == tapped->temple)
 		{
 			other.selected = &other == tapped;
 		}
@@ -1684,40 +1735,101 @@ bool LeashSystem::TapPost(PlayerNames player, entt::entity post)
 void LeashSystem::PlacePostsAtTemples()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	std::vector<std::tuple<PlayerNames, std::array<glm::vec3, 3>, entt::entity>> found;
-	bool anyTemple = false;
-	registry.Each<const Temple, const Transform, const Mesh>([&](entt::entity entity, const Temple& temple,
-	                                                             const Transform& transform, const Mesh& mesh) {
-		anyTemple = true;
-		if (!meshes.Contains(mesh.id))
+	std::unordered_set<entt::entity> withPosts;
+	registry.Each<const LeashPost>([&withPosts](const LeashPost& post) {
+		if (post.temple != entt::null)
 		{
-			return;
+			withPosts.insert(post.temple);
 		}
-		// The leashes hang at the first three points of the temple's heart
-		const auto& points = meshes.Handle(mesh.id)->GetExtraMetrics();
-		if (points.size() < 3)
-		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The temple has {} points, too few to hang its leashes at", points.size());
-			return;
-		}
-		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		std::array<glm::vec3, 3> at {};
-		for (size_t i = 0; i < at.size(); ++i)
-		{
-			at.at(i) = glm::vec3(model * points.at(i)[3]);
-		}
-		found.emplace_back(temple.owner, at, entity);
 	});
-	if (!anyTemple)
+	// The temple made its posts as it came into being. A temple that has none here got no posts then.
+	std::vector<entt::entity> without;
+	registry.Each<const Temple, const Transform, const Mesh>(
+	    [&without, &withPosts](entt::entity entity, const Temple& /*temple*/, const Transform& /*transform*/,
+	                           const Mesh& /*mesh*/) {
+		    if (!withPosts.contains(entity))
+		    {
+			    without.push_back(entity);
+		    }
+	    });
+	struct Found
+	{
+		entt::entity temple;
+		std::array<glm::vec3, 3> points;
+	};
+	std::vector<Found> found;
+	for (const auto entity : without)
+	{
+		if (const auto points = PostPointsOf(entity); points.has_value())
+		{
+			found.push_back({.temple = entity, .points = *points});
+		}
+	}
+	for (const auto& entry : found)
+	{
+		HangPostsAtPoints(entry.temple, entry.points);
+	}
+}
+
+void LeashSystem::HangPostsOf(entt::entity temple)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	bool hasOwn = false;
+	registry.Each<const LeashPost>([&hasOwn, temple](const LeashPost& post) { hasOwn = hasOwn || post.temple == temple; });
+	if (hasOwn)
 	{
 		return;
 	}
-	for (const auto& [owner, points, temple] : found)
+	if (const auto points = PostPointsOf(temple); points.has_value())
+	{
+		HangPostsAtPoints(temple, *points);
+	}
+}
+
+std::optional<std::array<glm::vec3, 3>> LeashSystem::PostPointsOf(entt::entity temple) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::resources::has_value() || !registry.Valid(temple) || !registry.AllOf<Temple, Transform, Mesh>(temple))
+	{
+		return std::nullopt;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto& transform = registry.Get<const Transform>(temple);
+	const auto& mesh = registry.Get<const Mesh>(temple);
+	if (!meshes.Contains(mesh.id))
+	{
+		return std::nullopt;
+	}
+	// The leashes hang at the first three points of the temple's heart
+	const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+	const auto at = temple_leashes::PointsOn(model, meshes.Handle(mesh.id)->GetExtraMetrics());
+	if (!at.has_value())
+	{
+		SPDLOG_LOGGER_TRACE(spdlog::get("game"), "The temple has too few points to hang its leashes at");
+	}
+	return at;
+}
+
+void LeashSystem::HangPostsAtPoints(entt::entity temple, const std::array<glm::vec3, 3>& points)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto owner = registry.Get<const Temple>(temple).owner;
+	// A game saved before the posts kept their temple has the posts of the temple at its points, with no link
+	bool unlinkedAtPoints = false;
+	registry.Each<LeashPost>([&unlinkedAtPoints, &points, temple, owner](LeashPost& post) {
+		if (post.temple != entt::null || post.owner != owner || std::ranges::none_of(points, [&post](const glm::vec3& point) {
+			    return temple_leashes::HangsAt(post.point, point);
+		    }))
+		{
+			return;
+		}
+		post.temple = temple;
+		unlinkedAtPoints = true;
+	});
+	if (temple_leashes::SetFor(false, unlinkedAtPoints) == temple_leashes::TempleSet::Makes)
 	{
 		HangPosts(owner, points, temple);
 	}
-	_postsPlaced = true;
 }
 
 void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& worn)
@@ -1839,6 +1951,7 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	    .leashed = leashes.worn.has_value(),
 	    .leashWorks = !leashes.worn.has_value() || leashes.worn->works,
 	    .orderInForce = OrderInForce(creature),
+	    .lead = mind != nullptr ? mind->leashLead : leash::Lead::None,
 	    .mimicking = mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value(),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .teleporting = TravelsByTeleport(registry, creature),
@@ -1883,7 +1996,7 @@ void LeashSystem::WalkBack(entt::entity creature)
 	// While the leash is on, the leash leads the walk back
 	if (auto* led = MindOf(registry, creature))
 	{
-		led->ledByLeash = leashes.worn.has_value();
+		led->leashLead = leashes.worn.has_value() ? leash::Lead::Pull : leash::Lead::None;
 	}
 	// The creature keeps the place until the action of the walk ends
 	leashes.returnTo = leashes.confinementCentre;
@@ -1905,7 +2018,6 @@ void LeashSystem::ProcessTurn()
 
 void LeashSystem::Reset()
 {
-	_postsPlaced = false;
 	_lastRefusal.reset();
 	_lastPressDouble = false;
 	_ropeHand = leash_snap::Hand::Away;
@@ -1915,19 +2027,8 @@ void LeashSystem::BeginTurn()
 {
 	// The leashes on a temple go with it, by any path: its destruction, the editor, or the load of a game
 	RemovePostsOfGoneTemples();
-	if (_postsPlaced)
-	{
-		return;
-	}
-	// A loaded world (a save, or the world state of the game server) keeps the posts that its temples got. Do not
-	// make them again.
-	bool loaded = false;
-	Locator::entitiesRegistry::value().Each<const LeashPost>([&loaded](const LeashPost& /*post*/) { loaded = true; });
-	if (loaded)
-	{
-		_postsPlaced = true;
-		return;
-	}
+	// Each temple hangs its own leashes as it comes into being. A temple that got no leashes then hangs them here. A
+	// loaded world keeps the posts that its temples got.
 	PlacePostsAtTemples();
 }
 
@@ -1939,7 +2040,7 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		return;
 	}
 	// An order's marker goes once the creature finishes or gives up what it was told, or the thing is gone
-	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderInForce(entity))
+	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderMarked(entity))
 	{
 		EndOrder(entity);
 	}
@@ -2575,17 +2676,24 @@ bool LeashSystem::OrderAt(PlayerNames player, const glm::vec3& place)
 	{
 		return false;
 	}
-	return TakeGroundOrder(*creature, place);
+	const bool taken = TakeGroundOrder(*creature, place);
+	LeadByOrder(Locator::entitiesRegistry::value(), *creature);
+	return taken;
 }
 
 bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 {
 	const auto creature = PlayersCreature(player);
-	if (!creature.has_value() || !IsLeashed(*creature))
+	auto& registry = Locator::entitiesRegistry::value();
+	// The order needs a thing in the world
+	if (!creature.has_value() || !IsLeashed(*creature) || !registry.Valid(object) ||
+	    registry.TryGet<const Transform>(object) == nullptr)
 	{
 		return false;
 	}
-	return TakeThingOrder(*creature, object);
+	const bool taken = TakeThingOrder(*creature, object);
+	LeadByOrder(registry, *creature);
+	return taken;
 }
 
 bool LeashSystem::AskedForFight(entt::entity creature) const
@@ -2792,11 +2900,6 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} couldn't carry out the order", entt::to_integral(creature));
 		return false;
 	}
-	// The leash leads the order that the player gave
-	if (auto* led = MindOf(registry, creature))
-	{
-		led->ledByLeash = true;
-	}
 	if (desire.has_value())
 	{
 		leashes.help = CreatureLeash::Help::CurrentDesire;
@@ -2962,11 +3065,6 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	leashes.helpDesire = desire;
 	TellHelp(creature,
 	         {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .thing = object});
-	// The leash leads the order that the player gave
-	if (mind != nullptr)
-	{
-		mind->ledByLeash = true;
-	}
 	MarkOrder(creature, object, objectAt, fight);
 	// What it is shown on the aggression and compassion leashes teaches it which desire to act on such things with
 	if (auto lessons = leash::LessonsFor(type, isCreature); mind != nullptr && !lessons.empty())
@@ -3091,7 +3189,24 @@ bool LeashSystem::OrderInForce(entt::entity creature) const
 		return Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature);
 	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	return mind != nullptr && mind->idle.serial == order.serial && mind->idle.step < mind->idle.agenda.size();
+	return mind != nullptr && leash::OrderInForce(AgendaAfterOrder(*mind, order));
+}
+
+bool LeashSystem::OrderMarked(entt::entity creature) const
+{
+	if (OrderInForce(creature))
+	{
+		return true;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& order = *registry.Get<const CreatureLeash>(creature).order;
+	if (order.fight || (order.object.has_value() &&
+	                    (!registry.Valid(*order.object) || registry.TryGet<const Transform>(*order.object) == nullptr)))
+	{
+		return false;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return mind != nullptr && leash::OrderMarked(AgendaAfterOrder(*mind, order));
 }
 
 std::optional<glm::vec3> LeashSystem::OrderTarget(entt::entity creature) const

@@ -49,6 +49,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureHandGlow.h"
+#include "Creature/CreatureNames.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureSwap.h"
@@ -1424,7 +1425,8 @@ void SetCreatureName() // 343 SET_CREATURE_NAME
 		ScriptMessage("Thing not creature!");
 		return;
 	}
-	creature->name = ecs::creature_naming::HelpWords(text);
+	// The name keeps at most 63 characters, so the mind file, the fight panel and the network all get the same name
+	creature->name = creature_names::FitName(ecs::creature_naming::HelpWords(text));
 }
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND

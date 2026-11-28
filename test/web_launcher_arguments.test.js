@@ -2,7 +2,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { playerArguments } = require('../web/page/launcher-arguments.js');
+const { playerArguments, argumentWords } = require('../web/page/launcher-arguments.js');
 
 const query = (text) => new URLSearchParams(text);
 let count = 0;
@@ -40,5 +40,11 @@ check('a parameter that is not in the list gives nothing', () => {
 check('a developer build takes args and adds each switch one time', () => {
   assert.deepEqual(playerArguments(query('args=--testbed%20-multiplayer&multiplayer&show-ping'), true, false),
     ['--testbed', '-multiplayer', '--show-ping']);
+});
+check('a part of args in double quotes is one argument with its spaces', () => {
+  assert.deepEqual(playerArguments(query('args=-s%20%22Online%20Maps/mpm_2p_1.map%22%20%20-n%20100'), true, false),
+    ['-s', 'Online Maps/mpm_2p_1.map', '-n', '100']);
+  assert.deepEqual(argumentWords('a"b c"d "" e'), ['ab cd', '', 'e']);
+  assert.deepEqual(argumentWords('   '), []);
 });
 console.log(`${count} checks passed`);

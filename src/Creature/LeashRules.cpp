@@ -178,8 +178,8 @@ bool creature_leash::RefusesWalk(const AgendaArea& area, glm::vec2 destination)
 bool creature_leash::WalksBack(const Confinement& confinement)
 {
 	if (!IsConfined(confinement.radius, confinement.leashed, confinement.leashWorks) || confinement.orderInForce ||
-	    confinement.mimicking || confinement.scriptControlled || confinement.teleporting || confinement.clearingWay ||
-	    confinement.distance <= confinement.radius)
+	    confinement.lead == Lead::Order || confinement.mimicking || confinement.scriptControlled || confinement.teleporting ||
+	    confinement.clearingWay || confinement.distance <= confinement.radius)
 	{
 		return false;
 	}
@@ -209,6 +209,39 @@ float creature_leash::ReturnArrival(float radius, float height)
 bool creature_leash::ReturnInForce(uint32_t walkSerial, uint32_t agendaSerial, size_t step, size_t steps)
 {
 	return walkSerial == agendaSerial && step < steps;
+}
+
+namespace
+{
+bool DoesOrderAgenda(const creature_leash::OrderAgenda& agenda)
+{
+	return agenda.orderSerial == agenda.agendaSerial && agenda.step < agenda.steps;
+}
+
+bool KeepsOrderWithNoSteps(const creature_leash::OrderAgenda& agenda)
+{
+	return agenda.orderSerial == agenda.agendaSerial && agenda.steps == 0 && agenda.planKept;
+}
+} // namespace
+
+bool creature_leash::LeadsPlan(Lead lead)
+{
+	return lead != Lead::None;
+}
+
+creature_leash::Lead creature_leash::LeadAfterOrder(Lead before, bool leashOn, bool leashWorks)
+{
+	return leashOn && leashWorks ? Lead::Order : before;
+}
+
+bool creature_leash::OrderInForce(const OrderAgenda& agenda)
+{
+	return DoesOrderAgenda(agenda) || (KeepsOrderWithNoSteps(agenda) && agenda.ledByLeash);
+}
+
+bool creature_leash::OrderMarked(const OrderAgenda& agenda)
+{
+	return DoesOrderAgenda(agenda) || KeepsOrderWithNoSteps(agenda);
 }
 
 bool creature_leash::AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn)

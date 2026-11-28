@@ -81,10 +81,11 @@ public:
 	[[nodiscard]] uint32_t GetCastersChanges() const noexcept { return _castersChanges; }
 	/// Forgets everything, so the next update bakes the whole island
 	void Reset();
-	/// Starts the test of the watched things on a thread of its own, before the next update needs its answer. The draw
-	/// only reads the world, thus the thread reads it while the draw continues. Call it only in a draw that calls Update.
+	/// Starts the test of the watched things on a thread of its own, before the next update needs its answer. The fill of
+	/// the drawn frame only reads the world, thus the thread reads it while the fill continues. Call it only in a fill
+	/// that calls Update.
 	void StartWatchedTest();
-	/// Waits for the test that StartWatchedTest started and forgets its answer. Call it at the end of the draw.
+	/// Waits for the test that StartWatchedTest started and forgets its answer
 	void ForgetWatchedTest();
 	/// Bakes the whole island again after a restore of the graphics device, which keeps no copy of the texture. The
 	/// texture shows no shadow until the bake ends.

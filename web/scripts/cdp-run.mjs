@@ -45,6 +45,10 @@
 //                            with page movements, while the page has the lock. The script follows the pointer from the
 //                            mouse press that took the lock, with the pointer speed of the game; a pointer that the
 //                            game moves itself (a hand demonstration) is not followed.
+//                            {"do": "focus", "on": false}   (the page stays in view, but document.hasFocus() answers
+//                            false and the page gets a blur event; "on": true gives the focus back with a focus event.
+//                            With "hide": true the page goes behind a second tab instead: the browser then stops the
+//                            display frames of the page, and the game, which follows them, stops too)
 //                            {"do": "wait-log", "text": "...", "seconds": 60}
 //                            {"do": "resize", "width": 1920, "height": 1080, "dpr": 2}   (the new size of the window;
 //                            the device pixel ratio stays the same when the step has no "dpr")
@@ -138,6 +142,7 @@ if (!target) {
   process.exit(1);
 }
 
+let otherTab;
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 // The sessions of the workers of the page, for a CPU profile
 const sessions = [];
@@ -500,6 +505,24 @@ const runStep = async (step) => {
     pixelRatio = step.dpr ?? pixelRatio;
     await send('Emulation.setDeviceMetricsOverride', { width: step.width, height: step.height,
       deviceScaleFactor: pixelRatio, mobile: false });
+    break;
+  case 'focus':
+    if (step.hide) {
+      if (step.on === false) {
+        const other = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
+        await fetch(`http://127.0.0.1:${port}/json/activate/${other.id}`);
+        otherTab = other.id;
+      } else if (otherTab) {
+        await fetch(`http://127.0.0.1:${port}/json/activate/${target.id}`);
+        await fetch(`http://127.0.0.1:${port}/json/close/${otherTab}`);
+        otherTab = undefined;
+      }
+    } else {
+      await evaluate(step.on === false
+        ? `(() => { document.hasFocus = () => false; window.dispatchEvent(new Event('blur')); })()`
+        : `(() => { delete document.hasFocus; window.dispatchEvent(new Event('focus')); })()`);
+    }
+    record(`[focus] ${step.on !== false ? 'given to' : 'taken from'} the page${step.hide ? ' (hidden)' : ''}`);
     break;
   case 'eval':
     record(`[eval] ${step.expression} = ${JSON.stringify(await evaluate(step.expression))}`);

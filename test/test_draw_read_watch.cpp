@@ -64,6 +64,26 @@ TEST(DrawReadWatch, CountsTheReadsOfTheDrawOnly)
 	EXPECT_EQ(reads[1].count, 1u);
 }
 
+TEST(DrawReadWatch, KeepsTheCallsOfTheFirstReadOfEachKind)
+{
+	Registry registry(Registry::Drawn::No);
+	const auto entity = MakeEntity(registry);
+	DrawReadWatch watch(DrawReadCheck::Report);
+	registry.WatchReads(&watch, k_Name);
+	watch.Start();
+	EXPECT_TRUE(registry.Valid(entity));
+	watch.Stop();
+	const auto reads = watch.GetReads();
+	ASSERT_EQ(reads.size(), 1u);
+#if defined(_WIN32)
+	// The platform gives the return addresses and their names, one name for each address
+	EXPECT_FALSE(reads[0].stack.empty());
+	EXPECT_EQ(DrawReadWatch::DescribeStack(reads[0].stack).size(), reads[0].stack.size());
+#else
+	EXPECT_TRUE(DrawReadWatch::DescribeStack(reads[0].stack).empty());
+#endif
+}
+
 TEST(DrawReadWatch, IgnoresTheReadsOfOtherThreads)
 {
 	Registry registry(Registry::Drawn::No);

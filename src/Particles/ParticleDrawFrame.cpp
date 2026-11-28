@@ -831,7 +831,8 @@ void draw::AddFightMarks(Frame& frame, std::span<const FightMark> marks)
 		                         .colour = mark.colour,
 		                         .flags = glm::vec4(0.0f)});
 		frame.spriteMaterials.push_back(material);
-		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.position, .firstItem = firstItem, .itemCount = 1});
+		frame.groups.push_back(
+		    {.path = DrawPath::AtOnceAfterLand, .origin = mark.position, .firstItem = firstItem, .itemCount = 1});
 	}
 }
 
@@ -881,7 +882,12 @@ void draw::AddLearningMarks(Frame& frame, std::span<const LearningMark> marks)
 		                         .colour = mark.glowColour,
 		                         .flags = glm::vec4(0.0f)});
 		frame.spriteMaterials.push_back(material);
-		frame.groups.push_back({.path = DrawPath::Sorted, .origin = mark.glow, .firstItem = firstItem, .itemCount = 1});
+		// The game sorts the glow when it draws the mark, with the land's objects
+		frame.groups.push_back({.path = DrawPath::Sorted,
+		                        .origin = mark.glow,
+		                        .firstItem = firstItem,
+		                        .itemCount = 1,
+		                        .stage = DrawStage::LearningMarks});
 	}
 }
 
@@ -940,8 +946,22 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	Order(frame, camera, hand, commands, spriteOrder, lists);
 }
 
+void draw::SetStage(Frame& frame, size_t firstGroup, DrawStage stage)
+{
+	for (auto& group : std::span(frame.groups).subspan(std::min(firstGroup, frame.groups.size())))
+	{
+		group.stage = stage;
+	}
+}
+
+void draw::MoveGroupsToFront(Frame& frame, size_t firstGroup)
+{
+	const auto first = frame.groups.begin() + static_cast<std::ptrdiff_t>(std::min(firstGroup, frame.groups.size()));
+	std::rotate(frame.groups.begin(), first, frame.groups.end());
+}
+
 void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,
-                 std::vector<uint32_t>& spriteOrder, OrderLists& lists)
+                 std::vector<uint32_t>& spriteOrder, OrderLists& lists, DrawStage stage)
 {
 	commands.clear();
 	spriteOrder.clear();
@@ -994,7 +1014,7 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	keys.clear();
 	for (const auto& group : frame.groups)
 	{
-		if (group.path != DrawPath::Sorted)
+		if (group.path != DrawPath::Sorted || group.stage != stage)
 		{
 			continue;
 		}
@@ -1019,7 +1039,8 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 	// Each of the others at one place, in its own order
 	for (const auto& group : frame.groups)
 	{
-		if (group.path == DrawPath::Sorted || group.path == DrawPath::BeforeLand || group.path == DrawPath::WithLearningWords)
+		if (group.path == DrawPath::Sorted || group.path == DrawPath::BeforeLand || group.path == DrawPath::WithLearningWords ||
+		    group.stage != stage)
 		{
 			continue;
 		}

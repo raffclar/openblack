@@ -65,6 +65,8 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandMiracleFx.h"
+#include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -258,11 +260,32 @@ void Renderer::CollectHands(DrawnFrame& frame) const
 {
 	auto& hands = frame.hands;
 	hands.glow = HandGlowColour(hands.Drawn());
+	// The miracle looks and the morph of the drawn hand
+	hands.miracleFx.reset();
+	hands.miraclePose.reset();
+	hands.morphDrawn.reset();
+	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+	const bool handValid = registry != nullptr && registry->Valid(hands.Drawn());
+	const auto* transform = handValid ? registry->TryGet<const ecs::components::Transform>(hands.Drawn()) : nullptr;
+	if (handValid)
+	{
+		const auto* hand = registry->TryGet<const ecs::components::Hand>(hands.Drawn());
+		const auto* fx = registry->TryGet<const ecs::components::HandMiracleFx>(hands.Drawn());
+		if (hand != nullptr && fx != nullptr)
+		{
+			hands.miracleFx = *fx;
+			if (transform != nullptr)
+			{
+				hands.miraclePose = DrawnFrame::Hands::Pose {.transform = *transform, .bones = hand->boneMatrices};
+			}
+		}
+		if (const auto* morph = registry->TryGet<const ecs::components::HandMorph>(hands.Drawn()); morph != nullptr)
+		{
+			hands.morphDrawn = morph->state.drawn;
+		}
+	}
 	// The glow of the hand on the water shows only where the hand is near the low land
 	hands.waterGlowCentre.reset();
-	const auto* transform = Locator::entitiesRegistry::has_value()
-	                            ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(hands.Drawn())
-	                            : nullptr;
 	if (transform == nullptr || frame.land.island == nullptr)
 	{
 		return;
@@ -1619,12 +1642,17 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawGroundBlobs(desc);
 	DrawFarVillagerSmudges(desc);
 	DrawVillagerEyes(desc);
-	// The land draws the reward chests with their seeds, then the learning marks at once: the words of each mark, then
-	// its bulb. The game draws the globes and the icons of the village centres after the land. A seed that the game draws
-	// at once comes in this order.
+	// The objects of the land's draw list draw their fires. Then the land draws the reward chests with their seeds, the
+	// light of the opening, the ripples of the influence border and the learning marks: the words of each mark at
+	// once, then its bulb at once, then its glow into the sort. The game draws the globes and the icons of the village
+	// centres after the land. A seed that the game draws at once comes in this order.
+	DrawParticles(desc, particles::draw::DrawStage::ListedObjects);
 	DrawRewardSeeds(desc);
+	DrawIntroLight(desc);
+	DrawInfluenceRipples(desc);
 	DrawLearningBulbs(desc);
 	SubmitWorldLabels(desc, WorldLabelGroup::LearningWords);
+	DrawParticles(desc, particles::draw::DrawStage::LearningMarks);
 	DrawGlobes(desc);
 	DrawIconSeeds(desc);
 	DrawTribalPower(desc);
@@ -1641,9 +1669,11 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawMists(desc);
 	// The game adds the leashes to its sort after the land's draw
 	DrawLeashes(desc);
-	DrawIntroLight(desc);
-	DrawInfluenceBorder(desc);
-	DrawInfluenceRipples(desc);
+	// In the temple the border shows on the map of the main room. The land's border comes at the end of the pass.
+	if (desc.frame->templeActive)
+	{
+		DrawInfluenceBorder(desc);
+	}
 }
 
 void Renderer::DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const
@@ -2655,8 +2685,13 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 
 	DrawPassHand(desc, pass, draws);
 	// The game adds the particles to its sort after the hand, so a particle comes after the hand at an equal distance
-	DrawParticles(desc);
+	DrawParticles(desc, particles::draw::DrawStage::AfterHand);
 	DrawPassEffectsAfterParticles(desc);
+	// The game draws the land's influence border at once after all else that it draws at once, before the sorted things
+	if (!desc.frame->templeActive)
+	{
+		DrawInfluenceBorder(desc);
+	}
 
 	DrawPassDebugLines(desc, draws);
 }

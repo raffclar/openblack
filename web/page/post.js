@@ -67,6 +67,10 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     }
     if (block === null) {
       folder.files[file] = blob;
+      // The page removes the blocks of a file that it keeps whole. A new worker must not get the old blocks.
+      if (folder.blocks && folder.blocks[file]) {
+        folder.blocks[file].fill(null);
+      }
     } else if (folder.blocks && folder.blocks[file] && block >= 0 && block < folder.blocks[file].length) {
       folder.blocks[file][block] = blob;
     } else {

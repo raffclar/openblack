@@ -59,6 +59,18 @@ vcpkg_download_distfile(
 #   device. The values that the shaders read do not change.
 # - webgpu-lose-device: a request to lose the device, for the tests of the recovery, destroys the WebGPU device and marks
 #   the loss. The next frame then makes the device again, as after a loss that the browser reports.
+# - webgpu-submit-recent-states: the submit keeps the last eight pipelines and bind groups of each view. A draw that
+#   matches one of them does not calculate the hash again. A pipeline match compares only the binding values that
+#   the pipeline key reads, thus a draw with other textures of the same formats uses the same pipeline. Before, only
+#   the last draw counted, and about 45% of the draws on the 32-god map calculated the hash. Each stage keeps its last
+#   uniform block, and a stage with the same values uses that block again. The submit does not set a vertex buffer
+#   slot of the render pass again when the draw has the same buffer, offset and size in it. The frame statistics get
+#   the time of the submit (before, the end time was the start time). The values that the shaders read and the draws
+#   do not change.
+# - webgpu-uniform-changes: a draw writes a uniform value only when its bytes are not the same as the current value.
+#   The submit copies the program uniforms into the stage blocks only when a value or the program changed. On the
+#   32-god map, 91% of the uniform values that the draws set are the same as before, and about 46% of the draws
+#   change no value. The values that the shaders read do not change.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
@@ -132,6 +144,8 @@ vcpkg_extract_source_archive(
     webgpu-lose-device.patch
     depth-ties-submit-order.patch
     vulkan-descriptor-pools-each-kick.patch
+    webgpu-submit-recent-states.patch
+    webgpu-uniform-changes.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

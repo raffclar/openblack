@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::streams;
@@ -182,7 +183,7 @@ std::vector<hydrology::River> streams::Choose(std::span<const hydrology::River> 
                                               const Grid<float>& heights, const Grid<uint8_t>& water, size_t landCorners,
                                               uint64_t seed, const Settings& settings)
 {
-	Random random(StageSeed(seed, 140));
+	Random random(StageSeed(seed, Stage::StreamCount));
 	const float density = random.NextRange(settings.fewestPerKm2, settings.mostPerKm2);
 	const float area = static_cast<float>(landCorners) * k_SquareKmPerCorner;
 	const auto wanted = std::max(static_cast<size_t>(std::floor((area * density) + 0.5f)), settings.fewest);
@@ -204,7 +205,7 @@ std::vector<hydrology::River> streams::Choose(std::span<const hydrology::River> 
 	{
 		for (int gz = 0; gz < heights.side; gz += step)
 		{
-			Random place(Hash(StageSeed(seed, 143), gx, gz));
+			Random place(Hash(StageSeed(seed, Stage::StreamSprings), gx, gz));
 			const int x = std::min(gx + static_cast<int>(place.NextBelow(static_cast<uint32_t>(step))), heights.side - 1);
 			const int z = std::min(gz + static_cast<int>(place.NextBelow(static_cast<uint32_t>(step))), heights.side - 1);
 			const float metres = heights.At(x, z) * k_MetresPerAltitude;
@@ -311,7 +312,7 @@ std::vector<hydrology::River> streams::Choose(std::span<const hydrology::River> 
 	}
 	for (auto& stream : chosen)
 	{
-		stream.points = PointsOf(stream, water, StageSeed(seed, 141), settings.wander);
+		stream.points = PointsOf(stream, water, StageSeed(seed, Stage::StreamPoints), settings.wander);
 	}
 	return chosen;
 }
@@ -389,7 +390,7 @@ std::vector<features::Feature> streams::PlaceBankTrees(const features::Ground& g
 		{
 			continue;
 		}
-		Random random(Mix(StageSeed(seed, 142) + index));
+		Random random(Mix(StageSeed(seed, Stage::StreamBankTrees) + index));
 		// The distance along the stream in metres where the next stand starts, and the trees of the stand still to come
 		float along = 0.0f;
 		const float gapForEachTree = settings.treeSpacing * (1.0f - settings.cover) / settings.cover;

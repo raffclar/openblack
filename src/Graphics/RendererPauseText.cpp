@@ -22,6 +22,7 @@
 #include "Camera/Camera.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "Graphics/AlphaTest.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -33,13 +34,12 @@ using namespace openblack::graphics;
 
 void Renderer::DrawPauseText(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::pauseTextSystem::has_value() || !Locator::windowing::has_value())
+	if (desc.viewId != RenderPass::Main)
 	{
 		return;
 	}
-	const auto& words = Locator::pauseTextSystem::value();
-	const auto* texture = words.GetTextTexture();
-	const auto vertices = words.GetText(*desc.camera, glm::u16vec2(Locator::windowing::value().GetSize()));
+	const auto* texture = desc.frame->effects.pauseTextTexture;
+	const auto& vertices = desc.frame->effects.pauseText;
 	if (vertices.empty() || texture == nullptr)
 	{
 		return;

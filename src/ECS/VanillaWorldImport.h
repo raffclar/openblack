@@ -1047,6 +1047,13 @@ struct ImportedHeldSpell
 	float duration {-1.0f};
 	float age {0.0f};
 	float magnitude {0.0f};
+	/// The value that multiplies the strength of the spell, which a script can set
+	float strengthMultiplier {1.0f};
+	/// The prayer power that a spell of a worship site spent each turn and at each event since its last mote of light
+	float upkeepMotes {0.0f};
+	float eventMotes {0.0f};
+	/// The movement of the spell
+	std::array<float, 3> movement {1.0f, 0.0f, 0.0f};
 	/// What the spell gives its particles each turn: the point of the caster, the point that a creature casts from
 	/// above, the view, the movement of the hand, the power and the flag that the caster still casts
 	std::array<float, 3> casterPoint {};
