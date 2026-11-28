@@ -805,7 +805,7 @@ void LandFootprints::StartSearch()
 std::optional<std::vector<uint32_t>> LandFootprints::TakeMarkedThings()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto marked = registry.ThingChanges().Take();
+	auto marked = registry.ThingChanges().Take(ecs::ThingWrites::Reader::LandFootprints);
 	// The marks belong to one registry. After a new registry or a new land, the search looks at all the things one time.
 	if (std::exchange(_lookAtAll, false) || std::exchange(_markedRegistry, &registry) != &registry)
 	{
