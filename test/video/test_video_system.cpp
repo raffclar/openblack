@@ -519,3 +519,100 @@ TEST(VideoSystem, TheFallingSpellsCreatureFollowsItsFilm)
 	EXPECT_TRUE(videos.Escape(false, false));
 	EXPECT_EQ(game.filmEnds, 1);
 }
+
+namespace
+{
+/// The bytes of a 16x16 video of `frames` frames at `fps`
+std::vector<uint8_t> VideoBytes(uint32_t frames, uint32_t fps)
+{
+	std::vector<std::vector<uint8_t>> packets;
+	for (uint32_t i = 0; i < frames; ++i)
+	{
+		packets.push_back(bink::test::FillFrame(static_cast<uint8_t>(16 + i % 200), 128, 128));
+	}
+	return bink::test::MakeBik(packets, {.fpsNumerator = fps});
+}
+
+/// A video that streams the bytes of `bytes` one byte at a time, with the header and the tables at once
+std::shared_ptr<const bink::BinkFile> StreamVideo(bink::test::GatedBytes& bytes, uint32_t frames)
+{
+	bytes.Open(bink::BinkFile::k_HeaderSize + (frames + 1) * 4);
+	auto file = bink::BinkFile::Stream(bytes.Reader(), bytes.Size(), 1);
+	EXPECT_TRUE(file.has_value());
+	return std::make_shared<const bink::BinkFile>(std::move(*file));
+}
+} // namespace
+
+TEST(VideoSystem, AStreamHoldsTheFirstFrameUntilItsPacketsWillArriveInTime)
+{
+	FakeGame game;
+	const auto data = VideoBytes(48, 24);
+	bink::test::GatedBytes bytes(data);
+	const auto file = StreamVideo(bytes, 48);
+	game.files["s.bik"] = file;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	EXPECT_TRUE(videos.Play("s.bik"));
+	videos.Update(k_Start);
+	EXPECT_EQ(videos.GetStatus()->frame, 0);
+	videos.Update(k_Start + 1s);
+	EXPECT_EQ(videos.GetStatus()->frame, 0);
+	EXPECT_TRUE(videos.GetPicture()->y.empty());
+
+	bytes.Open(data.size());
+	ASSERT_TRUE(file->WaitForFrame(47));
+	// The clock starts at the first update that has the packets
+	const auto start = k_Start + 2s;
+	videos.Update(start);
+	EXPECT_EQ(videos.GetStatus()->frame, 1);
+	videos.Update(start + 1s);
+	EXPECT_EQ(videos.GetStatus()->frame, 25);
+	EXPECT_EQ(videos.GetPicture()->y[0], 16 + 24);
+}
+
+TEST(VideoSystem, AStreamThatStopsHoldsTheClockAtTheFrameAndContinuesFromIt)
+{
+	FakeGame game;
+	const auto data = VideoBytes(48, 24);
+	bink::test::GatedBytes bytes(data);
+	const auto file = StreamVideo(bytes, 48);
+	game.files["s.bik"] = file;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	EXPECT_TRUE(videos.Play("s.bik"));
+	// The packets of the first ten frames arrive at once: the stream is fast enough for the rest
+	bytes.Open(file->FrameOffset(10));
+	ASSERT_TRUE(file->WaitForFrame(9));
+	videos.Update(k_Start);
+	ASSERT_EQ(videos.GetStatus()->frame, 1);
+	// The packet of frame 10 does not arrive: the count stops after frame 9
+	videos.Update(k_Start + 1s);
+	EXPECT_EQ(videos.GetStatus()->frame, 10);
+	videos.Update(k_Start + 2s);
+	EXPECT_EQ(videos.GetStatus()->frame, 10);
+	EXPECT_EQ(videos.GetPicture()->serial, 10u);
+
+	bytes.Open(data.size());
+	ASSERT_TRUE(file->WaitForFrame(47));
+	// The video continues from frame 10, with no jump
+	const auto resume = k_Start + 3s;
+	videos.Update(resume);
+	EXPECT_EQ(videos.GetStatus()->frame, 10);
+	videos.Update(resume + 1s);
+	EXPECT_EQ(videos.GetStatus()->frame, 34);
+}
+
+TEST(VideoSystem, AStreamThatWaitsCanStop)
+{
+	FakeGame game;
+	const auto data = VideoBytes(48, 24);
+	bink::test::GatedBytes bytes(data);
+	game.files["s.bik"] = StreamVideo(bytes, 48);
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Worker);
+	EXPECT_TRUE(videos.Play("s.bik"));
+	videos.Update(k_Start);
+	videos.Update(k_Start + 1s);
+	// The worker of the frames waits for a packet: the stop does not wait for it
+	videos.Stop();
+	EXPECT_FALSE(videos.IsPlaying());
+	game.files.clear();
+	bytes.Open(data.size());
+}

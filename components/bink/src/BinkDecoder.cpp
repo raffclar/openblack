@@ -395,12 +395,13 @@ bool FrameReader::DecodeFrame(uint32_t frame)
 		{
 			_next = key;
 		}
-		// A frame that fails on the way keeps the picture before it, as when playing in order
+		// A frame that fails on the way keeps the picture before it, as when playing in order. A file that streams
+		// gives each packet when it arrives
 		for (; _next < frame; ++_next)
 		{
-			[[maybe_unused]] const bool decoded = _decoder.Decode(_file->VideoPacket(_next));
+			[[maybe_unused]] const bool decoded = _file->WaitForFrame(_next) && _decoder.Decode(_file->VideoPacket(_next));
 		}
 	}
 	_next = frame + 1;
-	return _decoder.Decode(_file->VideoPacket(frame));
+	return _file->WaitForFrame(frame) && _decoder.Decode(_file->VideoPacket(frame));
 }

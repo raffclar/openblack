@@ -113,10 +113,17 @@ private:
 		int32_t frame {0};
 		/// When its first frame was due
 		std::optional<std::chrono::steady_clock::time_point> start;
+		/// For a file that streams: where the packet of each frame ends. Empty for a file that has all its bytes
+		std::vector<uint32_t> frameEnds;
+		/// True while the clock of a file that streams waits for its packets
+		bool buffering {false};
 	};
 
 	/// Counts the frames due by the real clock and takes the newest of them decoded
 	void DecodeDue(std::chrono::steady_clock::time_point now);
+	/// True while the clock of a file that streams must wait: before the first frame and after a packet that did not
+	/// arrive in time, until the stream will give each next packet before it is due
+	bool HoldsForStream(std::chrono::steady_clock::time_point now);
 	/// Counts the frames that become due until one is ready, or until all the tries of the wait are done
 	void WaitForFrame(std::chrono::steady_clock::time_point now);
 	/// The video goes; the next update puts the pause and the bars back
