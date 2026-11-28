@@ -99,7 +99,8 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	    .Field<&components::MapCellResident::coversOutline>("coversOutline")
 	    .Field<&components::MapCellResident::moves>("moves")
 	    .Field<&components::MapCellResident::cells>("cells")
-	    .Field<&components::MapCellResident::filedAt>("filedAt");
+	    .Field<&components::MapCellResident::filedAt>("filedAt")
+	    .Field<&components::MapCellResident::filings>("filings");
 	Reflect<components::MapCellMover> {context};
 	Reflect<components::MapPlace>(context).Field<&components::MapPlace::place>("place").Field<&components::MapPlace::placedAt>(
 	    "placedAt");
