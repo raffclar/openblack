@@ -610,7 +610,10 @@ private:
 	bool PrepareLakeMesh() const;
 	/// Draws the mirror of each level of the lakes' water in view, as the sea's reflection is drawn at the sea's level
 	void DrawLakeMirrors(const DrawSceneDesc& drawDesc) const;
-	/// Releases the lakes' mesh, the layers of their mirrors and the questions of their water
+	/// Copies the sky of the sea's reflection, before the land that the sea mirrors, for each level of the lakes that has
+	/// no mirror in this frame. The copy happens only when such a level is in view.
+	void CopyLakeSky(const FrameBuffer& reflection) const;
+	/// Releases the lakes' mesh, the layers of their mirrors, the copy of the sky and the questions of their water
 	void ReleaseLakes() const;
 	/// The height of the water that a pass mirrors: a lake's level in its mirror, else the sea's level
 	[[nodiscard]] float MirrorLevelOf(RenderPass viewId) const;
@@ -935,6 +938,8 @@ private:
 	/// The uniforms that SetSeaUniforms gave to the sea this frame: params, rows, mode, colour, camera and drift
 	mutable std::array<glm::vec4, 6> _seaUniforms {};
 	mutable uint64_t _lakeMeshDigest {0};
+	/// The copy of the land's heights that the lakes' mesh is made from (see LandHeights::Copies)
+	mutable uint64_t _lakeMeshHeights {0};
 	/// Whether the fill of the frame made the lakes' mesh ready, and the frame draws the lakes
 	mutable bool _lakesReady {false};
 	/// The water of each level of the lakes, in the order of the mesh's triangles
@@ -956,6 +961,12 @@ private:
 	mutable std::vector<uint8_t> _lakeHidden;
 	/// The frames that drew the lakes' mirrors, for the mirrors that draw every second frame
 	mutable uint32_t _lakeMirrorFrames {0};
+	/// The sky of the sea's reflection with no land, which a level of the lakes with no mirror shows. The sea mirrors the
+	/// land at the sea's level, which is wrong at the level of a lake. The sky has no height, so it is right at all levels.
+	mutable std::optional<TextureHandle> _lakeSky;
+	mutable glm::u16vec2 _lakeSkySize {0};
+	/// Whether this frame copied the sky into _lakeSky
+	mutable bool _lakeSkyCopied {false};
 	/// The land's luminosity of this frame and of the frame before, a copy of the shaded land (see land_shade) sized to
 	/// the land's. Each frame changes the other one and keeps the rows it changed: the next frame changes those too.
 	mutable std::array<std::unique_ptr<Texture2D>, 2> _landLuminosity;

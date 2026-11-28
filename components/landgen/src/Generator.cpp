@@ -40,7 +40,7 @@ constexpr float k_MetresPerCorner = 10.0f;
 constexpr float k_TempleClearRadius = 5.0f;
 constexpr float k_BuildingClearRadius = 1.5f;
 constexpr float k_FieldClearRadius = 1.2f;
-/// The bed of a path and its banks keep this many altitude units above the sea, and above a lake that is this many
+/// The bed of a path and its banks keep this many height units above the sea, and above a lake that is this many
 /// corners away or nearer
 constexpr float k_ShoreRise = 1.5f;
 constexpr float k_LakeShoreReach = 3.0f;
@@ -194,7 +194,7 @@ void openblack::landgen::FlattenStartArea(Grid<float>& heights, const StartArea&
 
 Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>& altitudes, const Grid<uint8_t>& luminosity,
                                                             const Grid<Biome>& biomes, const Grid<uint8_t>& freshWater,
-                                                            const Grid<float>* lakeLevels)
+                                                            const Grid<float>* lakeLevels, const Grid<uint16_t>* heightUnits)
 {
 	const int side = altitudes.side;
 	Grid<openblack::lnd::LNDCell> cells(side, openblack::lnd::LNDCell {});
@@ -204,6 +204,12 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 	// The level of the lake at a corner, or below 0 where no lake is
 	const auto lakeLevel = [&](int x, int z) {
 		return lakeLevels != nullptr ? lakeLevels->At(std::min(x, side - 1), std::min(z, side - 1)) : -1.0f;
+	};
+	// The height of a corner in the units of the lake levels
+	const auto units = [&](int x, int z) {
+		const int cx = std::min(x, side - 1);
+		const int cz = std::min(z, side - 1);
+		return heightUnits != nullptr ? static_cast<float>(heightUnits->At(cx, cz)) : static_cast<float>(altitudes.At(cx, cz));
 	};
 	for (int x = 0; x < side; ++x)
 	{
@@ -226,7 +232,23 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 			// renderer keeps few lists of triangles for a land of many blocks.
 			cell.properties.split = ((x + z) & 1) != 0 ? 1 : 0;
 			uint8_t sound = 0;
-			if (high == 0)
+			// A lake above the sea comes first: its water can cover a hollow at the sea level that it holds
+			if (const float lake =
+			        std::max({lakeLevel(x, z), lakeLevel(x + 1, z), lakeLevel(x, z + 1), lakeLevel(x + 1, z + 1)});
+			    lake >= 0.0f && std::min({units(x, z), units(x + 1, z), units(x, z + 1), units(x + 1, z + 1)}) <= lake)
+			{
+				// A lake above the sea: its water and its shore are as the sea's, with the sound of still fresh water
+				if (std::max({units(x, z), units(x + 1, z), units(x, z + 1), units(x + 1, z + 1)}) <= lake)
+				{
+					cell.properties.hasWater = 1;
+				}
+				else
+				{
+					cell.properties.coastLine = 1;
+				}
+				sound = static_cast<uint8_t>(Sound::StillFreshWater);
+			}
+			else if (high == 0)
 			{
 				cell.properties.hasWater = 1;
 				sound = static_cast<uint8_t>(water);
@@ -244,21 +266,6 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 					cell.properties.coastLine = 1;
 				}
 				sound = static_cast<uint8_t>(fresh ? Sound::StillFreshWater : Sound::Coastal);
-			}
-			else if (const float lake =
-			             std::max({lakeLevel(x, z), lakeLevel(x + 1, z), lakeLevel(x, z + 1), lakeLevel(x + 1, z + 1)});
-			         lake >= 0.0f && static_cast<float>(low) <= lake)
-			{
-				// A lake above the sea: its water and its shore are as the sea's, with the sound of still fresh water
-				if (static_cast<float>(high) <= lake)
-				{
-					cell.properties.hasWater = 1;
-				}
-				else
-				{
-					cell.properties.coastLine = 1;
-				}
-				sound = static_cast<uint8_t>(Sound::StillFreshWater);
 			}
 			else
 			{
@@ -509,12 +516,22 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		land.heightUnits.values[i] =
 		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
 	}
-	// The lakes above the sea, from the altitudes that the game draws: each basin holds water at its own level
+	// The lakes above the sea, from the height units that the game draws: each basin holds water at its own level, in
+	// height units. Above the knee of the curve, one altitude is many height units, so the altitude byte is too coarse.
 	Grid<float> drawn(side, 0.0f);
 	for (size_t i = 0; i < drawn.values.size(); ++i)
 	{
-		drawn.values[i] = static_cast<float>(altitudes.values[i]);
+		drawn.values[i] = static_cast<float>(land.heightUnits.values[i]);
 	}
+	// Sets the height of a corner from its height units: the units, the height through the curve and the altitude byte
+	const auto setUnits = [&](size_t corner, float units) {
+		const float whole = std::clamp(std::floor(units + 0.5f), 0.0f, k_MostUnits);
+		const float height = std::clamp(land.heightCurve.AltitudeOf(whole), 0.0f, terrain::k_HighestAltitude);
+		land.heightUnits.values[corner] = static_cast<uint16_t>(whole);
+		heights.values[corner] = height;
+		altitudes.values[corner] = static_cast<uint8_t>(std::floor(height + 0.5f));
+		drawn.values[corner] = whole;
+	};
 	// No lake covers the flat ground of a start or a town, so that each town stays dry and its paths reach it
 	std::vector<lakes::Keep> dryGround;
 	dryGround.reserve(starts.size());
@@ -535,10 +552,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	for (size_t i = 0; i < drawn.values.size(); ++i)
 	{
 		// A joined lake lowers the bed of the higher lake
-		if (drawn.values[i] != static_cast<float>(altitudes.values[i]))
+		if (drawn.values[i] != static_cast<float>(land.heightUnits.values[i]))
 		{
-			altitudes.values[i] = static_cast<uint8_t>(std::clamp(drawn.values[i], 0.0f, terrain::k_HighestAltitude));
-			heights.values[i] = drawn.values[i];
+			setUnits(i, drawn.values[i]);
 		}
 	}
 	// Each lake gets the shore steps of the sea, so that a steep rim has a flat shore for the sand. The flat ground of
@@ -552,13 +568,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	                                           {.freeboard = settings.highLakes.freeboard, .rise = settings.shelf.cliffRise});
 	for (const auto corner : stepped)
 	{
-		const float height = std::clamp(drawn.values[corner], 0.0f, terrain::k_HighestAltitude);
-		const auto altitude = static_cast<uint8_t>(std::floor(height + 0.5f));
-		heights.values[corner] = height;
-		altitudes.values[corner] = altitude;
-		land.heightUnits.values[corner] =
-		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
-		drawn.values[corner] = static_cast<float>(altitude);
+		setUnits(corner, drawn.values[corner]);
 	}
 	for (const auto& lake : land.highLakes)
 	{
@@ -748,7 +758,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 				for (int z = std::max(0, lz - reach); z <= std::min(side - 1, lz + reach); ++z)
 				{
 					auto& lowest = roadLowest.At(x, z);
-					lowest = std::max(lowest, land.heightCurve.MetresOf(lake.level + k_ShoreRise));
+					lowest = std::max(lowest, (lake.level + k_ShoreRise) * k_MetresPerUnit);
 				}
 			}
 		}
@@ -787,7 +797,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			freshWater.values[corner] = 1;
 		}
 	}
-	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, &lakeLevels);
+	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, &lakeLevels, &land.heightUnits);
 	land.materials = countries::UsedSurfaces();
 	for (size_t biome = 0; biome < biomes::k_BiomeCount; ++biome)
 	{

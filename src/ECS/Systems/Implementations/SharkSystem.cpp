@@ -11,6 +11,7 @@
 
 #include "SharkSystem.h"
 
+#include <algorithm>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -118,11 +119,15 @@ void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 
 		    // Drawn between the start of its turn and where it is, facing the way it moved
 		    shark.heading = ecs::shark_rules::Heading(shark.turnStart, shark.position, shark.heading);
-		    const auto startHeight = land.GetHeightAt(glm::vec2(shark.turnStart.x, shark.turnStart.z));
-		    const auto endHeight = land.GetHeightAt(glm::vec2(shark.position.x, shark.position.z));
+		    // On the sea the land's height is the flat sea level. On a lake above the sea of a generated land, the shark
+		    // swims at the lake's level and is cut there.
+		    const auto heightAt = [&land](glm::vec2 xz) { return std::max(land.GetHeightAt(xz), land.GetWaterLevelAt(xz)); };
+		    const auto startHeight = heightAt(glm::vec2(shark.turnStart.x, shark.turnStart.z));
+		    const auto endHeight = heightAt(glm::vec2(shark.position.x, shark.position.z));
 		    shark.drawn = Shark::DrawnPlace {
 		        .position = ecs::shark_rules::Drawn(shark.turnStart, startHeight, shark.position, endHeight, turnFraction),
 		        .rotation = ecs::shark_rules::Facing(shark.heading)};
+		    pose.cutBelow = land.GetWaterLevelAt(glm::vec2(shark.drawn->position.x, shark.drawn->position.z));
 
 		    if (!timing.has_value() || !meshes.Contains(mesh.id))
 		    {

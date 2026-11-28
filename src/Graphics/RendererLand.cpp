@@ -386,7 +386,7 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 	model[0] = glm::vec4(hand_water_glow::k_HalfSize, 0.0f, 0.0f, 0.0f);
 	model[1] = glm::vec4(0.0f, 0.0f, -hand_water_glow::k_HalfSize, 0.0f);
 	model[2] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-	model[3] = glm::vec4(centre->x, 0.0f, centre->y, 1.0f);
+	model[3] = glm::vec4(centre->x, desc.frame->hands.waterGlowLevel, centre->y, 1.0f);
 
 	bgfx::setTransform(glm::value_ptr(model));
 	spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));

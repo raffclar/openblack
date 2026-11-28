@@ -77,6 +77,8 @@ struct DrawnFrame
 		bool inPhysics {false};
 		bool inHand {false};
 		bool highDetail {false};
+		/// The height of the water that a swimmer is in: the sea's level, or the level of a lake above the sea
+		float waterLevel {0.0f};
 	};
 
 	/// The pose and the look of an animal as the models' pass draws it
@@ -171,6 +173,8 @@ struct DrawnFrame
 		/// The place on the water under the drawn hand, when the hand is near the low land. The hand's glow on the water
 		/// shows there at night.
 		std::optional<glm::vec2> waterGlowCentre;
+		/// The height of the water that the glow lies on: the sea's level, or the level of a lake above the sea
+		float waterGlowLevel {0.0f};
 		/// The alignment of the player of this computer, from -1, evil, to 1, good
 		float ownAlignment {0.0f};
 		/// The miracle looks of the drawn hand: its bands, its bracelets and its glow. It is empty when the hand has none.

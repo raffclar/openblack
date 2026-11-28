@@ -142,7 +142,11 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 	                    Locator::waterRingSystem::has_value() && !rained.empty();
 	const uint32_t light = splash ? FrameLandLight(rain::k_SplashLight) & 0xFFFFFFu : 0u;
 	const auto random = GameRandom();
-	const rain::HeightAt heightAt = [&island](glm::vec2 point) { return island.GetHeightAt(point); };
+	// A splash on the water lies on the water's surface: on the sea, the flat sea level, and on a lake above the sea of a
+	// generated land, the level of the lake
+	const rain::HeightAt heightAt = [&island](glm::vec2 point) {
+		return std::max(island.GetHeightAt(point), island.GetWaterLevelAt(point));
+	};
 	for (const auto& block : rained)
 	{
 		if (auto tile = rain::TileOf(block.centre, block.wettest, eye))

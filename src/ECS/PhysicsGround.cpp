@@ -115,7 +115,7 @@ std::optional<float> PhysicsGround::LakeDepth(glm::ivec2 cell) const
 	{
 		return std::nullopt;
 	}
-	return lakes->GetLakes()[*lake].level - LandIslandInterface::GetDrawnAltitude(found->altitude);
+	return lakes->GetLakes()[*lake].level - LandIslandInterface::GetDrawnAltitude(_land.HeightUnitsOf(*found, cell.x, cell.y));
 }
 
 float PhysicsGround::WaterLevelAt(glm::vec2 xz) const

@@ -137,7 +137,8 @@ bool LandIslandInterface::IsUnderLake(glm::u16vec2 coordinates) const
 	}
 	const auto lake = lakes->LakeOfCorner(coordinates.x, coordinates.y);
 	const auto* cell = lake.has_value() ? FindCell(coordinates) : nullptr;
-	return cell != nullptr && GetDrawnAltitude(cell->altitude) < lakes->GetLakes()[*lake].level;
+	return cell != nullptr &&
+	       GetDrawnAltitude(HeightUnitsOf(*cell, coordinates.x, coordinates.y)) < lakes->GetLakes()[*lake].level;
 }
 
 bool LandIslandInterface::AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const

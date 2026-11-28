@@ -286,23 +286,40 @@ void Renderer::CollectHands(DrawnFrame& frame) const
 	}
 	// The glow of the hand on the water shows only where the hand is near the low land
 	hands.waterGlowCentre.reset();
+	hands.waterGlowLevel = land_lakes::k_SeaLevel;
 	if (transform == nullptr || frame.land.island == nullptr)
 	{
 		return;
 	}
 	const glm::vec2 centre {transform->position.x, transform->position.z};
 	const auto& island = *frame.land.island;
-	const auto altitudeAt = [&island](int x, int z) -> std::optional<uint8_t> {
+	const auto* lakes = island.GetLakeMap();
+	const auto altitudeAt = [&island, lakes](int x, int z) -> std::optional<uint8_t> {
 		if (x < 0 || z < 0 || x >= LandIslandInterface::k_MapCellsPerSide || z >= LandIslandInterface::k_MapCellsPerSide)
 		{
 			return std::nullopt;
 		}
 		const auto* cell = island.FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
-		return cell != nullptr ? std::optional<uint8_t>(cell->altitude) : std::nullopt;
+		if (cell == nullptr)
+		{
+			return std::nullopt;
+		}
+		// By a lake above the sea, the land is low when it is near the lake's water
+		if (const auto lake = lakes != nullptr ? lakes->LakeOfCorner(x, z) : std::nullopt)
+		{
+			return hand_water_glow::AltitudeOverLake(island.HeightUnitsOf(*cell, x, z),
+			                                         lakes->GetLakes()[*lake].level / LandIslandInterface::k_HeightUnit);
+		}
+		return cell->altitude;
 	};
-	if (hand_water_glow::NearLowLand(centre, altitudeAt))
+	if (const auto low = hand_water_glow::FirstLowCell(centre, altitudeAt))
 	{
 		hands.waterGlowCentre = centre;
+		// The glow lies on the water of that cell: a lake's level, or else the sea's level
+		if (const auto lake = lakes != nullptr ? lakes->LakeOfCorner(low->x, low->y) : std::nullopt)
+		{
+			hands.waterGlowLevel = lakes->GetLakes()[*lake].level;
+		}
 	}
 }
 
@@ -2502,7 +2519,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			const auto view = std::exchange(submitDesc.viewId, RenderPass::UnderSea);
 			submitDesc.objectLook =
 			    L3DMeshSubmitDesc::ObjectLook {.colour = ecs::swimmer_rules::k_UnderSeaColour, .alpha = 1.0f};
-			submitDesc.cutAbove = 0.0f;
+			submitDesc.cutAbove = pose->waterLevel;
 			drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
 			submitDesc.cutAbove.reset();
 			submitDesc.objectLook.reset();

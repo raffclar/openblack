@@ -17,6 +17,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -27,6 +28,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandBlock.h"
+#include "3D/LandHeights.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "Camera/Camera.h"
@@ -64,8 +66,8 @@ constexpr uint16_t k_MirrorMargin = 2;
 
 /// The water surface of the lakes of the land, as a mesh that gives its data again after a restore of the device, and the
 /// triangles of each level of the water in the mesh
-std::pair<std::unique_ptr<Mesh>, std::vector<lake_mirrors::Level>> MakeLakeMesh(const LandIslandInterface& island,
-                                                                                const land_lakes::LakeMap& lakes)
+std::pair<std::unique_ptr<Mesh>, std::vector<lake_mirrors::Level>>
+MakeLakeMesh(const LandIslandInterface& island, const LandHeights& heights, const land_lakes::LakeMap& lakes)
 {
 	const auto cellAt = [&island](int x, int z) -> const lnd::LNDCell* {
 		if (x < 0 || z < 0 || x >= LandIslandInterface::k_MapCellsPerSide || z >= LandIslandInterface::k_MapCellsPerSide)
@@ -76,9 +78,14 @@ std::pair<std::unique_ptr<Mesh>, std::vector<lake_mirrors::Level>> MakeLakeMesh(
 	};
 	auto surface = lake_surface::Build(
 	    lakes,
-	    [&cellAt](int x, int z) -> std::optional<float> {
-		    const auto* cell = cellAt(x, z);
-		    return cell != nullptr ? std::optional<float>(LandIslandInterface::GetDrawnAltitude(cell->altitude)) : std::nullopt;
+	    // The heights come from the frame's copy of the land, in height units, as the land is drawn
+	    [&cellAt, &heights](int x, int z) -> std::optional<float> {
+		    if (cellAt(x, z) == nullptr)
+		    {
+			    return std::nullopt;
+		    }
+		    const auto units = heights.CornerUnits({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
+		    return LandIslandInterface::GetDrawnAltitude(units);
 	    },
 	    [&cellAt](int x, int z) {
 		    const auto* cell = cellAt(x, z);
@@ -135,11 +142,15 @@ bool Renderer::PrepareLakeMesh() const
 		}
 		return false;
 	}
-	if (_lakeMeshDigest != lakes->Digest())
+	// The mesh follows the lakes and the heights of the land: a change of the land at run time (a miracle, the editor)
+	// moves the line where the water meets the land
+	const auto& heights = _drawnFrame->land.heights;
+	if (_lakeMeshDigest != lakes->Digest() || _lakeMeshHeights != heights.Copies())
 	{
 		ReleaseLakes();
-		std::tie(_lakeMesh, _lakeLevels) = MakeLakeMesh(island, *lakes);
+		std::tie(_lakeMesh, _lakeLevels) = MakeLakeMesh(island, heights, *lakes);
 		_lakeMeshDigest = lakes->Digest();
+		_lakeMeshHeights = heights.Copies();
 		_lakeQueries.assign(_lakeLevels.size(), BGFX_INVALID_HANDLE);
 		_lakeHidden.assign(_lakeLevels.size(), 0);
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Lakes: {} lakes at {} levels, {} indices of water",
@@ -153,6 +164,7 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 {
 	const auto before = std::exchange(_lakePasses, {});
 	_lakeSlotOfLevel.clear();
+	_lakeSkyCopied = false;
 	if (!drawDesc.drawWater || !drawDesc.drawIsland || _warmingUp || drawDesc.frame->sea.reflection == nullptr || !_lakesReady)
 	{
 		return;
@@ -161,6 +173,7 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 	const auto& options = Locator::config::value().lakeMirrors;
 	if (!options.mirrors)
 	{
+		CopyLakeSky(*drawDesc.frame->sea.reflection);
 		return;
 	}
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::LakeMirrorPass);
@@ -204,6 +217,13 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 		{
 			_lakeSlotOfLevel[level] = *plan.passOfLevel[level];
 		}
+	}
+	// A level in view with no mirror (more levels than slots) shows the sky with no land
+	if (std::ranges::any_of(std::views::iota(size_t {0}, _lakeLevels.size()), [&](size_t level) {
+		    return _lakeSlotOfLevel[level] == k_LakeMirrorSlots && (level >= _lakeHidden.size() || _lakeHidden[level] == 0);
+	    }))
+	{
+		CopyLakeSky(*drawDesc.frame->sea.reflection);
 	}
 
 	// The layers of the target, each the size of the sea's reflection
@@ -285,10 +305,42 @@ void Renderer::DrawLakeMirrors(const DrawSceneDesc& drawDesc) const
 	}
 }
 
+void Renderer::CopyLakeSky(const FrameBuffer& reflection) const
+{
+	glm::u16vec2 size {0};
+	reflection.GetSize(size.x, size.y);
+	if (!_lakeSky.has_value() || _lakeSkySize != size)
+	{
+		if (_lakeSky.has_value())
+		{
+			bgfx::destroy(toBgfx(*_lakeSky));
+		}
+		constexpr uint64_t k_Flags = BGFX_TEXTURE_BLIT_DST | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
+		_lakeSky = fromBgfx(bgfx::createTexture2D(size.x, size.y, false, 1, bgfx::TextureFormat::RGBA8, k_Flags));
+		bgfx::setName(toBgfx(*_lakeSky), "Lake Sky");
+		_lakeSkySize = size;
+	}
+	// The view of the reflection's land comes after the view of its sky, and the copies of a view go before its draws.
+	// Thus the copy holds the sky and no land.
+	bgfx::TextureRegion to;
+	to.init(toBgfx(*_lakeSky));
+	bgfx::TextureRegion sky;
+	sky.init(toBgfx(reflection.GetColorAttachment().GetNativeHandle()));
+	bgfx::blit(static_cast<bgfx::ViewId>(RenderPass::Reflection), to, sky);
+	_lakeSkyCopied = true;
+}
+
 void Renderer::ReleaseLakes() const
 {
+	if (_lakeSky.has_value())
+	{
+		bgfx::destroy(toBgfx(*_lakeSky));
+		_lakeSky.reset();
+	}
+	_lakeSkyCopied = false;
 	_lakeMesh.reset();
 	_lakeMeshDigest = 0;
+	_lakeMeshHeights = 0;
 	_lakeLevels.clear();
 	_lakePasses.clear();
 	_lakeSlotOfLevel.clear();
@@ -369,7 +421,8 @@ void Renderer::DrawPassLakes(const DrawSceneDesc& desc) const
 		bgfx::setState(k_LakeState);
 		lakeShader->SetTextureSampler("s_diffuse", 0, *texture);
 		// Each level shows its own mirror: the pixel of the mirror's rectangle in its layer under the water's pixel. A
-		// level with no mirror shows the sea's reflection, whose sky is the same at every height.
+		// level with no mirror shows the sky of the sea's reflection with no land, because the sky is the same at every
+		// height.
 		const uint8_t slot = level < _lakeSlotOfLevel.size() ? _lakeSlotOfLevel[level] : k_LakeMirrorSlots;
 		glm::vec4 u_lakeMirrorRect {0.0f};
 		glm::vec4 u_lakeMirrorScale {1.0f, 1.0f, size.x, size.y};
@@ -380,6 +433,10 @@ void Renderer::DrawPassLakes(const DrawSceneDesc& desc) const
 			u_lakeMirrorScale.x = static_cast<float>(pass.drawn.width) / static_cast<float>(pass.rect.width);
 			u_lakeMirrorScale.y = static_cast<float>(pass.drawn.height) / static_cast<float>(pass.rect.height);
 			lakeShader->SetTextureSampler("s_reflection", 1, _lakeLayers[pass.layer]->GetColorAttachment());
+		}
+		else if (_lakeSkyCopied && _lakeSky.has_value())
+		{
+			lakeShader->SetTextureSampler("s_reflection", 1, *_lakeSky);
 		}
 		else
 		{

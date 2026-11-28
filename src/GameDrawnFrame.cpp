@@ -27,10 +27,12 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
+#include "ECS/SwimmerRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -106,6 +108,14 @@ DrawnFrame::EntityLook LookOf(DrawnFrame& frame, const ecs::Registry& registry, 
 		if (instance >= holders.size() || holders[instance] != InstanceHolder::WithPalette)
 		{
 			villager.bones = KeepBones(frame, pose->bones);
+		}
+		// A swimmer is cut at the water that it swims in: the sea, or a lake above the sea of a generated land
+		const auto* transform = registry.TryGet<const ecs::components::Transform>(entity);
+		if (transform != nullptr && Locator::terrainSystem::has_value() &&
+		    ecs::swimmer_rules::Swims(villager.highDetail, villager.clip))
+		{
+			villager.waterLevel =
+			    Locator::terrainSystem::value().GetWaterLevelAt({transform->position.x, transform->position.z});
 		}
 		look.villager = villager;
 	}

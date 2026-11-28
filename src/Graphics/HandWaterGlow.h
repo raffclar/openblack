@@ -44,8 +44,17 @@ inline constexpr float k_MinimumStrength = 0.01f;
 /// The altitude of the land's cell at a cell's x and z, none where there is no land
 using AltitudeAt = std::function<std::optional<uint8_t>(int x, int z)>;
 
-/// Whether there is water near the hand: any cell within reach is low or not land at all. The cells start no lower
-/// than the map's first and no higher than its last, but may run past its last.
+/// The first cell near the hand where there is water: a cell within reach that is low or not land at all, along x
+/// then along z. The cells start no lower than the map's first and no higher than its last, but may run past its last.
+/// None when no cell within reach is low.
+[[nodiscard]] std::optional<glm::ivec2> FirstLowCell(glm::vec2 xz, const AltitudeAt& altitudeAt);
+
+/// Whether there is water near the hand: any cell within reach is low or not land at all
 [[nodiscard]] bool NearLowLand(glm::vec2 xz, const AltitudeAt& altitudeAt);
+
+/// The altitude that the rule for low land compares for a cell by a lake above the sea of a generated land: the height of
+/// the cell's corner over the lake's water, measured as the land over the sea is. The first whole height unit over the
+/// level counts as the first altitude over the sea level (4), as the lake's coast does.
+[[nodiscard]] uint8_t AltitudeOverLake(uint16_t cornerUnits, float levelUnits);
 
 } // namespace openblack::graphics::hand_water_glow

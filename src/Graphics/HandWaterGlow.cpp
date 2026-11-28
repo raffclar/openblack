@@ -9,6 +9,8 @@
 
 #include "HandWaterGlow.h"
 
+#include <cmath>
+
 #include <algorithm>
 
 using namespace openblack::graphics;
@@ -36,7 +38,7 @@ uint32_t hand_water_glow::Colour(uint32_t warmColour, float strength)
 	return alpha << 24 | towards(16, 255) << 16 | towards(8, 128) << 8 | towards(0, 64);
 }
 
-bool hand_water_glow::NearLowLand(glm::vec2 xz, const AltitudeAt& altitudeAt)
+std::optional<glm::ivec2> hand_water_glow::FirstLowCell(glm::vec2 xz, const AltitudeAt& altitudeAt)
 {
 	// Truncated towards zero, then divided rounding towards zero
 	const auto cellOf = [](float v) { return static_cast<int>(v) / 10; };
@@ -51,9 +53,22 @@ bool hand_water_glow::NearLowLand(glm::vec2 xz, const AltitudeAt& altitudeAt)
 			const auto altitude = altitudeAt(x, z);
 			if (!altitude.has_value() || *altitude < k_LowAltitude)
 			{
-				return true;
+				return glm::ivec2(x, z);
 			}
 		}
 	}
-	return false;
+	return std::nullopt;
+}
+
+bool hand_water_glow::NearLowLand(glm::vec2 xz, const AltitudeAt& altitudeAt)
+{
+	return FirstLowCell(xz, altitudeAt).has_value();
+}
+
+uint8_t hand_water_glow::AltitudeOverLake(uint16_t cornerUnits, float levelUnits)
+{
+	// The first altitude over the sea level
+	constexpr int k_FirstOverSea = 4;
+	const int firstOver = static_cast<int>(std::floor(levelUnits)) + 1;
+	return static_cast<uint8_t>(std::clamp(static_cast<int>(cornerUnits) - firstOver + k_FirstOverSea, 0, 255));
 }

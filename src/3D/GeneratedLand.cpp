@@ -369,7 +369,7 @@ std::optional<generated_land::StoryParts> generated_land::ReadStoryParts(filesys
 
 float generated_land::LevelOf(const landgen::lakes::Lake& lake)
 {
-	return lake.level * k_MetresPerAltitude;
+	return lake.level * landgen::k_MetresPerUnit;
 }
 
 LandData generated_land::Build(const landgen::GeneratedLand& land, const StoryParts& parts)

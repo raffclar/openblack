@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0x63DFA73F7AD182C5ull;
+constexpr uint64_t k_SmallLandHash = 0x97FB8B487399E28Aull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -1173,4 +1173,46 @@ TEST(LandgenGenerator, NoTreeOrRockStandsOnTheWetSandOfALake)
 		}
 	}
 	ASSERT_GT(beds, 0);
+}
+
+TEST(LandgenGenerator, TheLakesOfTheHighGroundHaveTheirLevelsInHeightUnits)
+{
+	// With a low knee, the lakes on the hills are above it, where one altitude is many height units
+	size_t aboveKnee = 0;
+	for (const uint64_t seed : {77u, 78u, 79u, 80u})
+	{
+		auto settings = SmallSettings(seed);
+		settings.heightKnee = 8.0f;
+		const auto land = Generate(settings);
+		const float kneeUnits = land.heightCurve.UnitsOf(land.heightCurve.knee);
+		for (const auto& lake : land.highLakes)
+		{
+			aboveKnee += lake.level > kneeUnits ? 1 : 0;
+			// The water covers the corners whose height units are under the level
+			const auto under = std::ranges::count_if(lake.corners, [&](uint32_t corner) {
+				return static_cast<float>(land.heightUnits.values[corner]) < lake.level;
+			});
+			EXPECT_GT(under, 0) << seed << " " << lake.level;
+			// A cell whose four corners are all under the level has water
+			for (const auto corner : lake.corners)
+			{
+				const int x = land.heightUnits.XOf(corner);
+				const int z = land.heightUnits.ZOf(corner);
+				if (x + 1 >= land.heightUnits.side || z + 1 >= land.heightUnits.side)
+				{
+					continue;
+				}
+				const bool allUnder = std::ranges::all_of(
+				    std::array {std::pair {x, z}, std::pair {x + 1, z}, std::pair {x, z + 1}, std::pair {x + 1, z + 1}},
+				    [&](const auto& point) {
+					    return static_cast<float>(land.heightUnits.At(point.first, point.second)) <= lake.level;
+				    });
+				if (allUnder)
+				{
+					EXPECT_EQ(land.cells.At(x, z).properties.hasWater, 1) << seed << " " << x << " " << z;
+				}
+			}
+		}
+	}
+	ASSERT_GT(aboveKnee, 0u);
 }
