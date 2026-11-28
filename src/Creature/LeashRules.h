@@ -162,6 +162,26 @@ constexpr float k_ReturnMostExtraSpeed = 0.8f;
 /// agenda has steps that it did not do. Any end of that action ends the walk back.
 [[nodiscard]] bool ReturnInForce(uint32_t walkSerial, uint32_t agendaSerial, size_t step, size_t steps);
 
+/// What an order of the leash knows about the mind of the creature after the order
+struct OrderAgenda
+{
+	/// The agenda that the order gave the mind, and the agenda of the mind now
+	uint32_t orderSerial {0};
+	uint32_t agendaSerial {0};
+	size_t step {0};
+	size_t steps {0};
+	/// No plan runs, but the mind keeps a plan with no agenda. The creature did not stop what it does after that.
+	bool planKept {false};
+	/// The leash leads the creature. A turn with no plan and each stop of what the creature does remove this mark.
+	bool ledByLeash {false};
+};
+/// The order is in force while the mind does the agenda that the order gave it. When the plan of the order has no
+/// steps, the order stays in force until the leash does not lead the creature.
+[[nodiscard]] bool OrderInForce(const OrderAgenda& agenda);
+/// The mark of the order stays while the order is in force. When the plan of the order has no steps, the mark stays
+/// until the creature stops what it does.
+[[nodiscard]] bool OrderMarked(const OrderAgenda& agenda);
+
 /// Free of its home only within 140 of it, and only if its player has a temple
 constexpr float k_HomeRange = 140.0f;
 [[nodiscard]] bool FreeOfHome(float distanceFromHome, bool playerHasTemple);
