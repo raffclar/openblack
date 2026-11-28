@@ -718,7 +718,7 @@ constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Ca
 // NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign): each field has a default value, so the copy has no garbage
 struct Command
 {
-	enum class Kind : uint8_t
+	enum class Kind : uint16_t
 	{
 		/// Going to the point, by walking or running; following the other creature; running away from the point;
 		/// turning to face the point, or the camera; stopping
