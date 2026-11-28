@@ -120,8 +120,11 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	{
 		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
 		// the frames that draw the dispenser, not in the turns.
-		dispenser.effect = Locator::effectRequestSystem::value().Start(
-		    {.type = ParticleType::SpelldispenserVortex, .position = position, .synced = false, .step = EffectStep::Frame});
+		dispenser.effect = Locator::effectRequestSystem::value().Start({.type = ParticleType::SpelldispenserVortex,
+		                                                                .position = position,
+		                                                                .synced = false,
+		                                                                .step = EffectStep::Frame,
+		                                                                .drawnBy = particles::draw::ObjectEffect(entity)});
 	}
 	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
 	// no town.
@@ -146,8 +149,11 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	{
 		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
 		// the frames that draw the dispenser, not in the turns.
-		dispenser.effect = Locator::effectRequestSystem::value().Start(
-		    {.type = ParticleType::SpelldispenserVortex, .position = position, .synced = false, .step = EffectStep::Frame});
+		dispenser.effect = Locator::effectRequestSystem::value().Start({.type = ParticleType::SpelldispenserVortex,
+		                                                                .position = position,
+		                                                                .synced = false,
+		                                                                .step = EffectStep::Frame,
+		                                                                .drawnBy = particles::draw::ObjectEffect(entity)});
 	}
 	// It starts to work at once, built or not. After the first turn, it gets its footpath from its town's storage pit.
 	if (Locator::footpathSystem::has_value())

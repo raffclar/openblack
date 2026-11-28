@@ -58,7 +58,7 @@ public:
 
 private:
 	/// A vortex's effects start where it is made
-	static void StartEffects(components::Vortex& vortex);
+	static void StartEffects(entt::entity entity, components::Vortex& vortex);
 	/// They go at once with it
 	static void DeleteEffects(const components::Vortex& vortex);
 	/// A fully open vortex that leads away takes what it reaches this turn

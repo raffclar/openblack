@@ -91,8 +91,8 @@ public:
 	/// The artefacts put down by a site are no longer among its own; they stay where they are
 	virtual void ArtefactsLeaveSite(entt::entity /*site*/) {}
 	/// The particle effect of a site's motes of prayer power, which the site steps in its turn; 0 when it can't be
-	/// started
-	virtual uint32_t StartMotes() { return 0; }
+	/// started. The game draws the motes of the sites of each player in the order of the players.
+	virtual uint32_t StartMotes(PlayerNames /*player*/) { return 0; }
 	/// A mote flies along a path from one point to another in a colour (0xRRGGBB)
 	virtual void AddMote(uint32_t /*effect*/, glm::vec3 /*from*/, glm::vec3 /*to*/, uint32_t /*rgb*/) {}
 	/// One turn of the motes' effect: false once it has ended, and then it is gone

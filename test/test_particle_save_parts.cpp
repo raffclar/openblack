@@ -46,6 +46,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Particles/ParticleDrawer.h"
 #include "Particles/ParticleTypes.h"
 #include "Resources/Resources.h"
 
@@ -64,6 +65,24 @@ const entt::meta_ctx& Context()
 		return made;
 	}();
 	return *k_Context;
+}
+
+/// The bytes of a part in a form from before each effect kept the thing that draws it. The effects of these tests have
+/// no drawer, so the bytes of the default drawer come out of each effect.
+std::vector<uint8_t> WithoutDrawers(std::vector<uint8_t> bytes)
+{
+	reflection::BinaryWriter writer(Context());
+	const particles::draw::DrawnBy none {};
+	reflection::Save(writer, none.drawer);
+	reflection::Save(writer, none.slot);
+	reflection::Save(writer, none.object);
+	reflection::Save(writer, none.after);
+	const auto& drawer = writer.Bytes();
+	for (auto found = std::ranges::search(bytes, drawer); !found.empty(); found = std::ranges::search(bytes, drawer))
+	{
+		bytes.erase(found.begin(), found.end());
+	}
+	return bytes;
 }
 
 /// The files of the effects, in memory
@@ -380,7 +399,7 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	// The synced part starts with its form, the next synced number and the values of the rules. The tables, the effects
 	// and the world follow, as in the one part of an old save.
 	reflection::BinaryWriter head(Context());
-	reflection::Save(head, uint32_t {4});
+	reflection::Save(head, uint32_t {5});
 	reflection::Save(head, ParticleRuleSystemInterface::EffectId {synced + 1});
 	reflection::Save(head, false);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
@@ -404,7 +423,9 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	reflection::Save(old, false);
 	reflection::Save(old, water_rings::Pace {});
 	std::vector<uint8_t> oldBytes = old.Bytes();
-	oldBytes.insert(oldBytes.end(), parts.synced.begin() + static_cast<std::ptrdiff_t>(headBytes.size()), parts.synced.end());
+	const auto body =
+	    WithoutDrawers({parts.synced.begin() + static_cast<std::ptrdiff_t>(headBytes.size()), parts.synced.end()});
+	oldBytes.insert(oldBytes.end(), body.begin(), body.end());
 
 	ParticleRuleSystem loaded;
 	ASSERT_TRUE(Read(*loaded.OldSaveState(), oldBytes));
@@ -521,8 +542,8 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheTrailsKeptWhereTheyAreHeardL
 
 	// With no gesture trail, the older form has the same bytes after its form
 	constexpr uint32_t k_Older = 3;
-	auto synced = parts.synced;
-	auto local = parts.local;
+	auto synced = WithoutDrawers(parts.synced);
+	auto local = WithoutDrawers(parts.local);
 	std::memcpy(synced.data(), &k_Older, sizeof(k_Older));
 	std::memcpy(local.data(), &k_Older, sizeof(k_Older));
 
@@ -549,7 +570,7 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 	// - the part of this computer has no effect of the gesture trails
 	// - the part of this computer has no list of waits. With no sound, that list is one of the counts of 0 at its end.
 	reflection::BinaryWriter now(Context());
-	reflection::Save(now, uint32_t {4});
+	reflection::Save(now, uint32_t {5});
 	reflection::BinaryWriter before(Context());
 	reflection::Save(before, uint32_t {1});
 	const auto& nowBytes = now.Bytes();
@@ -560,14 +581,14 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 		std::copy(beforeBytes.begin(), beforeBytes.end(), bytes.begin());
 		return bytes;
 	};
-	auto synced = older(parts.synced);
+	auto synced = older(WithoutDrawers(parts.synced));
 	const auto afterForm = static_cast<std::ptrdiff_t>(nowBytes.size());
 	synced.erase(synced.begin() + afterForm, synced.begin() + afterForm + static_cast<std::ptrdiff_t>(sizeof(uint32_t)));
 	// The pause, the two effects and the count of the waiting storm bolts come before the effect of the gesture trails
 	constexpr std::ptrdiff_t k_TrailsAt = 1 + 4 + 4 + 4;
 	const std::array<uint8_t, sizeof(uint32_t)> noEffect {};
 	synced.insert(synced.begin() + afterForm + k_TrailsAt, noEffect.begin(), noEffect.end());
-	auto local = older(parts.local);
+	auto local = older(WithoutDrawers(parts.local));
 	local.erase(local.begin() + afterForm + static_cast<std::ptrdiff_t>(sizeof(uint32_t)),
 	            local.begin() + afterForm + static_cast<std::ptrdiff_t>(2 * sizeof(uint32_t)));
 	// The one number of all effects was after the synced effect
@@ -643,4 +664,30 @@ TEST_F(ParticleSaveParts, TheEffectInTheHandDrawsAsItsLastStepLeftIt)
 	EXPECT_TRUE(drawn.at(inHand).atLastStep);
 	EXPECT_EQ(drawn.at(inHand).path, particles::draw::DrawPath::Immediate);
 	EXPECT_FALSE(drawn.at(plain).atLastStep);
+}
+
+TEST_F(ParticleSaveParts, AnEffectKeepsTheThingThatDrawsItThroughASave)
+{
+	ParticleRuleSystem rules;
+	const auto miracle = rules.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
+	const auto cast = rules.Start("Synced", {2.0f, 0.0f, 0.0f}, 1.0f, true);
+	const auto chain = rules.Start("Local", {3.0f, 0.0f, 0.0f}, 1.0f, false);
+	const particles::draw::DrawnBy castBy {.drawer = particles::draw::Drawer::Spells, .slot = 1, .after = miracle};
+	auto chainBy = particles::draw::ObjectEffect(entt::entity {7});
+	chainBy.slot = 2;
+	rules.SetDrawnBy(miracle, {.drawer = particles::draw::Drawer::Spells});
+	rules.SetDrawnBy(cast, castBy);
+	rules.SetDrawnBy(chain, chainBy);
+	const auto parts = Save(rules);
+
+	ParticleRuleSystem loaded;
+	ASSERT_TRUE(Read(loaded, parts.synced));
+	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), parts.local));
+	std::map<ParticleRuleSystemInterface::EffectId, particles::draw::DrawnBy> drawers;
+	loaded.ForEachDrawn(
+	    [&drawers](const ParticleRuleSystemInterface::DrawnEffect& effect) { drawers.emplace(effect.id, effect.drawnBy); });
+	ASSERT_EQ(drawers.size(), 3u);
+	EXPECT_EQ(drawers.at(miracle), (particles::draw::DrawnBy {.drawer = particles::draw::Drawer::Spells}));
+	EXPECT_EQ(drawers.at(cast), castBy);
+	EXPECT_EQ(drawers.at(chain), chainBy);
 }

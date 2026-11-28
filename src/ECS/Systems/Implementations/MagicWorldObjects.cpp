@@ -151,6 +151,8 @@ void MagicSystem::StartCastEffect(Spell& spell, ParticleType type, bool synced)
 	    .player = static_cast<int>(spell.caster.player),
 	    .direction = spell.direction,
 	    .processInfo = spell.processInfo,
+	    // The miracle draws it just after its own effect
+	    .drawnBy = {.drawer = particles::draw::Drawer::Spells, .slot = 1, .after = spell.effect},
 	});
 }
 

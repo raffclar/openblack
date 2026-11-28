@@ -114,7 +114,7 @@ public:
 	{
 		return onScreen;
 	}
-	uint32_t StartEffect(ParticleType type, glm::vec3 at) override
+	uint32_t StartEffect(ParticleType type, glm::vec3 at, entt::entity /*highlight*/, uint32_t /*slot*/) override
 	{
 		started.emplace_back(type, at);
 		return nextEffect++;

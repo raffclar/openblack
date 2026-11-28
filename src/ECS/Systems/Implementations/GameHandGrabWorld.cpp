@@ -1435,7 +1435,11 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 		const auto particles = facts->resource == ResourceType::Wood ? k_PourWood
 		                       : facts->poisoned                     ? k_PourPoisonedFood
 		                                                             : k_PourFood;
-		pour = Locator::effectRequestSystem::value().StartHere({.type = particles, .position = hand, .synced = false});
+		pour = Locator::effectRequestSystem::value().StartHere(
+		    {.type = particles,
+		     .position = hand,
+		     .synced = false,
+		     .drawnBy = particles::draw::HandEffect(particles::draw::HandSlot::Pour)});
 	}
 	// The handful is gone from the hand first, so that it can't take back what it pours. What it held goes to the stores
 	// and piles of it about the point, or makes a pile there; in the water it is lost.
@@ -1616,7 +1620,11 @@ std::optional<uint32_t> GameHandGrabWorld::StartScoopStream(ResourceType resourc
 	}
 	// Poisoned food streams as its own
 	const auto stream = resource == ResourceType::Wood ? k_ScoopWood : poisoned ? k_ScoopPoisonedFood : k_ScoopFood;
-	return Locator::effectRequestSystem::value().Start({.type = stream, .position = source, .synced = false});
+	return Locator::effectRequestSystem::value().Start(
+	    {.type = stream,
+	     .position = source,
+	     .synced = false,
+	     .drawnBy = particles::draw::HandEffect(particles::draw::HandSlot::Scoop)});
 }
 
 std::optional<uint32_t> GameHandGrabWorld::StartFishScoopStream(glm::vec3 source)
@@ -1626,7 +1634,10 @@ std::optional<uint32_t> GameHandGrabWorld::StartFishScoopStream(glm::vec3 source
 		return std::nullopt;
 	}
 	return Locator::effectRequestSystem::value().Start(
-	    {.type = ParticleType::FoodPickupFish, .position = source, .synced = false});
+	    {.type = ParticleType::FoodPickupFish,
+	     .position = source,
+	     .synced = false,
+	     .drawnBy = particles::draw::HandEffect(particles::draw::HandSlot::Scoop)});
 }
 
 void GameHandGrabWorld::StopScoopStream(uint32_t stream)

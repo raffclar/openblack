@@ -231,6 +231,7 @@ void MagicShieldSystem::MakeDome(entt::entity object, const Spell& miracle, cons
 		    .synced = false,
 		    .player = static_cast<int>(miracle.caster.player),
 		    .restored = file != nullptr ? file->effect : nullptr,
+		    .drawnBy = {.drawer = particles::draw::Drawer::Shields},
 		});
 		// A state of the file that does not agree with the particle file starts the trail from its start
 		if (file != nullptr && file->effect != nullptr && !effects.IsRunning(dome.effect))
@@ -243,6 +244,7 @@ void MagicShieldSystem::MakeDome(entt::entity object, const Spell& miracle, cons
 			    .magnitude = miracle.magnitude,
 			    .synced = false,
 			    .player = static_cast<int>(miracle.caster.player),
+			    .drawnBy = {.drawer = particles::draw::Drawer::Shields},
 			});
 		}
 		effects.AddTarget(dome.effect, object);

@@ -165,7 +165,7 @@ public:
 		_registry.Assign<WorshipSiteFlag>(flag, WorshipSiteFlag {.site = site, .need = need});
 		return flag;
 	}
-	uint32_t StartMotes() override { return ++motesStarted; }
+	uint32_t StartMotes(PlayerNames /*player*/) override { return ++motesStarted; }
 	void AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb) override
 	{
 		motes.push_back({.effect = effect, .from = from, .to = to, .rgb = rgb});

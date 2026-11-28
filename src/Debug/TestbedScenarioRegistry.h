@@ -37,6 +37,7 @@
 #include "ECS/StatisticsRules.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
+#include "Particles/ParticleDrawer.h"
 #include "Simulation/CommandLog.h"
 #include "TestbedCrowd.h"
 #include "TestbedScenarioChecks.h"
@@ -487,6 +488,8 @@ struct ParticleSetup
 	int player {0};
 	/// Seconds after which it closes down and starts again, for effects that end; none to run until the scenario stops
 	float restartSeconds {0.0f};
+	/// The thing in the game's frame that draws it, which gives its turn among the effects at an equal distance
+	particles::draw::Drawer drawer {particles::draw::Drawer::Others};
 };
 
 /// A learning mark made as a creature makes one when it learns, with no creature. A mark goes after six seconds, and

@@ -18,7 +18,9 @@
 #include <limits>
 #include <numbers>
 #include <optional>
+#include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -954,10 +956,87 @@ void draw::SetStage(Frame& frame, size_t firstGroup, DrawStage stage)
 	}
 }
 
-void draw::MoveGroupsToFront(Frame& frame, size_t firstGroup)
+uint32_t draw::PlaceOf(const DrawnBy& by, uint32_t index, std::optional<uint32_t> afterIndex)
 {
-	const auto first = frame.groups.begin() + static_cast<std::ptrdiff_t>(std::min(firstGroup, frame.groups.size()));
-	std::rotate(frame.groups.begin(), first, frame.groups.end());
+	switch (by.drawer)
+	{
+	case Drawer::Hand:
+		return by.slot;
+	case Drawer::ListedObject:
+		return std::min(by.slot, (1u << k_SlotBits) - 1);
+	case Drawer::WorshipSites:
+	{
+		// The game draws the sites of each player in the order of the players, the neutral player last
+		constexpr uint32_t k_IndexBits = 24;
+		constexpr uint32_t k_IndexMask = (1u << k_IndexBits) - 1;
+		return (std::min(by.slot, 0xFFu) << k_IndexBits) | std::min(index, k_IndexMask);
+	}
+	case Drawer::Spells:
+	{
+		// Each miracle draws its effects together, the newest miracle first. The place of a miracle is the place of its own
+		// effect in the list of the running effects.
+		constexpr uint32_t k_SlotMask = (1u << k_SlotBits) - 1;
+		const auto spell = std::min(afterIndex.value_or(index), std::numeric_limits<uint32_t>::max() >> k_SlotBits);
+		return (spell << k_SlotBits) | std::min(by.slot, k_SlotMask);
+	}
+	default:
+		return index;
+	}
+}
+
+void draw::SetDrawer(Frame& frame, size_t firstGroup, const DrawnBy& by, uint32_t place)
+{
+	for (auto& group : std::span(frame.groups).subspan(std::min(firstGroup, frame.groups.size())))
+	{
+		group.drawer = by.drawer;
+		group.place = place;
+		group.object = by.object;
+		if (by.drawer == Drawer::ListedObject)
+		{
+			group.stage = DrawStage::ListedObjects;
+		}
+	}
+}
+
+void draw::PlaceListedObjects(Frame& frame, std::span<const entt::entity> list)
+{
+	// The groups of the listed objects by their objects, then one walk of the list. Each group keeps its place in its
+	// object under the place of the object.
+	constexpr uint32_t k_SlotMask = (1u << k_SlotBits) - 1;
+	std::vector<std::pair<entt::entity, uint32_t>> drawn;
+	for (uint32_t i = 0; i < frame.groups.size(); ++i)
+	{
+		auto& group = frame.groups[i];
+		if (group.drawer == Drawer::ListedObject)
+		{
+			group.place = (k_NotListed << k_SlotBits) | (group.place & k_SlotMask);
+			if (group.object != entt::null)
+			{
+				drawn.emplace_back(group.object, i);
+			}
+		}
+	}
+	if (drawn.empty())
+	{
+		return;
+	}
+	std::ranges::sort(drawn);
+	for (uint32_t place = 0; place < std::min<size_t>(list.size(), k_NotListed); ++place)
+	{
+		auto [first, last] = std::ranges::equal_range(drawn, list[place], {}, &std::pair<entt::entity, uint32_t>::first);
+		for (; first != last; ++first)
+		{
+			auto& group = frame.groups[first->second];
+			group.place = std::min(group.place, (place << k_SlotBits) | (group.place & k_SlotMask));
+		}
+	}
+}
+
+void draw::OrderByDrawer(Frame& frame)
+{
+	std::ranges::stable_sort(frame.groups, [](const Group& a, const Group& b) {
+		return std::tie(a.stage, a.drawer, a.place) < std::tie(b.stage, b.drawer, b.place);
+	});
 }
 
 void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3> hand, std::vector<Command>& commands,

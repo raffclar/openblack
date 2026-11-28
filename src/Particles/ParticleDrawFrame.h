@@ -29,6 +29,7 @@
 
 #include "LightSheet.h"
 #include "ParticleDrawPath.h"
+#include "ParticleDrawer.h"
 #include "ParticleEffect.h"
 #include "ParticleSprites.h"
 #include "Visual/RenderModes.h"
@@ -234,6 +235,12 @@ struct Group
 	uint32_t firstItem;
 	uint32_t itemCount;
 	DrawStage stage {DrawStage::AfterHand};
+	/// The thing that draws the effect in the game's frame
+	Drawer drawer {Drawer::Others};
+	/// The place of the effect among the effects of its drawer, the first place first
+	uint32_t place {0};
+	/// The object of the land's draw list that draws the effect
+	entt::entity object {entt::null};
 };
 
 struct Frame
@@ -449,9 +456,17 @@ void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3>
            std::vector<uint32_t>& spriteOrder, OrderLists& lists, DrawStage stage = DrawStage::AfterHand);
 /// Gives each group from the first group to the last group of the frame this step
 void SetStage(Frame& frame, size_t firstGroup, DrawStage stage);
-/// Moves the groups from the first group to the end of the frame before the groups that come before them, each in its
-/// order. The items stay where they are.
-void MoveGroupsToFront(Frame& frame, size_t firstGroup);
+/// Gives each group from the first group to the last group of the frame the thing that draws it. Each group also gets
+/// its place among the effects of that thing. The effects of the objects of the land's draw list go to the step of the
+/// listed objects.
+void SetDrawer(Frame& frame, size_t firstGroup, const DrawnBy& by, uint32_t place);
+/// Gives each group that an object of the land's draw list draws the place of the object in the list. An object that the
+/// list does not hold comes after the listed objects.
+void PlaceListedObjects(Frame& frame, std::span<const entt::entity> list);
+/// Puts the groups in the order that the game draws them in each step of its frame. The drawers come in the order of the
+/// frame, and the groups of one drawer come in the order of their places. Groups of an equal drawer and an equal place
+/// keep their order. The items stay where they are.
+void OrderByDrawer(Frame& frame);
 /// The lowest and the highest corners of a box that holds each corner of each sprite that the frame draws, as the
 /// sprite shader puts the corners. It is none when the frame draws nothing or more than sprites.
 [[nodiscard]] std::optional<std::pair<glm::vec3, glm::vec3>> SpriteBox(const Frame& frame);
