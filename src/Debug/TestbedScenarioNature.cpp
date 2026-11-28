@@ -390,4 +390,25 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	                .eye = {k_NorthForest.x, 150.0f, k_NorthForest.y - 350.0f},
 	                .look = {k_NorthForest.x, 10.0f, k_NorthForest.y}},
 	});
+
+	all.push_back({
+	    .id = "nature.young_trees_keep_their_footprints",
+	    .name = "Young trees that grow keep the footprints of the size that they had",
+	    .facet = Facet::Nature,
+	    .description = "Three young oaks of one forest stand close by, at a fifth of their full size. A full grown oak "
+	                   "stands beside them. The game runs at eight times its speed. After 30 seconds the full grown oak "
+	                   "goes from the world.",
+	    .expected = "The young oaks grow, but the land under them keeps their small footprints. The full grown oak "
+	                "comes out of the cells of the land, and the game paints again the blocks under it. Then the land "
+	                "shows the footprints of the young oaks in these blocks at their new size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 12.0f}, .look = {k_Tree.x, 0.0f, k_Tree.y}},
+	    .objects =
+	        {{.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(-5.0f, 0.0f), .scale = 0.2f, .forest = 1, .fullSize = 1.0f},
+	         {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(0.0f, 4.0f), .scale = 0.2f, .forest = 1, .fullSize = 1.0f},
+	         {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(5.0f, 0.0f), .scale = 0.2f, .forest = 1, .fullSize = 1.0f},
+	         {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(0.0f, 14.0f)}},
+	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 0.5f, .amount = 8.0f},
+	                 {.kind = Kind::RemoveObject, .delaySeconds = 30.0f, .object = 3}},
+	});
 }

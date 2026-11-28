@@ -59,7 +59,9 @@ namespace openblack::graphics
 /// footprint_paint and ecs::land_footprints). The game paints a block's footprints again each time a thing with a
 /// footprint over it comes onto the map, goes from it or is built, and each time the land under the block changes
 /// height. This paints a block again when a thing with a footprint over it goes into the map's cells or comes out of
-/// them, moves or turns, when a print of a thing changes, and when the land paints the block again.
+/// them, moves or turns, when a print of a thing changes, and when the land paints the block again. A thing that only
+/// changes its size in its cells, as a tree that grows, does not paint a block again. A block that is painted again for
+/// another cause then shows the new size.
 class LandFootprints
 {
 public:
@@ -107,6 +109,8 @@ private:
 		/// The count of the map's cells it is filed in, and the first of them
 		uint32_t cellCount {0};
 		uint32_t firstCell {0};
+		/// How many times it went into the map's cells
+		uint32_t filings {0};
 		ecs::components::Transform transform {};
 	};
 	/// A print that no thing in the map's cells gives: the print of a thing that shows only as a print, or a stretch of
@@ -176,9 +180,17 @@ private:
 	void Forget(entt::entity entity);
 	/// The compared part of a known thing, none for a thing that is not known
 	[[nodiscard]] const KnownLook* LookOf(entt::entity entity) const;
-	/// Whether a known thing has the same model, cells and transform as when it was seen last. It changes nothing.
-	[[nodiscard]] bool SameLook(const KnownLook& look, entt::id_type mesh, const std::vector<uint32_t>& cells,
+	/// Whether a known thing has the same model and cells as when it was seen last, and did not go into the cells again.
+	/// It changes nothing.
+	[[nodiscard]] bool SameFiling(const KnownLook& look, entt::id_type mesh,
+	                              const ecs::components::MapCellResident& resident) const;
+	/// Whether a known thing has the same filing and transform as when it was seen last. It changes nothing.
+	[[nodiscard]] bool SameLook(const KnownLook& look, entt::id_type mesh, const ecs::components::MapCellResident& resident,
 	                            const ecs::components::Transform& transform) const;
+	/// Keeps the new size of a known thing that changed only its size. Its blocks keep their texels, but the next paint of
+	/// each of them paints all of it.
+	void Resize(const ThingStores& stores, KnownLook& look, const L3DMesh::Footprint& footprint,
+	            const ecs::components::Transform& transform);
 	/// The things and loose prints that paint a block. It changes nothing.
 	[[nodiscard]] BlockPaint FindBlockPaint(size_t block, const ThingStores& stores) const;
 	/// Paints the block's own texture with its footprints into texels. It changes only the block's own texture that is
@@ -223,6 +235,9 @@ private:
 	std::map<std::pair<int, int>, size_t> _blockAt;
 	/// Whether each block holds footprints now
 	std::vector<bool> _painted;
+	/// Whether each block holds the footprint of a thing at a size that it does not have now. Such a block is painted in
+	/// full the next time.
+	std::vector<bool> _oldSizes;
 	std::set<size_t> _dirty;
 	/// The blocks of _dirty that must be painted again in full
 	std::set<size_t> _wholeDirty;
