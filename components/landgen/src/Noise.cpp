@@ -75,7 +75,7 @@ float noise::Fractal(uint64_t seed, float x, float z, int octaves)
 	float frequency = 1.0f;
 	for (int octave = 0; octave < octaves; ++octave)
 	{
-		sum += Gradient(StageSeed(seed, static_cast<uint64_t>(octave)), x * frequency, z * frequency) * amplitude;
+		sum += Gradient(PartSeed(seed, static_cast<uint64_t>(octave)), x * frequency, z * frequency) * amplitude;
 		total += amplitude;
 		amplitude *= 0.5f;
 		frequency *= 2.0f;
@@ -92,7 +92,7 @@ float noise::Ridged(uint64_t seed, float x, float z, int octaves)
 	float weight = 1.0f;
 	for (int octave = 0; octave < octaves; ++octave)
 	{
-		float crest = 1.0f - std::fabs(Gradient(StageSeed(seed, static_cast<uint64_t>(octave)), x * frequency, z * frequency));
+		float crest = 1.0f - std::fabs(Gradient(PartSeed(seed, static_cast<uint64_t>(octave)), x * frequency, z * frequency));
 		crest = crest * crest * weight;
 		weight = crest < 1.0f ? crest : 1.0f;
 		sum += crest * amplitude;

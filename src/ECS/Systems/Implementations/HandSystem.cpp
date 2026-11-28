@@ -81,6 +81,16 @@ ReportedHand& ReportedOf(ecs::Registry& registry, entt::entity hand)
 	return registry.Assign<ReportedHand>(hand);
 }
 
+/// The hand goes where a report of its player puts it
+void ApplyReport(ecs::Registry& registry, entt::entity hand, const player_commands::HandReport& report)
+{
+	auto& reported = ReportedOf(registry, hand);
+	reported.collidePoint = report.collidePoint;
+	reported.handPoint = report.handPoint;
+	reported.camera = report.camera;
+	reported.focus = report.focus;
+}
+
 using Hands = std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>;
 
 /// The hands that the entity of a player links to. None when no entity of the player has a link.
@@ -634,11 +644,31 @@ void HandSystem::Report(PlayerNames player, const player_commands::HandReport& r
 		const auto from = stillness != nullptr ? stillness->last : (before != nullptr ? before->handPoint : glm::vec3(0.0f));
 		hand_grab::other_held::Reported(*track, from);
 	}
-	auto& reported = ReportedOf(registry, hand);
-	reported.collidePoint = report.collidePoint;
-	reported.handPoint = report.handPoint;
-	reported.camera = report.camera;
-	reported.focus = report.focus;
+	ApplyReport(registry, hand, report);
+}
+
+void HandSystem::ReportMind(PlayerNames player, const player_commands::HandReport& report, std::optional<glm::vec3> stepStart)
+{
+	// The report moves the left hand of the god. A god with no hands yet has no report.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hands = GetHandsOf(player);
+	const auto hand = hands.has_value() ? (*hands)[static_cast<size_t>(Side::Left)] : entt::null;
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	// The report after a step starts a movement of what the hand holds, in every game. The movement starts at the place
+	// of the hand before the step and lasts as long as the frames between the last two reports after a step.
+	if (stepStart.has_value())
+	{
+		auto* track = registry.TryGet<HeldDrawTrack>(hand);
+		if (track == nullptr)
+		{
+			track = &registry.Assign<HeldDrawTrack>(hand);
+		}
+		hand_grab::other_held::Reported(*track, *stepStart);
+	}
+	ApplyReport(registry, hand, report);
 }
 
 void HandSystem::ReportPick(PlayerNames player, entt::entity object)

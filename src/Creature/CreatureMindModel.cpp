@@ -440,13 +440,16 @@ void creature_mind_model::SetSavedBy(creaturemind::MindFileData& file, std::opti
 {
 	// Both names end with a zero; the profile is in 16-bit characters, low byte first
 	const auto savedAs = ownerFile.value_or(k_NoPlayerFile);
-	file.savedAs.assign(savedAs.begin(), savedAs.end());
-	file.savedAs.push_back(0);
-	file.profile.clear();
+	std::vector<uint8_t> savedAsBytes(savedAs.begin(), savedAs.end());
+	savedAsBytes.push_back(0);
+	std::vector<uint8_t> profileBytes;
 	for (const auto c : profile)
 	{
-		file.profile.push_back(static_cast<uint8_t>(c & 0xff));
-		file.profile.push_back(static_cast<uint8_t>(c >> 8));
+		profileBytes.push_back(static_cast<uint8_t>(c & 0xff));
+		profileBytes.push_back(static_cast<uint8_t>(c >> 8));
 	}
-	file.profile.insert(file.profile.end(), {0, 0});
+	profileBytes.insert(profileBytes.end(), {0, 0});
+	// Each name has a count of one byte in the file, so this cuts a name that is too long for its count
+	file.savedAs = creaturemind::FitSavedAs(savedAsBytes);
+	file.profile = creaturemind::FitProfile(profileBytes);
 }

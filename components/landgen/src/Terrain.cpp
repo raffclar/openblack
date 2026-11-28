@@ -22,6 +22,7 @@
 #include "landgen/Climate.h"
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 
@@ -195,7 +196,7 @@ IslandPoint OnIsland(const terrain::Outline* island, size_t index, float u, floa
 
 Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& settings)
 {
-	Random random(StageSeed(seed, 1));
+	Random random(StageSeed(seed, Stage::BaseShape));
 	std::vector<Range> ranges;
 	ranges.reserve(settings.ranges);
 	for (int i = 0; i < settings.ranges; ++i)
@@ -209,9 +210,11 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 		    .height = random.NextRange(0.75f, 1.0f),
 		});
 	}
-	const OutlineSeeds seeds {.warpU = StageSeed(seed, 2), .warpV = StageSeed(seed, 3), .outline = StageSeed(seed, 4)};
-	const auto hills = StageSeed(seed, 5);
-	const auto crests = StageSeed(seed, 6);
+	const OutlineSeeds seeds {.warpU = StageSeed(seed, Stage::OutlineWarpU),
+	                          .warpV = StageSeed(seed, Stage::OutlineWarpV),
+	                          .outline = StageSeed(seed, Stage::Outline)};
+	const auto hills = StageSeed(seed, Stage::Hills);
+	const auto crests = StageSeed(seed, Stage::Crests);
 
 	Grid<float> heights(side, 0.0f);
 	const auto last = static_cast<float>(side - 1);
@@ -322,7 +325,7 @@ void terrain::ErodeHydraulic(Grid<float>& heights, uint64_t seed, const Hydrauli
 	const auto brush = MakeBrush(settings.radius);
 	const auto limit = static_cast<float>(heights.side - 1);
 
-	Random random(StageSeed(seed, 10));
+	Random random(StageSeed(seed, Stage::HydraulicErosion));
 	for (int drop = 0; drop < settings.drops; ++drop)
 	{
 		float x = random.NextUnit() * limit;
@@ -450,7 +453,7 @@ void terrain::ErodeThermal(Grid<float>& heights, const ThermalSettings& settings
 
 std::vector<float> terrain::TerraceLevels(uint64_t seed, const TerraceSettings& settings)
 {
-	Random random(StageSeed(seed, 11));
+	Random random(StageSeed(seed, Stage::TerraceLevels));
 	std::vector<float> levels;
 	float level = random.NextRange(settings.firstLevelLow, settings.firstLevelHigh);
 	while (level <= settings.highestLevel)
@@ -466,10 +469,10 @@ Grid<uint8_t> terrain::TerraceSteps(const Grid<float>& heights, std::span<const 
 {
 	const int side = heights.side;
 	const float last = static_cast<float>(std::max(side - 1, 1));
-	const auto edgeSeed = StageSeed(seed, 12);
-	const auto warpSeed = StageSeed(seed, 16);
-	const auto ridgeSeed = StageSeed(seed, 17);
-	const auto roughSeed = StageSeed(seed, 18);
+	const auto edgeSeed = StageSeed(seed, Stage::TerraceEdge);
+	const auto warpSeed = StageSeed(seed, Stage::TerraceWarp);
+	const auto ridgeSeed = StageSeed(seed, Stage::TerraceRidge);
+	const auto roughSeed = StageSeed(seed, Stage::TerraceRough);
 	Grid<uint8_t> steps(side, 0);
 	for (int x = 0; x < side; ++x)
 	{
@@ -632,7 +635,7 @@ Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const Terrac
 	}
 	const auto steps = TerraceSteps(heights, levels, seed, settings, highestEdge);
 	const float last = static_cast<float>(std::max(side - 1, 1));
-	const auto widthSeed = StageSeed(seed, 13);
+	const auto widthSeed = StageSeed(seed, Stage::TerraceWidth);
 
 	// The flat terraces: each corner goes down towards the edge of its terrace
 	Grid<float> terraced = heights;
@@ -770,7 +773,7 @@ std::vector<terrain::Peak> terrain::PlaceMassifs(const Grid<float>& heights, uin
 	}
 	const auto seaDistance = climate::DistanceToWater(sea);
 
-	Random random(StageSeed(seed, 19));
+	Random random(StageSeed(seed, Stage::MassifPlaces));
 	const int lowest = std::max(settings.countLow, 0);
 	const int count =
 	    lowest + static_cast<int>(random.NextBelow(static_cast<uint32_t>(std::max(settings.countHigh - lowest, 0) + 1)));
@@ -839,12 +842,12 @@ Grid<float> terrain::MassifHeights(int side, std::span<const Peak> peaks, uint64
 {
 	Grid<float> massifs(side, 0.0f);
 	const float last = static_cast<float>(std::max(side - 1, 1));
-	const auto outlineSeed = StageSeed(seed, 20);
-	const auto spurSeeds = StageSeed(seed, 21);
+	const auto outlineSeed = StageSeed(seed, Stage::MassifOutline);
+	const auto spurSeeds = StageSeed(seed, Stage::MassifSpurs);
 	for (size_t p = 0; p < peaks.size(); ++p)
 	{
 		const auto& peak = peaks[p];
-		const auto spurSeed = StageSeed(spurSeeds, p);
+		const auto spurSeed = PartSeed(spurSeeds, p);
 		const auto reach = static_cast<int>(peak.radius * (1.0f + settings.outline)) + 1;
 		const auto cx = static_cast<int>(peak.x);
 		const auto cz = static_cast<int>(peak.z);
@@ -881,9 +884,9 @@ Grid<float> terrain::MassifHeights(int side, std::span<const Peak> peaks, uint64
 	// The cliff bands: in each band the height rises gently over most of the width, then steeply
 	if (settings.bandHigh > 0.0f && settings.faceWidth > 0.0f && settings.faceWidth < 1.0f)
 	{
-		Random random(StageSeed(seed, 22));
+		Random random(StageSeed(seed, Stage::MassifBands));
 		const float band = random.NextRange(settings.bandLow, settings.bandHigh);
-		const auto bandSeed = StageSeed(seed, 23);
+		const auto bandSeed = StageSeed(seed, Stage::MassifBandNoise);
 		const float faceSlope = settings.faceRise / settings.faceWidth;
 		const float slope = (1.0f - settings.faceRise) / (1.0f - settings.faceWidth);
 		for (int x = 0; x < side; ++x)
@@ -1065,9 +1068,9 @@ void terrain::RollGround(Grid<float>& heights, uint64_t seed, const RollSettings
 		sea.values[i] = heights.values[i] <= k_SeaLevel ? 1 : 0;
 	}
 	const auto distance = climate::DistanceToWater(sea);
-	const auto rollSeed = StageSeed(seed, 24);
-	const auto ridgeSeed = StageSeed(seed, 25);
-	const auto partSeed = StageSeed(seed, 26);
+	const auto rollSeed = StageSeed(seed, Stage::RollShape);
+	const auto ridgeSeed = StageSeed(seed, Stage::RollRidge);
+	const auto partSeed = StageSeed(seed, Stage::RollPart);
 	std::vector<uint8_t> moved(heights.values.size(), 0);
 	for (int x = 0; x < side; ++x)
 	{
@@ -1152,10 +1155,10 @@ Grid<float> terrain::ShoreShelf(Grid<float>& heights, const Grid<float>* riverDi
 	}
 	const auto distance = climate::DistanceToWater(sea);
 	Grid<float> widths(side, stepCount);
-	const auto bankSeed = StageSeed(seed, 15);
-	const auto sectorSeed = StageSeed(seed, 60);
-	const auto beachSeed = StageSeed(seed, 61);
-	const auto topSeed = StageSeed(seed, 62);
+	const auto bankSeed = StageSeed(seed, Stage::ShoreBanks);
+	const auto sectorSeed = StageSeed(seed, Stage::ShoreSectors);
+	const auto beachSeed = StageSeed(seed, Stage::ShoreBeaches);
+	const auto topSeed = StageSeed(seed, Stage::ShoreTops);
 	for (int x = 0; x < side; ++x)
 	{
 		for (int z = 0; z < side; ++z)

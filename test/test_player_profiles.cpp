@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/PlayerProfiles.h"
+#include "Gui/TextDatabase.h"
 
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS 1
@@ -115,6 +116,44 @@ TEST(PlayerProfiles, AProfileMadeWithoutANameTakesTheAccountsName)
 	Profiles profiles;
 	EXPECT_EQ(Add(profiles, u"", u"Matt", "C1.erc", 0).name, "Matt");
 	EXPECT_EQ(Add(profiles, u"", u"", "C2.erc", 0).name, k_UnnamedPlayer);
+}
+
+TEST(PlayerProfiles, ANameLongerThanTheLongestANewProfileMayTakeIsCut)
+{
+	const std::u16string longest(k_LongestName, u'a');
+	EXPECT_EQ(FitName(longest), longest);
+	EXPECT_EQ(FitName(longest + u"b"), longest);
+	// The cut does not keep the first half of a character pair
+	EXPECT_EQ(FitName(std::u16string(k_LongestName - 1, u'a') + u"😀"), std::u16string(k_LongestName - 1, u'a'));
+
+	// The account's name can be longer than a typed name
+	Profiles profiles;
+	EXPECT_EQ(Add(profiles, u"", std::u16string(300, u'm'), "C1.erc", 0).name, std::string(k_LongestName, 'm'));
+	EXPECT_EQ(profiles.current, std::string(k_LongestName, 'm'));
+}
+
+TEST(PlayerProfiles, ANameTooLongInTheProfilesFileIsCutWhereverItIsUsed)
+{
+	Profiles written;
+	Add(written, u"Matt", u"", "C1.erc", 0);
+	auto text = Write(written);
+	// Someone changed the file: the name has 300 characters, in each line that uses it
+	const std::string longName(300, 'z');
+	for (size_t at = text.find("Matt"); at != std::string::npos; at = text.find("Matt", at + longName.size()))
+	{
+		text.replace(at, 4, longName);
+	}
+	const auto read = Read(text);
+	ASSERT_EQ(read.profiles.size(), 1u);
+	EXPECT_EQ(read.profiles[0].name, std::string(k_LongestName, 'z'));
+	EXPECT_EQ(read.current, read.profiles[0].name);
+	ASSERT_NE(Current(read), nullptr);
+	EXPECT_EQ(Current(read)->creatureFile, "C1.erc");
+	// A name with 64 characters of two bytes each stays as the file has it
+	Profiles wide;
+	const std::u16string accents(k_LongestName, u'é');
+	Add(wide, accents, u"", "C2.erc", 0);
+	EXPECT_EQ(Read(Write(wide)).profiles[0].name, gui::ToUtf8(accents));
 }
 
 TEST(PlayerProfiles, ProfilesAreReadBackAsWritten)

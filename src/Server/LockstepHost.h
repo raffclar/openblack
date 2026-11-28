@@ -504,6 +504,9 @@ public:
 	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
 	[[nodiscard]] std::vector<std::string> SummaryLines() const;
+	/// A line from the server for the chat of every player in the game, such as the warning before the deadline. Before
+	/// the start it does nothing, as the room has its own chat.
+	void AnnounceToPlayers(std::string_view text);
 
 private:
 	struct Peer
@@ -601,6 +604,7 @@ private:
 	[[nodiscard]] std::string PeerName(ConnectionId connection, const Peer& peer) const;
 	/// The session of an observer ended after the start: the other players see that the observer left the game
 	void ObserverLeft(std::string_view name);
+
 	/// A new observer comes into the game: it gets the lowest number that no observer has, and the next turn tells the
 	/// worlds. 0 when every number is taken.
 	[[nodiscard]] uint8_t ObserverCame(std::string_view name);

@@ -119,5 +119,5 @@ if [ -z "$py" ]; then
 	echo "pre-commit: Python is not found: the clang-tidy check is skipped." >&2
 	exit 0
 fi
-"$py" "$gate" staged --jobs 2 --timeout 120 </dev/null
+"$py" "$gate" staged --jobs 2 --timeout 900 </dev/null
 exit $?

@@ -60,6 +60,14 @@
          first reads it. With it, the page gets all the files, and the browser keeps the choice for the next visit. -->
     <label><input id="site-files-all" type="checkbox"> Download all the game files now, so that the game never waits
       for the network (about 700 MB)</label>
+    <!-- With this choice (on by default), the page gets the other game files one at a time when the land is ready and
+         nothing else downloads. It does this only when the browser keeps the storage of the site. -->
+    <label><input id="site-files-background" type="checkbox" checked> Download the other game files while you play,
+      after the land is ready, so that the music and the next lands do not wait for the network</label>
+    <p id="site-files-space" hidden></p>
+    <p id="site-files-keep" hidden>This browser does not promise to keep the game files, and it can remove them when it
+      needs space. The next visit then downloads them again. In Safari, add this page to the Dock or to the Home Screen
+      to keep them.</p>
   </section>
 
   <section id="sources" hidden>

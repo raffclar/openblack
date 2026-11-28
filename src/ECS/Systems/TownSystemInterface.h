@@ -176,6 +176,9 @@ public:
 	/// The particle effect of the symbols of belief over a village centre, none if the centre shows no symbols. The world's
 	/// particle draw does not show this effect: the renderer draws it just after the column of the centre.
 	[[nodiscard]] virtual std::optional<uint32_t> BeliefSymbolsOf(entt::entity /*centre*/) const { return std::nullopt; }
+	/// Every village centre makes its symbols of belief again at the next frame, with a symbol for each player of the game.
+	/// Use this when players join after the land made its centres, so that the centres also show the new players.
+	virtual void MakeBeliefSymbolsAgain() {}
 	/// The village centres in the order that the game draws them: the newest first. A centre that goes keeps the order of
 	/// the others. The order follows the centres at each frame.
 	[[nodiscard]] virtual std::span<const entt::entity> CentresInDrawOrder() const { return {}; }

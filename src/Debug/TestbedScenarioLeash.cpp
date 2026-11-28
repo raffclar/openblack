@@ -413,6 +413,36 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.late_temple",
+	    .name = "A temple made after the land starts hangs its leashes",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes, and no temple stands at the start. Three seconds after the "
+	                   "start, a temple comes into being in front of the camera, as a land script, the editor or an "
+	                   "undo of a removal makes it.",
+	    .expected = "No leash hangs before the temple comes. Then the new temple hangs its three leashes at once: the "
+	                "spiked blade, the twisted rope and the rainbow fur, each one tumbling in its glow of smoke.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 Leash(0, LeashType::Evil, 0.5f),
+	                 Leash(0, LeashType::Good, 0.5f),
+	                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                 {.kind = Kind::MakeTemple, .delaySeconds = 1.0f, .point = {-300.0f, 100.0f}, .amount = 36.0f}},
+	    .checks = {{.label = "no leash hangs before the temple comes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "leash posts",
+	                .afterTurns = 15,
+	                .atMost = 0.0},
+	               {.label = "the new temple hangs its three leashes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "hung leash posts",
+	                .afterTurns = 35,
+	                .byTurn = 80,
+	                .atLeast = 3.0}},
+	});
+
+	all.push_back({
 	    .id = "leash.l_key_picks_post",
 	    .name = "The leash key picks the leash at the temple",
 	    .facet = Facet::Leash,

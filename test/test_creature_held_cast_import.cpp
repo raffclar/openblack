@@ -180,6 +180,30 @@ TEST_F(CreatureHeldCastImport, TheCreatureHoldsTheSpellWithTheValuesOfTheFile)
 	EXPECT_FALSE(made.closedDown);
 }
 
+// The spell keeps the strength multiplier that a script set, the movement of its last event and the prayer power that
+// it spent since its last motes of light
+TEST_F(CreatureHeldCastImport, TheSpellKeepsItsStrengthItsMovementAndItsMotesOfTheFile)
+{
+	auto cast = Water();
+	cast.strengthMultiplier = 2.0f;
+	cast.movement = {0.0f, 0.0f, -3.0f};
+	cast.upkeepMotes = 60.0f;
+	cast.eventMotes = 15.0f;
+	const auto spell = _magic->ImportCreatureCast(_creature, cast);
+	ASSERT_TRUE(spell != entt::null);
+	const auto& made = SpellOf(spell);
+	EXPECT_EQ(made.chants.strengthMultiplier, 2.0f);
+	EXPECT_EQ(made.movement, glm::vec3(0.0f, 0.0f, -3.0f));
+	EXPECT_EQ(made.upkeepMotes, 60.0f);
+	EXPECT_EQ(made.eventMotes, 15.0f);
+
+	// A file without these values gives the values of a new spell
+	const auto plain = _magic->ImportCreatureCast(_creature, Water());
+	ASSERT_TRUE(plain != entt::null);
+	EXPECT_EQ(SpellOf(plain).chants.strengthMultiplier, 1.0f);
+	EXPECT_EQ(SpellOf(plain).movement, glm::vec3(1.0f, 0.0f, 0.0f));
+}
+
 // The import makes the forest, the shields and the teleport, and the heal and the storm. The import of the world makes
 // the things of the forest, the shields and the teleport after the spell.
 TEST_F(CreatureHeldCastImport, TheImportMakesEveryKindOfSpell)

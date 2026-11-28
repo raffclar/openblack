@@ -178,8 +178,32 @@ openblack_setup_and_add_test(test_hand_grab hand/test_hand_grab.cpp)
 openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
+openblack_setup_and_add_test(
+  test_hand_grab_system_tree hand/test_hand_grab_system_tree.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_giving hand/test_hand_grab_system_giving.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_clicks hand/test_hand_grab_system_clicks.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_pull hand/test_hand_grab_system_pull.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_scoop hand/test_hand_grab_system_scoop.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_turns hand/test_hand_grab_system_turns.cpp
+)
 if(MSVC)
   target_compile_options(test_hand_grab_system PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_tree PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_giving PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_clicks PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_pull PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_scoop PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_turns PRIVATE /bigobj)
 endif()
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
 openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
@@ -2420,6 +2444,26 @@ openblack_setup_and_add_test(
 target_link_libraries(test_script_prayer_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_audio_library_log audio/test_audio_library_log.cpp)
 target_link_libraries(test_vanilla_world_import PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_2 test_vanilla_world_import_2.cpp
+)
+target_link_libraries(test_vanilla_world_import_2 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_3 test_vanilla_world_import_3.cpp
+)
+target_link_libraries(test_vanilla_world_import_3 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_4 test_vanilla_world_import_4.cpp
+)
+target_link_libraries(test_vanilla_world_import_4 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_5 test_vanilla_world_import_5.cpp
+)
+target_link_libraries(test_vanilla_world_import_5 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_6 test_vanilla_world_import_6.cpp
+)
+target_link_libraries(test_vanilla_world_import_6 PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_vanilla_script_import test_vanilla_script_import.cpp)
 target_link_libraries(test_vanilla_script_import PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_creature_stop_plays_rest test_creature_stop_plays_rest.cpp)
@@ -2758,6 +2802,8 @@ openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
 target_link_libraries(test_landgen_shape PRIVATE landgen)
 openblack_setup_and_add_test(test_landgen_lakes landgen/test_landgen_lakes.cpp)
 target_link_libraries(test_landgen_lakes PRIVATE landgen)
+openblack_setup_and_add_test(test_landgen_stages landgen/test_landgen_stages.cpp)
+target_link_libraries(test_landgen_stages PRIVATE landgen)
 openblack_setup_and_add_test(test_landgen_lakeshore landgen/test_landgen_lakeshore.cpp)
 target_link_libraries(test_landgen_lakeshore PRIVATE landgen)
 openblack_setup_and_add_test(

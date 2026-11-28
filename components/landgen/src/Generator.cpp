@@ -20,6 +20,7 @@
 #include "landgen/LakeShore.h"
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using biomes::Biome;
@@ -360,7 +361,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	clock.Done("lakes");
 	// The rivers follow a little noise over the land, so that they bend as rivers do on gentle slopes
 	Grid<float> bent = heights;
-	const auto bendSeed = StageSeed(seed, 33);
+	const auto bendSeed = StageSeed(seed, Stage::RiverBends);
 	const float last = static_cast<float>(std::max(side - 1, 1));
 	for (int x = 0; x < side; ++x)
 	{
@@ -447,7 +448,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	{
 		keepStarts.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
 	}
-	lakes::DigHollows(heights, awayFromHollows, keepStarts, StageSeed(seed, 35), settings.hillHollows);
+	lakes::DigHollows(heights, awayFromHollows, keepStarts, StageSeed(seed, Stage::HillHollows), settings.hillHollows);
 	clock.Done("hill hollows");
 
 	// The neutral towns stand on flat ground, as the towns of the story do, so the ground of each town becomes flat
@@ -561,7 +562,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 
 	// The climate and the biomes
 	auto climateSettings = settings.climate;
-	climateSettings.wind = settings.wind.value_or(static_cast<climate::Wind>(Random(StageSeed(seed, 30)).NextBelow(8)));
+	climateSettings.wind =
+	    settings.wind.value_or(static_cast<climate::Wind>(Random(StageSeed(seed, Stage::Wind)).NextBelow(8)));
 	const auto seaNow = Mask(side, [&altitudes](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude; });
 	const auto water = Mask(side, [&](size_t i) { return seaNow.values[i] != 0 || riverCorners.values[i] != 0; });
 	const auto temperature = climate::Temperature(heights, seed, climateSettings);
@@ -575,8 +577,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	clock.Done("climate");
 
 	Grid<Biome> biomes(side, Biome::Sea);
-	const auto beachSeed = StageSeed(seed, 31);
-	const auto blightSeed = StageSeed(seed, 32);
+	const auto beachSeed = StageSeed(seed, Stage::Beaches);
+	const auto blightSeed = StageSeed(seed, Stage::Blight);
 	Grid<float> beachWidths(side, 0.0f);
 	for (int x = 0; x < side; ++x)
 	{

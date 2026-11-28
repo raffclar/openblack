@@ -46,9 +46,10 @@
 # OB_CMAKE, OB_NINJA, OB_SCCACHE, OB_COMPILE_JOBS (8), OB_LINK_JOBS (4), OB_CTEST_JOBS (8), OB_WERROR (1; 0 turns
 # warnings-as-errors off), OB_LINK_FLAGS_DEBUG (/debug /INCREMENTAL), OB_CMAKE_ARGS (extra configure arguments).
 #
-# Memory: a build runs at most CMAKE_BUILD_PARALLEL_LEVEL (default 8) jobs, and fewer when free memory is low: each job
-# gets OB_MEMORY_PER_JOB_MB (1500) of the free memory above OB_MEMORY_RESERVE_GB (8). Under the reserve, the build
-# waits up to OB_MEMORY_WAIT seconds (600) for memory, then runs one job. OB_MEMORY_JOBS=0 turns this off. Links go
+# Memory: a build runs at most CMAKE_BUILD_PARALLEL_LEVEL (default 8) jobs. Each compile starts only when the free
+# memory is more than OB_MEMORY_RESERVE_GB (8) plus OB_MEMORY_PER_JOB_MB (1500), so a build follows the load of the
+# machine while it runs (see ob-cc.c). A compile waits at most OB_MEMORY_WAIT seconds (600). OB_MEMORY_JOBS=0 turns
+# this off. Links go
 # through ob-link (see ob-link.c): all builds on the machine together run at most (memory - reserve) /
 # OB_LINK_MEMORY_MB (12000) links, and each link waits for that much free memory, at most OB_LINK_WAIT seconds (900).
 set -uo pipefail
@@ -438,32 +439,20 @@ stop_sccache() {
 	OB_SERVER_PORT=""
 }
 
-# The number of build jobs: CMAKE_BUILD_PARALLEL_LEVEL (8), fewer when free memory is low (see the top of this file)
+# The number of build jobs: CMAKE_BUILD_PARALLEL_LEVEL (8). The memory follows the load while the build runs: each compile
+# waits in ob-cc until memory is free (see ob-cc.c), so the count does not depend on the memory at the start
 # Memory that is free to use: MemAvailable, else MemFree plus Cached, else MemFree (cached memory is freed on demand)
 free_memory_mb() { awk '/^MemAvailable:/ { a = $2 } /^MemFree:/ { f = $2 } /^Cached:/ { c = $2 } END { if (a != "") print int(a / 1024); else if (f != "" && c != "") print int((f + c) / 1024); else if (f != "") print int(f / 1024) }' /proc/meminfo 2>/dev/null; }
 
 build_jobs() {
 	local wanted=${CMAKE_BUILD_PARALLEL_LEVEL:-8}
 	case "$wanted" in '' | *[!0-9]*) wanted=8 ;; esac
-	if [ "${OB_MEMORY_JOBS:-1}" = 0 ]; then
-		echo "$wanted"
-		return 0
-	fi
-	local reserve=$((${OB_MEMORY_RESERVE_GB:-8} * 1024)) per_job=${OB_MEMORY_PER_JOB_MB:-1500}
-	local limit=${OB_MEMORY_WAIT:-600} waited=0 free
-	free=$(free_memory_mb)
-	[ -n "$free" ] || { echo "$wanted"; return 0; }
-	while [ "$free" -lt $((reserve + per_job)) ] && [ $waited -lt "$limit" ]; do
-		[ $waited != 0 ] || note "only $free MiB of memory is free (reserve $reserve MiB): waiting up to ${limit}s"
-		sleep 10
-		waited=$((waited + 10))
+	if [ "${OB_MEMORY_JOBS:-1}" != 0 ]; then
+		local free
 		free=$(free_memory_mb)
-	done
-	local jobs=$(((free - reserve) / per_job))
-	[ "$jobs" -ge 1 ] || jobs=1
-	[ "$jobs" -le "$wanted" ] || jobs=$wanted
-	[ "$jobs" = "$wanted" ] || note "$free MiB of memory is free: building with $jobs jobs, not $wanted"
-	echo "$jobs"
+		[ -z "$free" ] || note "$free MiB of memory is free at the start: $wanted jobs; each compile waits for memory"
+	fi
+	echo "$wanted"
 }
 
 # ---------------------------------------------------------------------------------------------------- commands

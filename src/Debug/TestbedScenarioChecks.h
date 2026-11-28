@@ -125,6 +125,13 @@ enum class Quantity : uint8_t
 	VillagerPregnant,
 	/// 1 when the scenario's villager at the index is asleep in its home, else 0
 	VillagerAsleepAtHome,
+	/// The worth of the artefact nearest the point within the radius. None when no artefact is there.
+	ArtefactWorth,
+	/// 1 when the dance of the artefact nearest the point within the radius is under way, else 0. None when no artefact
+	/// is there.
+	ArtefactDancing,
+	/// The belief of the town with the number (index), as a land's script gives it, in the first player
+	TownBeliefInPlayer,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -140,10 +147,10 @@ struct Check
 	std::string_view kind;
 	/// For ScriptLocal: the name of the local variable
 	std::string_view variable;
-	/// For CreatureDistance, ObjectDistance, FireNear, FootprintsNear and ShieldSphereAt: the point, from the middle of the
-	/// map, x east and y north in metres
+	/// For CreatureDistance, ObjectDistance, FireNear, FootprintsNear, ShieldSphereAt, ArtefactWorth and ArtefactDancing:
+	/// the point, from the middle of the map, x east and y north in metres
 	glm::vec2 point {0.0f};
-	/// For FireNear and FootprintsNear: the radius in metres
+	/// For FireNear, FootprintsNear, ArtefactWorth and ArtefactDancing: the radius in metres
 	float radius {0.0f};
 	/// The game turns after the scenario starts. A turn is a tenth of a second.
 	uint32_t afterTurns {0};

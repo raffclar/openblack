@@ -124,6 +124,12 @@ std::string_view Name(Quantity quantity)
 		return "the villager is a pregnant woman";
 	case Quantity::VillagerAsleepAtHome:
 		return "the villager sleeps in its home";
+	case Quantity::ArtefactWorth:
+		return "the worth of the artefact";
+	case Quantity::ArtefactDancing:
+		return "the dance of the artefact is under way";
+	case Quantity::TownBeliefInPlayer:
+		return "the belief of the town in the player";
 	}
 	return "";
 }

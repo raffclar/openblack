@@ -172,7 +172,8 @@ inline constexpr std::string_view k_NoPlayerFile = "Graeme";
 
 /// Writes into a mind file who saved it, as the game does at each save. The first name is the creature file of the
 /// human player at this computer who owns the creature, or k_NoPlayerFile when there is no such player. The second name
-/// is the profile played at this computer, whoever owns the creature.
+/// is the profile played at this computer, whoever owns the creature. The function cuts a name that is too long for its
+/// one-byte count in the file (creaturemind::FitSavedAs and FitProfile).
 void SetSavedBy(creaturemind::MindFileData& file, std::optional<std::string_view> ownerFile, std::u16string_view profile);
 
 } // namespace openblack::creature_mind_model

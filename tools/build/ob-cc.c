@@ -25,6 +25,13 @@
  * still hold objects that a deleted folder compiled. ob-cc ignores all other lines, so ob-build can add other kinds.
  * There is no limit on the number of roots. ob-cc writes a warning when it cannot read the file or a line is too long.
  * The first four arguments must not contain double quotes.
+ *
+ * Memory gate: a compile starts only when the free memory is more than OB_MEMORY_RESERVE_GB (8) plus
+ * OB_MEMORY_PER_JOB_MB (1500). The gate reads the free memory for each compile, so a build follows the load of the
+ * machine while it runs: when other builds take memory, its compiles wait, and when they end, its compiles go on.
+ * All compiles of the machine pass the gate one at a time. After a start under low memory, the gate waits 2 s so
+ * that the memory use of the new compile shows. A compile that waited OB_MEMORY_WAIT seconds (600) starts anyway,
+ * so a build never stops. OB_MEMORY_JOBS=0 turns the gate off.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <stdio.h>
@@ -86,8 +93,8 @@ static int StartsWithPath(const char* text, size_t textLength, const char* root,
 
 static int EndsPathPart(char c)
 {
-	return c == '/' || c == '\\' || c == '"' || c == '\'' || c == '\r' || c == '\n' || c == '\t' || c == ' ' ||
-	       c == ')' || c == '>' || c == ':';
+	return c == '/' || c == '\\' || c == '"' || c == '\'' || c == '\r' || c == '\n' || c == '\t' || c == ' ' || c == ')' ||
+	       c == '>' || c == ':';
 }
 
 /* Gives the length of "<parent>/<folder>" at the start of the text, or 0 when the text is not in a folder of parent */
@@ -186,8 +193,7 @@ static void LoadRoots(const char* file)
 	FILE* handle = fopen(file, "rb");
 	if (handle == NULL)
 	{
-		fprintf(stderr, "ob-cc: warning: cannot read the roots file %s; paths from other folders stay as they are\n",
-		        file);
+		fprintf(stderr, "ob-cc: warning: cannot read the roots file %s; paths from other folders stay as they are\n", file);
 		return;
 	}
 	char line[4096];
@@ -299,6 +305,57 @@ static const wchar_t* SkipToken(const wchar_t* cursor)
 	return cursor;
 }
 
+static unsigned long long GetEnvNumber(const char* name, unsigned long long fallback)
+{
+	const char* text = getenv(name);
+	if (text == NULL || *text == '\0')
+	{
+		return fallback;
+	}
+	char* end = NULL;
+	const unsigned long long value = strtoull(text, &end, 10);
+	return *end == '\0' ? value : fallback;
+}
+
+static unsigned long long FreeMemoryMb(void)
+{
+	MEMORYSTATUSEX status;
+	status.dwLength = sizeof(status);
+	return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys / (1024ull * 1024ull) : 0;
+}
+
+/* Waits until the free memory allows one more compile. Returns the mutex that the caller releases after the start. */
+static HANDLE WaitForMemory(int* settle)
+{
+	*settle = 0;
+	if (GetEnvNumber("OB_MEMORY_JOBS", 1) == 0)
+	{
+		return NULL;
+	}
+	const unsigned long long reserveMb = GetEnvNumber("OB_MEMORY_RESERVE_GB", 8) * 1024ull;
+	const unsigned long long perJobMb = GetEnvNumber("OB_MEMORY_PER_JOB_MB", 1500);
+	const ULONGLONG limitMs = GetEnvNumber("OB_MEMORY_WAIT", 600) * 1000ull;
+	const ULONGLONG start = GetTickCount64();
+	HANDLE mutex = CreateMutexW(NULL, FALSE, L"Local\\openblack-ob-cc-start");
+	if (mutex == NULL)
+	{
+		return NULL;
+	}
+	if (WaitForSingleObject(mutex, (DWORD)limitMs) == WAIT_TIMEOUT)
+	{
+		CloseHandle(mutex);
+		return NULL;
+	}
+	unsigned long long free = FreeMemoryMb();
+	while (free < reserveMb + perJobMb && GetTickCount64() - start < limitMs)
+	{
+		Sleep(2000);
+		free = FreeMemoryMb();
+	}
+	*settle = free < reserveMb + 4 * perJobMb;
+	return mutex;
+}
+
 int main(int argc, char** argv)
 {
 	if (argc < 6)
@@ -336,7 +393,19 @@ int main(int argc, char** argv)
 	startup.hStdOutput = writeEnd;
 	startup.hStdError = writeEnd;
 	PROCESS_INFORMATION process;
-	if (!CreateProcessW(NULL, commandCopy, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process))
+	int settle = 0;
+	HANDLE gate = WaitForMemory(&settle);
+	const BOOL started = CreateProcessW(NULL, commandCopy, NULL, NULL, TRUE, 0, NULL, NULL, &startup, &process);
+	if (gate != NULL)
+	{
+		if (started && settle)
+		{
+			Sleep(2000);
+		}
+		ReleaseMutex(gate);
+		CloseHandle(gate);
+	}
+	if (!started)
 	{
 		fprintf(stderr, "ob-cc: could not start: %ls (%lu)\n", commandCopy, GetLastError());
 		return 2;

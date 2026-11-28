@@ -1150,10 +1150,11 @@ void ReadSpell(WorldReader& r)
 	r.Ref("spellSystem");
 	r.Word();
 	r.Ref("spellReaction");
-	// A point, the map position where the spell was cast, which follows the hand that holds it, and a point
-	r.Bytes(12);
+	// The movement of the spell, the map position where the spell was cast, which follows the hand that holds it, and
+	// the movement of the hand
+	r.Bytes(12, "spellMovement");
 	r.Coords("spellCastPlace");
-	r.Bytes(12);
+	r.Bytes(12, "spellDirection");
 	// The prayer power that is left, the prayer power after the last fill, and the flag of a spell that closed down
 	r.Float("spellChants");
 	r.Float("spellInitialChants");
@@ -1167,6 +1168,7 @@ void ReadSpell(WorldReader& r)
 	r.Bytes(60, "spellProcessInfo");
 	// How long the spell can last in seconds, negative for no time limit
 	r.Float("spellDuration");
+	// The flag of a spell that costs no prayer power, and a byte. The code of the spells sets them only at the start.
 	r.Byte();
 	r.Byte();
 	// The object that cast the spell, and the player of that object. The game gives the neutral player when the object
@@ -1180,11 +1182,12 @@ void ReadSpell(WorldReader& r)
 	r.Word("spellMagicType");
 	r.Float("spellAge");
 	r.Float("spellMagnitude");
-	// A word, the map position where the spell was cast first, and two words
-	r.Word();
+	// The value that multiplies the strength of the spell, which a script can set
+	r.Float("spellStrengthMultiplier");
 	r.Coords("spellOriginalCastPlace");
-	r.Word();
-	r.Word();
+	// The prayer power that a spell of a worship site spent each turn and at each event since its last mote of light
+	r.Float("spellUpkeepMotes");
+	r.Float("spellEventMotes");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

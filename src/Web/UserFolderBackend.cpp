@@ -71,7 +71,20 @@ EM_JS(double, openblack_user_folder_read, (uint32_t file, uint8_t* buffer, doubl
 		for (let block = first; block <= last; block += 1) {
 			const start = Math.max(0, offset + done - block * size);
 			const end = Math.min(size, offset + length - block * size);
-			const bytes = new FileReaderSync().readAsArrayBuffer(blocks[block].slice(start, end));
+			// The page removes the blocks of a file when it keeps the whole file. A read of a removed block fails or
+			// gives fewer bytes than the block has. The thread then asks for the bytes again, and the page gives the
+			// whole file. The value false marks the block as removed, so that an old message of the block does not
+			// give it to the thread again (see web/page/pre.js).
+			let bytes = null;
+			try {
+				bytes = new FileReaderSync().readAsArrayBuffer(blocks[block].slice(start, end));
+			} catch (error) {
+				bytes = null;
+			}
+			if (bytes === null || bytes.byteLength < Math.min(end, blocks[block].size) - start) {
+				blocks[block] = false;
+				return -2;
+			}
 			HEAPU8.set(new Uint8Array(bytes), buffer + done);
 			done += bytes.byteLength;
 			if (bytes.byteLength < end - start) {
@@ -118,11 +131,16 @@ constexpr double k_NotInFolder = -2;
 
 /// Read a part of a file of the user's folder from the page. The bytes of a file that the site streams come from the
 /// site on their first read. Returns the number of bytes read, or -EIO.
+///
+/// The thread can get old messages of blocks that the page removed after it kept the whole file. Each read of such a
+/// block marks it as removed, so the thread asks again, at most one time for each block of the read and two more times.
 ssize_t ReadFromPage(uint32_t file, uint8_t* buffer, off_t count, off_t offset)
 {
+	const auto attempts = count / k_BlockSize + 3;
 	auto done = openblack_user_folder_read(file, buffer, static_cast<double>(count), static_cast<double>(offset));
-	if (done == k_NotInFolder &&
-	    openblack_user_folder_obtain(file, static_cast<double>(count), static_cast<double>(offset)) == 1)
+	for (off_t attempt = 0; done == k_NotInFolder && attempt < attempts &&
+	                        openblack_user_folder_obtain(file, static_cast<double>(count), static_cast<double>(offset)) == 1;
+	     ++attempt)
 	{
 		done = openblack_user_folder_read(file, buffer, static_cast<double>(count), static_cast<double>(offset));
 	}

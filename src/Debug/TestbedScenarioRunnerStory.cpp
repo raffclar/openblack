@@ -48,6 +48,7 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/TownMiracles.h"
+#include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -77,6 +78,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -418,6 +420,16 @@ bool Runner::GiveStoryCommand(const Command& command)
 		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
 		return true;
 	}
+	if (command.kind == Kind::MakeTemple)
+	{
+		// The temple comes into being after the land started, as a land script makes a citadel
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 position {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		_temples.push_back(
+		    ecs::archetypes::CitadelArchetype::Create(position, command.player, command.amount, glm::vec3(1.0f)));
+		Log(fmt::format("{:.1f}s: a temple comes into being at ({:.0f}, {:.0f})", _seconds, at.x, at.y));
+		return true;
+	}
 	if (command.kind == Kind::LookAtTempleScroll)
 	{
 		if (Locator::temple::has_value())
@@ -479,6 +491,20 @@ bool Runner::GiveStoryCommand(const Command& command)
 			_onLoadedLand = true;
 		}
 		Log(fmt::format("{:.1f}s: generated land {}: {}", _seconds, command.value, loaded ? "loaded" : "not loaded"));
+		return true;
+	}
+	if (command.kind == Kind::HumansJoin)
+	{
+		// The land of a network session waits for its humans, and then player one joins
+		const bool joined = Locator::computerPlayerSystem::has_value();
+		if (joined)
+		{
+			constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
+			auto& minds = Locator::computerPlayerSystem::value();
+			minds.WaitForHumans({});
+			minds.HumansJoined(k_Humans);
+		}
+		Log(fmt::format("{:.1f}s: player one joins: {}", _seconds, joined ? "joined" : "no computer players"));
 		return true;
 	}
 	if (command.kind == Kind::LoadMapLand)

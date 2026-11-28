@@ -284,9 +284,9 @@ public:
 	{
 		return std::nullopt;
 	}
-	/// The hand of a god that a computer mind plays: the place where the frames draw what it holds. In a turn with a step
-	/// of the mind, this is the place of the hand before the step. In other turns, it is the place of the turn. None for
-	/// a hand that the reports of a person move.
+	/// The hand of a god that a computer mind plays: the place to which the frames move what it holds. In a turn with a
+	/// step of the mind, this is the place of the hand before the step. In other turns, it is the place of the turn. None
+	/// for a hand that the reports of a person move.
 	[[nodiscard]] virtual std::optional<glm::vec3> MindDrawnPlaceOf([[maybe_unused]] entt::entity hand) const
 	{
 		return std::nullopt;
