@@ -387,8 +387,6 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	const auto& island = _drawnFrame != nullptr && _drawnFrame->land.island != nullptr ? *_drawnFrame->land.island
 	                                                                                   : Locator::terrainSystem::value();
 
-	auto extent = island.GetExtent();
-	auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const auto& heightMap = island.GetHeightMap();
 
 	auto const& skins = mesh.GetSkins();
@@ -747,12 +745,6 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (desc.morphWithTerrain)
 			{
 				setSampler(MeshUniform::Heightmap, 1, heightMap); // vs
-			}
-			// The land's extent is for the land's height under a model that follows the land, and for the land's light.
-			// bgfx accepts a uniform only once for each draw, so it is set one time for the two.
-			if (desc.morphWithTerrain || has(MeshUniform::LandLight))
-			{
-				setUniform(MeshUniform::IslandExtent, &islandExtent);
 			}
 			if (has(MeshUniform::LandLight))
 			{

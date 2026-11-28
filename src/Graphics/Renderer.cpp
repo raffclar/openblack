@@ -86,9 +86,11 @@
 #include "Graphics/DrawWindow.h"
 #include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
+#include "Graphics/FrameUniforms.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/InfluenceCurtains.h"
 #include "Graphics/LandFootprints.h"
 #include "Graphics/LandShadowBake.h"
 #include "Graphics/Mesh.h"
@@ -471,6 +473,8 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     , _workers(MakeWorkerPool())
 {
 	_shaderManager->LoadShaders();
+	// The shaders read the land's extent with one value for all the draws of a frame
+	_islandExtentUniform = fromBgfx(bgfx::createUniform("u_islandExtent", bgfx::UniformFreq::Frame, bgfx::UniformType::Vec4));
 	// Each program's mesh uniforms are found now, so that the threads that encode draws only read them
 	_shaderManager->ForEachProgram([this](const ShaderProgram& program) { static_cast<void>(MeshUniformsOf(program)); });
 	_groundShadowScratch.resize(_workers->GetLaneCount());
@@ -532,6 +536,8 @@ Renderer::~Renderer() noexcept
 	_landFootprints.reset();
 	_groundBlobQuads.reset();
 	_footprintQuads.reset();
+	_ribbonQuads.reset();
+	_influenceCurtains.reset();
 	_templeMapFrameBuffer.reset();
 	_templeMapHalfFrameBuffer.reset();
 	if (_landLightTexture)
@@ -588,6 +594,10 @@ Renderer::~Renderer() noexcept
 			bgfx::destroy(query);
 			query = BGFX_INVALID_HANDLE;
 		}
+	}
+	if (_islandExtentUniform.has_value())
+	{
+		bgfx::destroy(toBgfx(*_islandExtentUniform));
 	}
 	_shaderManager.reset();
 	bgfx::frame();
@@ -910,6 +920,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	_effectsFilled = false;
 	_drawnFrame = drawDesc.frame;
+	SetFrameUniforms();
 	// The draw loads no resource: the fill loaded them. The warm-up draws while the resources load.
 	const DrawLoadBlock blockLoads(Locator::resources::value(), !_warmingUp);
 	DrawLandColourPass(drawDesc);
@@ -1048,6 +1059,25 @@ void Renderer::ReleaseGpuWorkMemory() noexcept
 	}
 }
 
+void Renderer::SetFrameUniforms() const noexcept
+{
+	// The land's extent for all the draws of the frame: the land of the game, or none when the game has no land. The
+	// drawn copy of the frame and the draws before its fill read the same land. While a land loads, no draw reads the
+	// extent, and the value of the last frame stays.
+	if (!_islandExtentUniform.has_value())
+	{
+		return;
+	}
+	const bool hasTerrain = Locator::terrainSystem::has_value();
+	if (hasTerrain && !Locator::terrainSystem::value().IsLoaded())
+	{
+		return;
+	}
+	const auto extent = hasTerrain ? std::optional(Locator::terrainSystem::value().GetExtent()) : std::nullopt;
+	const auto islandExtent = IslandExtentValue(extent);
+	bgfx::setFrameUniform(toBgfx(*_islandExtentUniform), &islandExtent);
+}
+
 void Renderer::Frame() noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
@@ -1077,6 +1107,7 @@ void Renderer::Frame() noexcept
 		const bgfx::FrameBufferHandle mainBackbuffer = BGFX_INVALID_HANDLE;
 		bgfx::requestScreenShot(mainBackbuffer, sent->c_str());
 	}
+	SetFrameUniforms();
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
 	// The game thread's encoder starts each frame at submit order 0

@@ -86,6 +86,7 @@
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandWaterGlow.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/InfluenceCurtains.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/RendererDetail.h"
@@ -311,8 +312,6 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const auto texture = textures.Handle(Mist::k_TextureId);
 	const auto alphaTexture = textures.Handle(Mist::k_AlphaTextureId);
 	const auto* program = _shaderManager->GetShader("Mist");
-	const auto& island = *desc.frame->land.island;
-	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 
 	// Every mist faces the camera: the mesh's x across the screen, its y towards the camera and its z up the screen
 	const auto& camera = *desc.camera;
@@ -338,7 +337,6 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const ProgramUniform s_landLuminosity {*program, "s_landLuminosity"};
 	const ProgramUniform s_landLight {*program, "s_landLight"};
 	const ProgramUniform s_landColour {*program, "s_landColour"};
-	const ProgramUniform u_islandExtent {*program, "u_islandExtent"};
 	const ProgramUniform u_landLightUniform {*program, "u_landLight"};
 	const ProgramUniform u_haze {*program, "u_haze"};
 	const ProgramUniform u_hazeColour {*program, "u_hazeColour"};
@@ -396,7 +394,6 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				s_landLuminosity.Set(6, GetLandLuminosity());
 				s_landLight.Set(7, GetLandLightTexture());
 				s_landColour.Set(8, GetLandColour());
-				u_islandExtent.Set(&islandExtent);
 				u_landLightUniform.Set(&u_landLight);
 				u_haze.Set(hazed ? _haze.data() : &noHaze);
 				u_hazeColour.Set(&_haze[1]);
@@ -553,26 +550,64 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	const auto* program = _shaderManager->GetShader("WorldTextured");
+	const auto* curtainProgram = _shaderManager->GetShader("InfluenceBorder");
 	// Outside the temple, after the draws that the game makes at once and before every sorted key
 	const auto viewId =
 	    onMap.has_value() ? static_cast<bgfx::ViewId>(desc.viewId) : static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	const uint32_t depth = onMap.has_value() ? 0 : graphics::zsort::k_AtOnceAfterLand;
-	// A warm-up draws one triangle of no size, with the border's textures and states
+	// Blended over what is behind, tested against depth but leaving none, both sides
+	constexpr uint64_t k_State = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA;
+	// A warm-up draws one triangle of no size, with the border's textures and states, with each program of the border
 	if (_warmingUp)
 	{
 		constexpr uint32_t k_Corners = 3;
-		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
+		const auto warmUp = [&](const ShaderProgram& with, bgfx::ViewId view) {
+			if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
+			{
+				return;
+			}
+			bgfx::TransientVertexBuffer vertexBuffer;
+			bgfx::allocTransientVertexBuffer(&vertexBuffer, k_Corners, layout);
+			std::ranges::fill(std::span(reinterpret_cast<Vertex*>(vertexBuffer.data), k_Corners), Vertex {});
+			with.SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+			with.SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+			bgfx::setVertexBuffer(0, &vertexBuffer);
+			bgfx::setState(k_State);
+			with.Submit(view, depth);
+		};
+		warmUp(*program, viewId);
+		if (!onMap.has_value())
 		{
-			return;
+			warmUp(*curtainProgram, viewId);
 		}
-		bgfx::TransientVertexBuffer vertexBuffer;
-		bgfx::allocTransientVertexBuffer(&vertexBuffer, k_Corners, layout);
-		std::ranges::fill(std::span(reinterpret_cast<Vertex*>(vertexBuffer.data), k_Corners), Vertex {});
-		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
-		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
-		bgfx::setVertexBuffer(0, &vertexBuffer);
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		program->Submit(viewId, depth);
+		return;
+	}
+	// Outside the temple, each curtain is in a static buffer that changes only when its circle changes. The scroll and
+	// the strength of the border go to the shader for each draw.
+	if (!onMap.has_value())
+	{
+		if (!_influenceCurtains)
+		{
+			_influenceCurtains = std::make_unique<InfluenceCurtains>();
+		}
+		const auto& circles = desc.frame->effects.borderCircles;
+		_influenceCurtains->Update(circles, desc.frame->land.number);
+		const auto frameValues = CurtainFrameValues(offset, *alpha);
+		const ProgramUniform s_diffuse {*curtainProgram, "s_diffuse"};
+		const ProgramUniform s_alpha {*curtainProgram, "s_alpha"};
+		const ProgramUniform u_borderCurtain {*curtainProgram, "u_borderCurtain"};
+		for (size_t circle = 0; circle < circles.size(); ++circle)
+		{
+			if (!_influenceCurtains->Bind(circle))
+			{
+				continue;
+			}
+			s_diffuse.Set(0, *textures.Handle(k_TextureId));
+			s_alpha.Set(1, *textures.Handle(k_AlphaTextureId));
+			u_borderCurtain.Set(&frameValues);
+			bgfx::setState(k_State);
+			curtainProgram->Submit(viewId, depth);
+		}
 		return;
 	}
 	// The fill copied only the circles of the borders that show
@@ -614,8 +649,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
 		bgfx::setVertexBuffer(0, &vertexBuffer);
 		bgfx::setIndexBuffer(&indexBuffer);
-		// Blended over what is behind, tested against depth but leaving none, both sides
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+		bgfx::setState(k_State);
 		program->Submit(viewId, depth);
 	}
 }

@@ -50,13 +50,14 @@ QuadIndices::~QuadIndices()
 	}
 }
 
-bool QuadIndices::Bind(uint32_t quads)
+bool QuadIndices::Bind(uint32_t firstQuad, uint32_t quads)
 {
 	if (quads == 0)
 	{
 		return false;
 	}
-	if (quads > _capacity)
+	const auto lastQuad = firstQuad + quads;
+	if (lastQuad > _capacity)
 	{
 		// The graphics library frees the old buffer after the frame, so the draws of this frame that use it stay correct
 		if (_buffer.has_value())
@@ -64,7 +65,7 @@ bool QuadIndices::Bind(uint32_t quads)
 			bgfx::destroy(toBgfx(*_buffer));
 			_buffer.reset();
 		}
-		const auto capacity = QuadCapacity(quads);
+		const auto capacity = QuadCapacity(lastQuad);
 		const auto indices = QuadIndexList(_pattern, capacity);
 		const auto handle = bgfx::createIndexBuffer(
 		    bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint32_t))), BGFX_BUFFER_INDEX32);
@@ -76,6 +77,7 @@ bool QuadIndices::Bind(uint32_t quads)
 		_buffer = fromBgfx(handle);
 		_capacity = capacity;
 	}
-	bgfx::setIndexBuffer(toBgfx(*_buffer), 0, quads * static_cast<uint32_t>(_pattern.size()));
+	const auto quadIndices = static_cast<uint32_t>(_pattern.size());
+	bgfx::setIndexBuffer(toBgfx(*_buffer), firstQuad * quadIndices, quads * quadIndices);
 	return true;
 }

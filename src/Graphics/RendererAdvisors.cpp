@@ -253,8 +253,6 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 	_shaderManager->SetCamera(RenderPass::Advisors, camera, detail::SceneTarget(desc.frameBuffer));
 
 	const auto* program = _shaderManager->GetShader("Advisor");
-	const auto& island = *desc.frame->land.island;
-	const glm::vec4 islandExtent(island.GetExtent().minimum, island.GetExtent().maximum);
 	const glm::vec3 worldLight(_modelLight);
 	// The smoke is blended over what is behind it, tested against depth but leaving none, from both sides
 	constexpr uint64_t k_SmokeState =
@@ -340,7 +338,6 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 					}
 					bgfx::setTransform(draw.bones.data(), static_cast<uint16_t>(draw.bones.size()));
 					program->SetUniformValue("u_modelLight", &u_modelLight);
-					program->SetUniformValue("u_islandExtent", &islandExtent);
 					program->SetUniformValue("u_advisorLook", &u_advisorLook);
 					program->SetUniformValue("u_advisorPupil0", u_pupils.data());
 					program->SetUniformValue("u_advisorPupil1", &u_pupils[1]);

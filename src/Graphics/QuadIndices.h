@@ -46,7 +46,10 @@ public:
 
 	/// Sets the indices of this count of quads for the next draw of the main encoder. The buffer grows when it holds
 	/// fewer quads. False when the graphics library has no buffer for them.
-	bool Bind(uint32_t quads);
+	bool Bind(uint32_t quads) { return Bind(0, quads); }
+	/// Sets the indices of this count of quads from the first quad, for the next draw of the main encoder. The indices
+	/// point to the corners of these quads in the full list. The buffer grows when it holds fewer quads.
+	bool Bind(uint32_t firstQuad, uint32_t quads);
 
 private:
 	QuadPattern _pattern;

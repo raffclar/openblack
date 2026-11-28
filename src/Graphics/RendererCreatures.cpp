@@ -256,8 +256,6 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const auto viewId = static_cast<bgfx::ViewId>(pass);
 	const auto* program = _shaderManager->GetShader("CreatureHair");
 	// The hair takes the land's light and colour under the creature, and the haze at it, as its body does
-	const auto extent = desc.frame->land.extent.value_or(Extent2 {});
-	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const bool inTemple = desc.frame->templeActive;
 	const bool landLit = !inTemple && _landLightTexture.has_value();
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, CreatureLandLightScale(desc.viewId), 0.0f, 0.0f};
@@ -351,7 +349,6 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		{
 			program->SetTextureSampler("s_hairKept", 9, *_whiteTexture);
 		}
-		program->SetUniformValue("u_islandExtent", &islandExtent);
 		program->SetUniformValue("u_landLight", &u_landLight);
 		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
 		program->SetUniformValue("u_hairAlphaCutOff", &u_hairAlphaCutOff);
@@ -626,8 +623,6 @@ void Renderer::SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairL
 {
 	using namespace creature_hair_light;
 	const auto* program = _shaderManager->GetShader("HairLightKept");
-	const auto extent = _drawnFrame->land.island->GetExtent();
-	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const auto scale = source != nullptr ? source->landLightScale : 1.0f;
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, scale, 0.0f, 0.0f};
 	const glm::vec4 u_hairOrigin {source != nullptr ? source->origin : glm::vec3(0.0f), 0.0f};
@@ -664,7 +659,6 @@ void Renderer::SubmitHairLightTexels(bgfx::ViewId viewId, float row, const HairL
 		{
 			program->SetTextureSampler("s_worldColours", 9, *_whiteTexture);
 		}
-		program->SetUniformValue("u_islandExtent", &islandExtent);
 		program->SetUniformValue("u_landLight", &u_landLight);
 		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
 		program->SetUniformValue("u_hairLight", &u_hairLight);

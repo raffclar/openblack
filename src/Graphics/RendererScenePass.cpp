@@ -558,7 +558,6 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 	if (desc.drawIsland && landShown)
 	{
 		const auto& island = *desc.frame->land.island;
-		auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
 
 		const auto& textures = Locator::resources::value().GetTextures();
 		auto smallBump = textures.Handle(LandIslandInterface::k_SmallBumpTextureId);
@@ -649,7 +648,6 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 			terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 			terrainShader->SetUniformValue("u_landClip", &u_landClip);
-			terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 			terrainShader->SetUniformValue("u_landTexels", &landTexels);
 			// The moving shadows fall on the land, not on its reflection
 			SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);

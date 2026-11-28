@@ -169,8 +169,6 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 	const auto& heights = desc.frame->land.heights;
 	const auto ground = [&heights](glm::vec2 point) { return heights.HeightAt(point); };
 	const auto eye = desc.camera->GetOrigin();
-	const auto extent = *desc.frame->land.extent;
-	const auto islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	const glm::vec4 u_landLight {_landLightTexture.has_value() ? 1.0f : 0.0f, LandLightScale(desc.viewId), 0.0f, 0.0f};
 	const auto translucent = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
 	const auto* rope = _shaderManager->GetShader("Leash");
@@ -210,7 +208,6 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 			rope->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 			rope->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 			rope->SetTextureSampler("s_landColour", 8, GetLandColour());
-			rope->SetUniformValue("u_islandExtent", &islandExtent);
 			rope->SetUniformValue("u_landLight", &u_landLight);
 			rope->SetUniformValue("u_haze", _haze.data());
 			rope->SetUniformValue("u_hazeColour", &_haze[1]);

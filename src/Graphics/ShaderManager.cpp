@@ -170,6 +170,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_blob
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_influence_border
+#include "ShaderIncluder.h"
 #define SHADER_NAME fs_blob
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_world_textured
@@ -230,7 +232,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 83> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 84> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -291,6 +293,7 @@ const std::array<bgfx::EmbeddedShader, 83> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_hair_light_kept),      //
     BGFX_EMBEDDED_SHADER(vs_leash),                //
     BGFX_EMBEDDED_SHADER(vs_blob),                 //
+    BGFX_EMBEDDED_SHADER(vs_influence_border),     //
     BGFX_EMBEDDED_SHADER(fs_blob),                 //
     BGFX_EMBEDDED_SHADER(fs_world_textured),       //
     BGFX_EMBEDDED_SHADER(vs_advisor),              //
@@ -362,6 +365,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"Leash", "vs_leash", "fs_world_textured"},
     ShaderDefinition {"Blob", "vs_blob", "fs_blob"},
     ShaderDefinition {"WorldTextured", "vs_blob", "fs_world_textured"},
+    ShaderDefinition {"InfluenceBorder", "vs_influence_border", "fs_world_textured"},
     ShaderDefinition {"Advisor", "vs_advisor", "fs_advisor"},
     ShaderDefinition {"AdvisorQuad", "vs_blob", "fs_advisor_quad"},
     ShaderDefinition {"Fragment", "vs_fragment", "fs_fragment"},

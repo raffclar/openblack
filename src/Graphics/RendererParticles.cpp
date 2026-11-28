@@ -68,6 +68,7 @@
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/ObjectDrawWay.h"
+#include "Graphics/QuadIndices.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Texture2D.h"
@@ -93,7 +94,7 @@ using particles::draw::ItemKind;
 namespace
 {
 /// The corners of each segment of a ribbon, as two triangles
-constexpr std::array<uint32_t, 6> k_SegmentIndices {0, 1, 2, 1, 3, 2};
+constexpr QuadPattern k_SegmentIndices {0, 1, 2, 1, 3, 2};
 constexpr uint32_t k_CornersPerSegment = 4;
 
 /// What blends in the world: tested against depth but drawn on both sides, added to what is behind or blended over it,
@@ -387,8 +388,6 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	const auto* program = _shaderManager->GetShader("Mist");
 	const auto& camera = *desc.camera;
 	const auto origin = camera.GetOrigin();
-	const auto& island = *desc.frame->land.island;
-	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 	// It faces the camera and shrinks edge on, lit from straight above as the clouds are
 	const glm::mat3 facing {camera.GetRight(), -camera.GetForward(), camera.GetUp()};
 	glm::vec3 scale {mist.size};
@@ -416,7 +415,6 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 			program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 			program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 			program->SetTextureSampler("s_landColour", 8, GetLandColour());
-			program->SetUniformValue("u_islandExtent", &islandExtent);
 			program->SetUniformValue("u_landLight", &u_landLight);
 			program->SetUniformValue("u_haze", &noHaze);
 			program->SetUniformValue("u_hazeColour", &_haze[1]);
@@ -557,8 +555,6 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 	const auto localLight =
 	    model_light::LocalDirection(glm::vec3(light), fragment.axes[0], fragment.axes[1], fragment.axes[2], fragment.position);
 	const auto* program = _shaderManager->GetShader("Fragment");
-	const auto& island = *desc.frame->land.island;
-	const glm::vec4 islandExtent {island.GetExtent().minimum, island.GetExtent().maximum};
 	const glm::vec4 origin {fragment.position, 0.0f};
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	// A draw for each of its skins, its triangles placed by its atom
@@ -610,7 +606,6 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 		program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 		program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
 		program->SetTextureSampler("s_landColour", 8, GetLandColour());
-		program->SetUniformValue("u_islandExtent", &islandExtent);
 		program->SetUniformValue("u_fragmentOrigin", &origin);
 		bgfx::setVertexBuffer(0, &buffer);
 		// Drawn from both sides, as a broken piece shows its inside
@@ -857,12 +852,6 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 			{
 				*out++ = frame.sprites[index];
 			}
-			glm::vec4 islandExtent(0.0f);
-			if (_drawnFrame != nullptr && _drawnFrame->land.extent.has_value())
-			{
-				const auto& extent = *_drawnFrame->land.extent;
-				islandExtent = glm::vec4(extent.minimum, extent.maximum);
-			}
 			const auto* program = _shaderManager->GetShader("ParticleInstanced");
 			for (const auto& command : _filmParticleCommands)
 			{
@@ -877,7 +866,6 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 				program->SetTextureSampler("s_alpha", 1, *alpha);
 				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
-				program->SetUniformValue("u_islandExtent", &islandExtent);
 				bgfx::setState(BlendState(material.mode));
 				_plane->GetVertexBuffer().Bind();
 				bgfx::setInstanceDataBuffer(&instances, command.first, command.count);
@@ -1118,19 +1106,12 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 	}
 
 	const auto& textures = Locator::resources::value().GetTextures();
-	glm::vec4 islandExtent(0.0f);
-	if (desc.frame->land.island != nullptr)
-	{
-		const auto extent = desc.frame->land.island->GetExtent();
-		islandExtent = glm::vec4(extent.minimum, extent.maximum);
-	}
 	// The uniforms of the program, found by name one time for all the centres of the pass. The symbols' shader reads no
 	// light of the land.
 	std::optional<ProgramUniform> diffuse;
 	std::optional<ProgramUniform> alpha;
 	std::optional<ProgramUniform> landLuminosity;
 	std::optional<ProgramUniform> landLight;
-	std::optional<ProgramUniform> islandExtentUniform;
 	if (program != nullptr)
 	{
 		diffuse.emplace(*program, "s_diffuse");
@@ -1139,7 +1120,6 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 		{
 			landLuminosity.emplace(*program, "s_landLuminosity");
 			landLight.emplace(*program, "s_landLight");
-			islandExtentUniform.emplace(*program, "u_islandExtent");
 		}
 	}
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
@@ -1181,7 +1161,6 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 			{
 				landLuminosity->Set(6, GetLandLuminosity());
 				landLight->Set(7, GetLandLightTexture());
-				islandExtentUniform->Set(&islandExtent);
 			}
 			_plane->GetVertexBuffer().Bind();
 			bgfx::setInstanceDataBuffer(&instances, command.first - base, command.count);
@@ -1216,32 +1195,92 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		return std::ranges::any_of(commands, ofKind) || std::ranges::any_of(beforeLand, ofKind);
 	};
 
-	// Every sprite of the pass in one buffer of instances, in the order drawn
-	bgfx::InstanceDataBuffer instances {};
-	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
-	const auto spriteCount = static_cast<uint32_t>(spriteOrder.size());
-	const bool haveSprites = spriteCount > 0 && bgfx::getAvailInstanceDataBuffer(spriteCount, k_Stride) >= spriteCount;
-	if (haveSprites)
-	{
-		bgfx::allocInstanceDataBuffer(&instances, spriteCount, k_Stride);
-		auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
-		for (const auto index : spriteOrder)
+	// Every sprite of the pass in one of two buffers of instances, in the order drawn. The sprites of a command that all
+	// have the shape of a symbol's sprite go to the GPU in fewer bytes, with a shader that puts the same pixels on the
+	// screen. The sprites of the other commands go in the full size.
+	using particles::sprites::AsSymbolSprite;
+	using particles::sprites::SpriteInstance;
+	using particles::sprites::SymbolSpriteInstance;
+	const auto* symbolProgram = _shaderManager->GetShader("ParticleSymbol");
+	auto& spritePlaces = _particleSpritePlaces;
+	spritePlaces.assign(commands.size() + beforeLand.size(), ParticleSpritePlace {});
+	uint32_t fullCount = 0;
+	uint32_t symbolCount = 0;
+	const auto spritesOf = [&spriteOrder](const particles::draw::Command& command) {
+		return spriteOrder.subspan(command.first, command.count);
+	};
+	const auto placeCommands = [&](std::span<const particles::draw::Command> list, size_t firstPlace) {
+		for (size_t i = 0; i < list.size(); ++i)
 		{
-			*out++ = frame.sprites[index];
+			const auto& command = list[i];
+			if (command.kind != ItemKind::Sprite)
+			{
+				continue;
+			}
+			auto& place = spritePlaces[firstPlace + i];
+			place.symbol = symbolProgram != nullptr && std::ranges::all_of(spritesOf(command), [&frame](uint32_t index) {
+				               return AsSymbolSprite(frame.sprites[index]).has_value();
+			               });
+			auto& count = place.symbol ? symbolCount : fullCount;
+			place.first = count;
+			count += command.count;
 		}
+	};
+	placeCommands(commands, 0);
+	placeCommands(beforeLand, commands.size());
+	bgfx::InstanceDataBuffer fullInstances {};
+	bgfx::InstanceDataBuffer symbolInstances {};
+	constexpr auto k_FullStride = static_cast<uint16_t>(sizeof(SpriteInstance));
+	constexpr auto k_SymbolStride = static_cast<uint16_t>(sizeof(SymbolSpriteInstance));
+	const bool haveFullSprites = fullCount > 0 && bgfx::getAvailInstanceDataBuffer(fullCount, k_FullStride) >= fullCount;
+	if (haveFullSprites)
+	{
+		bgfx::allocInstanceDataBuffer(&fullInstances, fullCount, k_FullStride);
 	}
+	const bool haveSymbolSprites =
+	    symbolCount > 0 && bgfx::getAvailInstanceDataBuffer(symbolCount, k_SymbolStride) >= symbolCount;
+	if (haveSymbolSprites)
+	{
+		bgfx::allocInstanceDataBuffer(&symbolInstances, symbolCount, k_SymbolStride);
+	}
+	const auto fillCommands = [&](std::span<const particles::draw::Command> list, size_t firstPlace) {
+		for (size_t i = 0; i < list.size(); ++i)
+		{
+			const auto& command = list[i];
+			const auto& place = spritePlaces[firstPlace + i];
+			if (command.kind != ItemKind::Sprite || (place.symbol ? !haveSymbolSprites : !haveFullSprites))
+			{
+				continue;
+			}
+			if (place.symbol)
+			{
+				auto* out = reinterpret_cast<SymbolSpriteInstance*>(symbolInstances.data) + place.first;
+				for (const auto index : spritesOf(command))
+				{
+					*out++ = *AsSymbolSprite(frame.sprites[index]);
+				}
+			}
+			else
+			{
+				auto* out = reinterpret_cast<SpriteInstance*>(fullInstances.data) + place.first;
+				for (const auto index : spritesOf(command))
+				{
+					*out++ = frame.sprites[index];
+				}
+			}
+		}
+	};
+	fillCommands(commands, 0);
+	fillCommands(beforeLand, commands.size());
 
-	// Every ribbon's corners in one buffer, two triangles to a segment
+	// Every ribbon's corners in one buffer. The shared static indices make two triangles of each segment.
 	bgfx::TransientVertexBuffer chainVertices {};
-	bgfx::TransientIndexBuffer chainIndices {};
 	bool haveChains = false;
 	if (!frame.chains.empty() && draws(ItemKind::Chain))
 	{
 		const auto layout = ChainLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.chainVertices.size());
-		const uint32_t indexCount = vertexCount / k_CornersPerSegment * static_cast<uint32_t>(k_SegmentIndices.size());
-		haveChains = bgfx::getAvailTransientVertexBuffer(vertexCount, layout) >= vertexCount &&
-		             bgfx::getAvailTransientIndexBuffer(indexCount, true) >= indexCount;
+		haveChains = bgfx::getAvailTransientVertexBuffer(vertexCount, layout) >= vertexCount;
 		if (haveChains)
 		{
 			bgfx::allocTransientVertexBuffer(&chainVertices, vertexCount, layout);
@@ -1254,24 +1293,13 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 				    corners.subspan(chain.firstVertex, static_cast<size_t>(chain.segments) * k_CornersPerSegment),
 				    std::span(frame.chainJoints).subspan(chain.firstJoint, chain.segments + 1), origin);
 			}
-			bgfx::allocTransientIndexBuffer(&chainIndices, indexCount, true);
-			auto* index = reinterpret_cast<uint32_t*>(chainIndices.data);
-			for (uint32_t corner = 0; corner < vertexCount; corner += k_CornersPerSegment)
+			if (!_ribbonQuads)
 			{
-				for (const auto offset : k_SegmentIndices)
-				{
-					*index++ = corner + offset;
-				}
+				_ribbonQuads = std::make_unique<QuadIndices>(k_SegmentIndices);
 			}
 		}
 	}
 
-	glm::vec4 islandExtent(0.0f);
-	if (desc.frame->land.island != nullptr)
-	{
-		const auto extent = desc.frame->land.island->GetExtent();
-		islandExtent = glm::vec4(extent.minimum, extent.maximum);
-	}
 	// Every surface's points in one buffer and their triangles in another. The lit ones are lit as the game lights its
 	// models: each point by its normal against the light, seen from the surface's own frame.
 	bgfx::TransientVertexBuffer surfaceVertices {};
@@ -1330,16 +1358,15 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		return uniforms;
 	};
 	const auto spriteMaterial = materialUniformsOf(spriteProgram);
+	const auto symbolMaterial = materialUniformsOf(symbolProgram);
 	const auto chainMaterial = materialUniformsOf(chainProgram);
 	const auto surfaceMaterial = materialUniformsOf(surfaceProgram);
 	std::optional<ProgramUniform> spriteLandLuminosity;
 	std::optional<ProgramUniform> spriteLandLight;
-	std::optional<ProgramUniform> spriteIslandExtent;
 	if (spriteProgram != nullptr)
 	{
 		spriteLandLuminosity.emplace(*spriteProgram, "s_landLuminosity");
 		spriteLandLight.emplace(*spriteProgram, "s_landLight");
-		spriteIslandExtent.emplace(*spriteProgram, "u_islandExtent");
 	}
 	const auto bindMaterial = [&](const std::optional<MaterialUniforms>& uniforms, uint32_t index) {
 		const auto& material = frame.materials[index];
@@ -1355,18 +1382,27 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		bgfx::setState(BlendState(material.mode));
 		return true;
 	};
-	const auto submit = [&](const particles::draw::Command& command, bgfx::ViewId viewId) {
+	const auto submit = [&](const particles::draw::Command& command, const ParticleSpritePlace& place, bgfx::ViewId viewId) {
 		switch (command.kind)
 		{
 		case ItemKind::Sprite:
-			if (haveSprites && bindMaterial(spriteMaterial, command.material))
+			if (place.symbol)
+			{
+				// The symbols' shader reads no light of the land
+				if (haveSymbolSprites && bindMaterial(symbolMaterial, command.material))
+				{
+					_plane->GetVertexBuffer().Bind();
+					bgfx::setInstanceDataBuffer(&symbolInstances, place.first, command.count);
+					symbolProgram->Submit(viewId, command.depth);
+				}
+			}
+			else if (haveFullSprites && bindMaterial(spriteMaterial, command.material))
 			{
 				// The sprites tinted by the land read its light
 				spriteLandLuminosity->Set(6, GetLandLuminosity());
 				spriteLandLight->Set(7, GetLandLightTexture());
-				spriteIslandExtent->Set(&islandExtent);
 				_plane->GetVertexBuffer().Bind();
-				bgfx::setInstanceDataBuffer(&instances, command.first, command.count);
+				bgfx::setInstanceDataBuffer(&fullInstances, place.first, command.count);
 				spriteProgram->Submit(viewId, command.depth);
 			}
 			break;
@@ -1375,10 +1411,13 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 			const auto& chain = frame.chains[command.first];
 			if (haveChains && bindMaterial(chainMaterial, command.material))
 			{
+				// The indices of the ribbon's segments, from its first corner in the buffer
+				if (!_ribbonQuads->Bind(chain.firstVertex / k_CornersPerSegment, chain.segments))
+				{
+					bgfx::discard();
+					break;
+				}
 				bgfx::setVertexBuffer(0, &chainVertices);
-				bgfx::setIndexBuffer(&chainIndices,
-				                     chain.firstVertex / k_CornersPerSegment * static_cast<uint32_t>(k_SegmentIndices.size()),
-				                     chain.segments * static_cast<uint32_t>(k_SegmentIndices.size()));
 				chainProgram->Submit(viewId, command.depth);
 			}
 			break;
@@ -1416,18 +1455,19 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 		}
 	};
 	const auto translucentViewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
-	for (const auto& command : commands)
+	for (size_t i = 0; i < commands.size(); ++i)
 	{
-		submit(command, translucentViewId);
+		submit(commands[i], spritePlaces[i], translucentViewId);
 	}
 	// Only the surfaces, sprites and ribbons of what is drawn before the land go in the sky's pass: a vortex's swirl is
 	// surfaces of revolution
 	const auto skyViewId = static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId));
-	for (const auto& command : beforeLand)
+	for (size_t i = 0; i < beforeLand.size(); ++i)
 	{
+		const auto& command = beforeLand[i];
 		const bool inSkyPass =
 		    command.kind == ItemKind::Sprite || command.kind == ItemKind::Chain || command.kind == ItemKind::Surface;
-		submit(command, inSkyPass ? skyViewId : translucentViewId);
+		submit(command, spritePlaces[commands.size() + i], inSkyPass ? skyViewId : translucentViewId);
 	}
 }
 
@@ -1475,23 +1515,26 @@ void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 			}
 		}
 	}
-	// A sprite of a symbol of belief of no size, in the way that the symbols blend
+	// A sprite in the shape of a symbol's sprite, of no size, for each way that sprites blend. The symbols of belief and
+	// the particle sprites of that shape use this shader.
 	constexpr auto k_SymbolStride = static_cast<uint16_t>(sizeof(particles::sprites::SymbolSpriteInstance));
-	const auto symbols = static_cast<uint32_t>(views.size());
 	const auto* symbolProgram = _shaderManager->GetShader("ParticleSymbol");
-	if (symbolProgram != nullptr && bgfx::getAvailInstanceDataBuffer(symbols, k_SymbolStride) >= symbols)
+	if (symbolProgram != nullptr && bgfx::getAvailInstanceDataBuffer(sprites, k_SymbolStride) >= sprites)
 	{
 		bgfx::InstanceDataBuffer instances {};
-		bgfx::allocInstanceDataBuffer(&instances, symbols, k_SymbolStride);
-		std::fill_n(reinterpret_cast<particles::sprites::SymbolSpriteInstance*>(instances.data), symbols,
+		bgfx::allocInstanceDataBuffer(&instances, sprites, k_SymbolStride);
+		std::fill_n(reinterpret_cast<particles::sprites::SymbolSpriteInstance*>(instances.data), sprites,
 		            particles::sprites::SymbolSpriteInstance {});
 		uint32_t instance = 0;
 		for (const auto view : views)
 		{
-			bgfx::setState(BlendState(particles::draw::k_SymbolMode));
-			_plane->GetVertexBuffer().Bind();
-			bgfx::setInstanceDataBuffer(&instances, instance++, 1);
-			symbolProgram->Submit(view);
+			for (const auto state : states)
+			{
+				bgfx::setState(state);
+				_plane->GetVertexBuffer().Bind();
+				bgfx::setInstanceDataBuffer(&instances, instance++, 1);
+				symbolProgram->Submit(view);
+			}
 		}
 	}
 
@@ -1576,17 +1619,10 @@ void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
 		};
 	}
 	const auto* program = _shaderManager->GetShader("ParticleInstanced");
-	glm::vec4 islandExtent(0.0f);
-	if (desc.frame->land.island != nullptr)
-	{
-		const auto extent = desc.frame->land.island->GetExtent();
-		islandExtent = glm::vec4(extent.minimum, extent.maximum);
-	}
 	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_Sheet));
 	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_SheetAlpha));
 	program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
 	program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
-	program->SetUniformValue("u_islandExtent", &islandExtent);
 	// Added to what is behind, writing no depth; near its end and once landed it shows through the land and the sea
 	auto state = BlendState(render_modes::Mode::AlphaTexturedAlphaAdditiveNz);
 	if (frame->throughEverything)

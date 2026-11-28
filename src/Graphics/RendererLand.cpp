@@ -1088,7 +1088,6 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn,
 	const auto* baked = _landShadowsBaked && _landShadowBake ? _landShadowBake->GetTexture() : nullptr;
 	const glm::vec4 u_objectShadows {0.0f, 0.0f, 0.0f, baked != nullptr ? 1.0f : 0.0f};
 	const auto landTexels = LandTexelsUniform(blockTexels);
-	const auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
 	const glm::vec4 blockSize {0.0f, 0.0f, 160.0f, 160.0f};
 	const auto bindPaint = [&](const ShaderProgram& shader) {
 		shader.SetTextureSampler("s2_coarsePaints", 2, *paintsTexture);
@@ -1105,7 +1104,6 @@ void Renderer::PaintCoarseEdges(glm::vec3 camera, std::span<const size_t> drawn,
 			shader.SetTextureSampler("s14_landShadows", 14, *baked);
 		}
 		shader.SetUniformValue("u_landTexels", &landTexels);
-		shader.SetUniformValue("u_islandExtent", &islandExtent);
 		shader.SetUniformValue("u_blockPositionAndSize", &blockSize);
 	};
 

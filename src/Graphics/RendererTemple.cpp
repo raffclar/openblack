@@ -242,7 +242,6 @@ void Renderer::DrawTempleMapPass() const
 
 	const auto& island = *_drawnFrame->land.island;
 	const auto* terrainShader = _shaderManager->GetShader("Terrain");
-	const auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
 	auto smallBump = Locator::resources::value().GetTextures().Handle(LandIslandInterface::k_SmallBumpTextureId);
 	// The land's own textures, bumped, with the footprints and the objects' shadows on them
 	const glm::vec4 u_skyAndBump = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -265,7 +264,6 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 	const glm::vec4 u_landClip {0.0f};
 	terrainShader->SetUniformValue("u_landClip", &u_landClip);
-	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 	const auto landTexels = LandTexelsUniform(island.GetBlockTextureSide());
 	terrainShader->SetUniformValue("u_landTexels", &landTexels);
 	// The map shows no vortex's hole

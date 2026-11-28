@@ -98,6 +98,7 @@ namespace graphics
 {
 class FrameBuffer;
 class LandFootprints;
+class InfluenceCurtains;
 class QuadIndices;
 class LandShadowBake;
 class L3DSubMesh;
@@ -496,7 +497,6 @@ private:
 		Lightmap,
 		Environment,
 		Heightmap,
-		IslandExtent,
 		LandLight,
 		LandLuminosity,
 		LandLightTexture,
@@ -539,7 +539,6 @@ private:
 	    "s_lightmap",          //
 	    "s_environment",       //
 	    "s_heightmap",         //
-	    "u_islandExtent",      //
 	    "u_landLight",         //
 	    "s_landLuminosity",    //
 	    "s_landLight",         //
@@ -811,6 +810,10 @@ private:
 	/// The shared indices of the quads of the ground blobs and of the creatures' footprints, made at their first draw
 	mutable std::unique_ptr<QuadIndices> _groundBlobQuads;
 	mutable std::unique_ptr<QuadIndices> _footprintQuads;
+	/// The shared indices of the segments of the particles' ribbons, made at their first draw
+	mutable std::unique_ptr<QuadIndices> _ribbonQuads;
+	/// The curtains of the influence circles in static buffers, made at the first draw of the border
+	mutable std::unique_ptr<InfluenceCurtains> _influenceCurtains;
 	/// Whether this frame's land takes the baked shadows
 	mutable bool _landShadowsBaked {false};
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
@@ -1179,6 +1182,11 @@ private:
 	void CollectSprites(DrawnFrame& frame, const DrawSceneDesc& drawDesc) const;
 	/// Sampled by the primitives without a skin, as Direct3D's texture stages read white with no texture set
 	std::optional<TextureHandle> _whiteTexture;
+	/// The lowest and the highest corners of the land, which every draw of a frame reads with the same value. It goes
+	/// to the GPU one time for each frame, not with each draw.
+	std::optional<UniformHandle> _islandExtentUniform;
+	/// Gives the GPU the values that every draw of the frame reads with the same value
+	void SetFrameUniforms() const noexcept;
 	/// A texel that the renderer reads back to make a frame wait for the GPU; none if the backend cannot read textures
 	std::optional<TextureHandle> _readBackTexture;
 	/// Where the read-back texel goes
@@ -1252,6 +1260,15 @@ private:
 	mutable std::vector<particles::draw::Command> _townBeliefSymbolCommands;
 	/// The places of the sprites of the symbols of the pass in the layout, in the order drawn
 	mutable std::vector<uint32_t> _townBeliefSymbolSprites;
+	/// Where the sprites of a command of a particle frame are: in the buffer of the symbol sprites or of the full
+	/// sprites, from this first instance
+	struct ParticleSpritePlace
+	{
+		bool symbol {false};
+		uint32_t first {0};
+	};
+	/// The place of the sprites of each command of the particle frame that the pass draws. It keeps its memory.
+	mutable std::vector<ParticleSpritePlace> _particleSpritePlaces;
 	mutable particles::draw::SymbolOrderLists _townBeliefSymbolLists;
 	/// The lists that the orders of the particles use, kept from frame to frame for their memory
 	mutable particles::draw::OrderLists _townBeliefOrderLists;
