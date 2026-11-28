@@ -1857,8 +1857,17 @@ void FireSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& fr
 			const auto firstGroup = frame.groups.size();
 			particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, transform.position,
 			                           particles::draw::k_NeutralPlayer, sources, place);
-			// The object draws its fire at its place in the land's draw list
-			particles::draw::SetDrawer(frame, firstGroup, particles::draw::ObjectEffect(object), 0);
+			if (const auto* ball = registry.TryGet<const MagicFireBall>(object))
+			{
+				// The miracles draw the fires of the fireballs after the shields, the newest fireball first
+				particles::draw::SetDrawer(frame, firstGroup, {.drawer = particles::draw::Drawer::FireBalls},
+				                           particles::draw::FireBallPlace(ball->made));
+			}
+			else
+			{
+				// The object draws its fire at its place in the land's draw list
+				particles::draw::SetDrawer(frame, firstGroup, particles::draw::ObjectEffect(object), 0);
+			}
 		}
 		// A large building burning lights the land round it, flickering
 		if (look.lightsLand && lightMap.has_value())

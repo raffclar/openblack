@@ -85,7 +85,7 @@ std::optional<entt::entity> GameObjectEffects::AttachFireBall(glm::vec3 position
 	const auto row = magic::FireBallInfoRow(powerUpLevel);
 	const auto ball = registry.Create();
 	// It takes its place in the order of the things made
-	openblack::ecs::archetypes::TakeThingMadePlace();
+	const auto made = openblack::ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<Transform>(ball, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<MagicFireBall>(ball, MagicFireBall {
 	                                         .strength = strength,
@@ -95,6 +95,7 @@ std::optional<entt::entity> GameObjectEffects::AttachFireBall(glm::vec3 position
 	                                         .player = player.value_or(PlayerNames::NEUTRAL),
 	                                         .hasPlayer = player.has_value(),
 	                                         .lastTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0,
+	                                         .made = made,
 	                                     });
 	// The ball is as hot as its miracle is strong, times the start heat of its row
 	const float temperature = strength * Locator::infoConstants::value().magicFireBall.at(row).initialTemperature;

@@ -208,8 +208,10 @@ void ParticleSystem::AddLightSheets(const ParticleRuleSystemInterface& rules, pa
 {
 	std::vector<particles::LightSheet::Vertex> vertices;
 	std::vector<uint32_t> triangles;
-	for (const auto& sheet : rules.LightSheets())
+	const auto sheets = rules.LightSheets();
+	for (uint32_t i = 0; i < sheets.size(); ++i)
 	{
+		const auto& sheet = sheets[i];
 		if (sheet->Hidden())
 		{
 			continue;
@@ -217,7 +219,12 @@ void ParticleSystem::AddLightSheets(const ParticleRuleSystemInterface& rules, pa
 		// It takes its place by the point where its middle was at its last draw
 		const auto sortPoint = sheet->Middle();
 		sheet->Build(vertices, triangles);
+		const auto firstGroup = frame.groups.size();
 		particles::draw::AddLightSheet(frame, vertices, triangles, sortPoint, sheet->GetLook());
+		// Each owner draws its sheets in its turn, the newest sheet first. The sheets are in the order that they started.
+		const auto& by = sheet->GetDrawnBy();
+		const auto newestFirst = static_cast<uint32_t>(sheets.size()) - 1 - i;
+		particles::draw::SetDrawer(frame, firstGroup, by, particles::draw::PlaceOf(by, newestFirst, std::nullopt));
 	}
 }
 
@@ -265,9 +272,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 			auto firstGroup = frame.groups.size();
 			particles::draw::AddFightMarks(frame, rules->FightMarks());
 			particles::draw::SetDrawer(frame, firstGroup, {.drawer = particles::draw::Drawer::FightMarks}, 0);
-			firstGroup = frame.groups.size();
 			AddLightSheets(*rules, frame);
-			particles::draw::SetDrawer(frame, firstGroup, {.drawer = particles::draw::Drawer::LightSheets}, 0);
 			firstGroup = frame.groups.size();
 			for (const auto& symbol : rules->PlayerSymbols())
 			{

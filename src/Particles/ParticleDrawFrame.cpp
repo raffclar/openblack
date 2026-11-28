@@ -964,9 +964,11 @@ uint32_t draw::PlaceOf(const DrawnBy& by, uint32_t index, std::optional<uint32_t
 		return by.slot;
 	case Drawer::ListedObject:
 		return std::min(by.slot, (1u << k_SlotBits) - 1);
+	case Drawer::LightSheets:
 	case Drawer::WorshipSites:
 	{
-		// The game draws the sites of each player in the order of the players, the neutral player last
+		// The game draws the sheets of each list in the order of the lists, and the sites of each player in the order of
+		// the players and of their places round the temple
 		constexpr uint32_t k_IndexBits = 24;
 		constexpr uint32_t k_IndexMask = (1u << k_IndexBits) - 1;
 		return (std::min(by.slot, 0xFFu) << k_IndexBits) | std::min(index, k_IndexMask);
@@ -988,10 +990,14 @@ void draw::SetDrawer(Frame& frame, size_t firstGroup, const DrawnBy& by, uint32_
 {
 	for (auto& group : std::span(frame.groups).subspan(std::min(firstGroup, frame.groups.size())))
 	{
-		group.drawer = by.drawer;
+		// The game draws the shells of light from one list of its own, whatever effect made them
+		const auto items = std::span(frame.items).subspan(group.firstItem, group.itemCount);
+		const bool shells =
+		    !items.empty() && std::ranges::all_of(items, [](const Item& item) { return item.kind == ItemKind::Shell; });
+		group.drawer = shells ? Drawer::VolumeGlows : by.drawer;
 		group.place = place;
 		group.object = by.object;
-		if (by.drawer == Drawer::ListedObject)
+		if (group.drawer == Drawer::ListedObject)
 		{
 			group.stage = DrawStage::ListedObjects;
 		}
@@ -1035,7 +1041,7 @@ void draw::PlaceListedObjects(Frame& frame, std::span<const entt::entity> list)
 void draw::OrderByDrawer(Frame& frame)
 {
 	std::ranges::stable_sort(frame.groups, [](const Group& a, const Group& b) {
-		return std::tie(a.stage, a.drawer, a.place) < std::tie(b.stage, b.drawer, b.place);
+		return std::tuple(a.stage, TurnOf(a.drawer), a.place) < std::tuple(b.stage, TurnOf(b.drawer), b.place);
 	});
 }
 

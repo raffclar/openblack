@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <limits>
 #include <optional>
 
@@ -20,9 +21,9 @@ namespace openblack::particles::draw
 {
 
 /// The thing that draws an effect in the game's frame. The game has no one list of effects: each owner draws its effects
-/// when the frame draws the owner. In each step of the frame the owners draw in this order, and the scene submits the
-/// effects in the same order, so that at an equal distance an effect comes after the effects that the game draws before
-/// it.
+/// when the frame draws the owner. In each step of the frame the owners draw in the order of TurnOf, and the scene submits
+/// the effects in the same order, so that at an equal distance an effect comes after the effects that the game draws
+/// before it. A save keeps the value of the drawer, so a new drawer gets the next value.
 enum class Drawer : uint8_t
 {
 	/// An object of the land's draw list, at the place of the object in the list. The objects draw before the hand.
@@ -33,11 +34,11 @@ enum class Drawer : uint8_t
 	Liquids,
 	/// The lasting effects of the hand and the interface, each in its slot (see HandSlot)
 	Hand,
-	/// The sheets of light of the gesture trails and of the objects
+	/// The sheets of light of the gesture trails, then those of the objects (see SheetList), the newest first in each
 	LightSheets,
 	/// The motes of the worship sites, the sites of each player in the order of the players
 	WorshipSites,
-	/// The effects of the shields
+	/// The effects of the shields, the newest shield first
 	Shields,
 	/// The miracles, the newest first. A miracle draws its own effect first, then the other effects that it draws.
 	Spells,
@@ -47,7 +48,55 @@ enum class Drawer : uint8_t
 	Players,
 	/// An effect whose drawer in the game is not yet known. These effects come last.
 	Others,
+	/// A step of the land's draw after the objects of the list, as the puffs of dust and the wake of the boat. The stage of
+	/// the effect gives the step.
+	LandStep,
+	/// The rings of light round the arenas, the newest arena first, after the liquids
+	Arenas,
+	/// The fires of the fireballs, the newest fireball first, after the shields and before the miracles
+	FireBalls,
+	/// The shells of light that the effects lay over objects, the newest first, after the rings of the arenas
+	VolumeGlows,
 };
+
+/// The turn of a drawer in its step of the game's frame, the first turn first
+[[nodiscard]] constexpr uint8_t TurnOf(Drawer drawer)
+{
+	switch (drawer)
+	{
+	case Drawer::ListedObject:
+		return 0;
+	case Drawer::LandStep:
+		return 1;
+	case Drawer::FightMarks:
+		return 2;
+	case Drawer::Liquids:
+		return 3;
+	case Drawer::Arenas:
+		return 4;
+	case Drawer::VolumeGlows:
+		return 5;
+	case Drawer::Hand:
+		return 6;
+	case Drawer::LightSheets:
+		return 7;
+	case Drawer::WorshipSites:
+		return 8;
+	case Drawer::Shields:
+		return 9;
+	case Drawer::FireBalls:
+		return 10;
+	case Drawer::Spells:
+		return 11;
+	case Drawer::Containers:
+		return 12;
+	case Drawer::Players:
+		return 13;
+	case Drawer::Others:
+		return 14;
+	}
+	return 14;
+}
 
 /// The lasting effects of the hand and the interface, in the order that the game draws them
 enum class HandSlot : uint8_t
@@ -74,12 +123,27 @@ enum class HandSlot : uint8_t
 	Selection,
 };
 
+/// The lists of the sheets of light, in the order that the game draws them
+enum class SheetList : uint8_t
+{
+	/// The sheets of the gesture trails
+	GestureTrails,
+	/// The sheets that the effects put round objects
+	Objects,
+};
+
+/// The places round a temple where its worship sites stand
+constexpr uint32_t k_WorshipSitePlaces = 6;
+/// The places of the players' temples: the seven players, then the neutral player
+constexpr uint32_t k_TemplePlayers = 8;
+
 /// The thing that draws an effect, which its owner gives the effect when it starts it
 struct DrawnBy
 {
 	Drawer drawer {Drawer::Others};
-	/// The place of the effect among the effects of its drawer: a HandSlot for the hand, the player for a worship site,
-	/// and the place of the effect in its object or its miracle for an object or a miracle (its own effect is 0)
+	/// The place of the effect among the effects of its drawer: a HandSlot for the hand, a SheetList for a sheet of
+	/// light, the player and the place round the temple for a worship site (see WorshipSiteEffect), and the place of the
+	/// effect in its object or its miracle for an object or a miracle (its own effect is 0)
 	uint32_t slot {0};
 	/// The object of the land's draw list that draws the effect
 	entt::entity object {entt::null};
@@ -99,6 +163,27 @@ constexpr uint32_t k_NotListed = std::numeric_limits<uint32_t>::max() >> k_SlotB
 [[nodiscard]] constexpr DrawnBy HandEffect(HandSlot slot)
 {
 	return {.drawer = Drawer::Hand, .slot = static_cast<uint32_t>(slot)};
+}
+
+/// The sheet of light of one list
+[[nodiscard]] constexpr DrawnBy SheetEffect(SheetList list)
+{
+	return {.drawer = Drawer::LightSheets, .slot = static_cast<uint32_t>(list)};
+}
+
+/// The effect of a worship site. The game draws the sites of each player in the order of the players, the neutral player
+/// last, and the sites of one temple in the order of their places round the temple.
+[[nodiscard]] constexpr DrawnBy WorshipSiteEffect(uint32_t player, uint32_t place)
+{
+	return {.drawer = Drawer::WorshipSites,
+	        .slot = (std::min(player, k_TemplePlayers - 1) * k_WorshipSitePlaces) + std::min(place, k_WorshipSitePlaces - 1)};
+}
+
+/// The place of the fire of a fireball among the fires of the fireballs, from the place of the fireball in the order of
+/// the things made. The newest fireball comes first.
+[[nodiscard]] constexpr uint32_t FireBallPlace(uint32_t made)
+{
+	return std::numeric_limits<uint32_t>::max() - made;
 }
 
 /// The effect drawn by an object of the land's draw list

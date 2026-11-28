@@ -1643,12 +1643,15 @@ void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
 	DrawFarVillagerSmudges(desc);
 	DrawVillagerEyes(desc);
 	// The objects of the land's draw list draw their fires. Then the land draws the reward chests with their seeds, the
-	// light of the opening, the ripples of the influence border and the learning marks: the words of each mark at
-	// once, then its bulb at once, then its glow into the sort. The game draws the globes and the icons of the village
-	// centres after the land. A seed that the game draws at once comes in this order.
+	// puffs of smoke and dust, the light of the opening, the wake of the boat, the ripples of the influence border and
+	// the learning marks: the words of each mark at once, then its bulb at once, then its glow into the sort. The game
+	// draws the globes and the icons of the village centres after the land. A seed that the game draws at once comes in
+	// this order.
 	DrawParticles(desc, particles::draw::DrawStage::ListedObjects);
 	DrawRewardSeeds(desc);
+	DrawParticles(desc, particles::draw::DrawStage::DustPuffs);
 	DrawIntroLight(desc);
+	DrawParticles(desc, particles::draw::DrawStage::Boat);
 	DrawInfluenceRipples(desc);
 	DrawLearningBulbs(desc);
 	SubmitWorldLabels(desc, WorldLabelGroup::LearningWords);

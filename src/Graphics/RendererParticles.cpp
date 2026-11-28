@@ -222,11 +222,15 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 	{
 		Locator::fireSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), particleFrame);
 	}
+	// The puffs of smoke and dust. The land draws them after the reward chests and the piles of roots.
 	if (Locator::explosionSystem::has_value())
 	{
+		const auto firstPuff = particleFrame.groups.size();
 		Locator::explosionSystem::value().CollectDrawFrame(particleFrame);
+		particles::draw::SetDrawer(particleFrame, firstPuff, {.drawer = particles::draw::Drawer::LandStep}, 0);
+		particles::draw::SetStage(particleFrame, firstPuff, particles::draw::DrawStage::DustPuffs);
 	}
-	// The dust of a reward chest that fell
+	// The dust of a reward chest that fell, which the chest draws at its place in the land's draw list
 	if (Locator::rewardSystem::has_value())
 	{
 		Locator::rewardSystem::value().CollectDrawFrame(particleFrame);
@@ -239,10 +243,13 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 		Locator::liquidParticleSystem::value().CollectDrawFrame(particleFrame);
 		particles::draw::SetDrawer(particleFrame, firstLiquid, {.drawer = particles::draw::Drawer::Liquids}, 0);
 	}
-	// The explorers' boat's wake
+	// The explorers' boat's wake. The land draws the boat after the light of the opening.
 	if (Locator::boatLaunchSystem::has_value())
 	{
+		const auto firstWake = particleFrame.groups.size();
 		Locator::boatLaunchSystem::value().CollectDrawFrame(particleFrame);
+		particles::draw::SetDrawer(particleFrame, firstWake, {.drawer = particles::draw::Drawer::LandStep}, 0);
+		particles::draw::SetStage(particleFrame, firstWake, particles::draw::DrawStage::Boat);
 	}
 	// Each effect takes its turn among the effects at an equal distance in the order of the things that draw it in the
 	// game's frame. The objects of the land's draw list draw in the order of the list.

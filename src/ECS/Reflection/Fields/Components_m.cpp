@@ -43,7 +43,8 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	    .Field<&components::MagicFireBall::player>("player")
 	    .Field<&components::MagicFireBall::hasPlayer>("hasPlayer")
 	    .Field<&components::MagicFireBall::lastTurn>("lastTurn")
-	    .Field<&components::MagicFireBall::handTarget>("handTarget");
+	    .Field<&components::MagicFireBall::handTarget>("handTarget")
+	    .Field<&components::MagicFireBall::made>("made");
 	Reflect<components::MagicForest>(context)
 	    .Field<&components::MagicForest::spell>("spell")
 	    .Field<&components::MagicForest::player>("player")

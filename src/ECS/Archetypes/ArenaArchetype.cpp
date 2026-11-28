@@ -43,6 +43,8 @@ std::shared_ptr<particles::LightSheet> ArenaArchetype::MakeRing(const glm::ivec2
 	ring->SetSpread(creature_arena::k_RingSpread);
 	ring->SetStrength(creature_arena::k_RingStrength);
 	ring->SetHidden(true);
+	// The game draws the rings of the arenas after the liquids, before the other particles
+	ring->SetDrawnBy({.drawer = particles::draw::Drawer::Arenas});
 	if (Locator::effectRequestSystem::has_value())
 	{
 		Locator::effectRequestSystem::value().AddLightSheet(ring);

@@ -220,6 +220,10 @@ enum class DrawStage : uint8_t
 {
 	/// With the objects of the land's draw list, before the reward chests: the fires of the objects
 	ListedObjects,
+	/// After the reward chests and the piles of roots, before the light of the opening: the puffs of smoke and dust
+	DustPuffs,
+	/// After the light of the opening, before the ripples of the influence border: the wake of the boat
+	Boat,
 	/// With the learning marks, after the bulb of each mark: the glows of the marks
 	LearningMarks,
 	/// After the hand: the liquids, the particle effects and everything after them
@@ -458,7 +462,7 @@ void Order(const Frame& frame, const glm::vec3& camera, std::optional<glm::vec3>
 void SetStage(Frame& frame, size_t firstGroup, DrawStage stage);
 /// Gives each group from the first group to the last group of the frame the thing that draws it. Each group also gets
 /// its place among the effects of that thing. The effects of the objects of the land's draw list go to the step of the
-/// listed objects.
+/// listed objects. A group that holds only shells of light goes to the shells (Drawer::VolumeGlows).
 void SetDrawer(Frame& frame, size_t firstGroup, const DrawnBy& by, uint32_t place);
 /// Gives each group that an object of the land's draw list draws the place of the object in the list. An object that the
 /// list does not hold comes after the listed objects.

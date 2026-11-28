@@ -40,6 +40,8 @@ struct MagicFireBall
 	/// Where the hand may take hold of it, as its particle was last placed; none while the particle is faint (an alpha
 	/// of 30 or less), when the hand passes through it
 	std::optional<glm::vec3> handTarget;
+	/// Its place in the order of the things made. The game draws the fires of the newest fireballs first.
+	uint32_t made {0};
 };
 
 } // namespace openblack::ecs::components
