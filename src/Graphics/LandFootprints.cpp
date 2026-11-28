@@ -16,6 +16,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <span>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -185,6 +186,7 @@ void LandFootprints::Reset(size_t blockCount)
 	_blockThings.assign(blockCount, {});
 	_ownTexels.clear();
 	_painted.assign(blockCount, false);
+	_oldSizes.assign(blockCount, false);
 	_blockAt.clear();
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
 	for (size_t i = 0; i < blocks.size(); ++i)
@@ -256,10 +258,16 @@ const LandFootprints::KnownLook* LandFootprints::LookOf(entt::entity entity) con
 	return index < _looks.size() && _looks[index].entity == entity ? &_looks[index] : nullptr;
 }
 
-bool LandFootprints::SameLook(const KnownLook& look, entt::id_type mesh, const std::vector<uint32_t>& cells,
+bool LandFootprints::SameLook(const KnownLook& look, entt::id_type mesh, const MapCellResident& resident,
                               const Transform& transform) const
 {
-	if (look.mesh != mesh || look.cellCount != cells.size() || !SameTransform(look.transform, transform))
+	return SameTransform(look.transform, transform) && SameFiling(look, mesh, resident);
+}
+
+bool LandFootprints::SameFiling(const KnownLook& look, entt::id_type mesh, const MapCellResident& resident) const
+{
+	const auto& cells = resident.cells;
+	if (look.mesh != mesh || look.filings != resident.filings || look.cellCount != cells.size())
 	{
 		return false;
 	}
@@ -269,6 +277,29 @@ bool LandFootprints::SameLook(const KnownLook& look, entt::id_type mesh, const s
 		return true;
 	}
 	return look.firstCell == cells.front() && (cells.size() == 1 || _known.get(look.entity).cells == cells);
+}
+
+void LandFootprints::Resize(const ThingStores& stores, KnownLook& look, const L3DMesh::Footprint& footprint,
+                            const Transform& transform)
+{
+	auto& known = _known.get(look.entity);
+	known.placement = PlacementFor(stores.turns, look.entity, transform);
+	// The bounds hold the footprint at its old size and at its new size. Thus a later paint removes the two sizes from
+	// the blocks that the thing leaves.
+	const auto bounds = land_footprints::GroundBounds(footprint.triangles, known.placement);
+	known.bounds = {glm::min(known.bounds.first, bounds.first), glm::max(known.bounds.second, bounds.second)};
+	std::tie(known.lowBlock, known.highBlock) = BlocksOf(known.bounds);
+	look.transform = transform;
+	for (int x = known.lowBlock.x; x <= known.highBlock.x; ++x)
+	{
+		for (int z = known.lowBlock.y; z <= known.highBlock.y; ++z)
+		{
+			if (const auto found = _blockAt.find(std::pair(x, z)); found != _blockAt.end())
+			{
+				_oldSizes.at(found->second) = true;
+			}
+		}
+	}
 }
 
 size_t LandFootprints::Shares(size_t count)
@@ -305,8 +336,15 @@ void LandFootprints::LookAt(const ThingStores& stores, uint32_t search, entt::en
 	if (_known.contains(entity))
 	{
 		auto& known = _looks[index];
-		if (footprint != nullptr && SameLook(known, mesh.id, resident.cells, transform))
+		const auto change = footprint != nullptr
+		                        ? land_footprints::ChangeOf(known.transform, transform, SameFiling(known, mesh.id, resident))
+		                        : land_footprints::FootprintChange::Repaint;
+		if (change != land_footprints::FootprintChange::Repaint)
 		{
+			if (change == land_footprints::FootprintChange::SizeOnly)
+			{
+				Resize(stores, known, *footprint, transform);
+			}
 			known.seen = search;
 			return;
 		}
@@ -328,6 +366,7 @@ void LandFootprints::LookAt(const ThingStores& stores, uint32_t search, entt::en
 	                 .mesh = mesh.id,
 	                 .cellCount = static_cast<uint32_t>(resident.cells.size()),
 	                 .firstCell = resident.cells.empty() ? 0u : resident.cells.front(),
+	                 .filings = resident.filings,
 	                 .transform = transform},
 	      std::move(known));
 }
@@ -468,7 +507,7 @@ void LandFootprints::FindChangedThingsInAll(const ThingStores& stores)
 				}
 				continue;
 			}
-			if (footprint->second.footprint != nullptr && SameLook(*known, mesh.id, resident.cells, transform))
+			if (footprint->second.footprint != nullptr && SameLook(*known, mesh.id, resident, transform))
 			{
 				known->seen = search;
 				continue;
@@ -682,7 +721,9 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, const Thi
 
 std::optional<footprint_paint::Region> LandFootprints::PartToPaint(size_t block, const BlockPaint& paint) const
 {
-	if (_wholeDirty.contains(block) || !_painted.at(block) || (paint.things.empty() && paint.loose.empty()))
+	// A block that holds a footprint at an old size gets all of its footprints at their sizes now
+	if (_wholeDirty.contains(block) || _oldSizes.at(block) || !_painted.at(block) ||
+	    (paint.things.empty() && paint.loose.empty()))
 	{
 		return std::nullopt;
 	}
@@ -954,6 +995,8 @@ void LandFootprints::PaintChanges(const ThingStores& stores)
 			_painted.at(blocks[i]) = !paints[i].things.empty() || !paints[i].loose.empty();
 			_blockThings.at(blocks[i]) = paints[i].things;
 		}
+		// Each block that holds an old size is painted in full now, or holds no footprints
+		_oldSizes.at(blocks[i]) = false;
 	}
 	// Then the paint of each block, which goes straight to the block's texture
 	const auto side = static_cast<size_t>(island.GetBlockTextureSide());

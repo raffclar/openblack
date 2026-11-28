@@ -32,6 +32,9 @@ struct MapCellResident
 	std::vector<uint32_t> cells;
 	/// Where it stood when it went into them
 	glm::vec3 filedAt {0.0f};
+	/// How many times it went into the cells. The land paints a footprint again only when its thing goes into the cells
+	/// or comes out of them, thus the footprints use this count to find these times.
+	uint32_t filings {0};
 };
 
 /// A thing on the map that can move, whose cell is checked each turn

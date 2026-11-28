@@ -633,12 +633,15 @@ TEST_F(MapProductionFiling, AThingThatChangesItsSizeLeavesTheMapAtItsOldSizeAndC
 	registry.Assign<BigForest>(forest);
 	map.FileNew();
 	ASSERT_EQ(footpaths.put, std::vector {3.0f});
+	EXPECT_EQ(registry.Get<const MapCellResident>(forest).filings, 1u);
 
 	ecs::thing_map_place::ReinsertWith(forest,
 	                                   [&registry, forest]() { registry.Get<Transform>(forest).scale = glm::vec3(1.0f); });
 	EXPECT_EQ(footpaths.removed, std::vector {3.0f});
 	EXPECT_EQ(footpaths.put, (std::vector {3.0f, 1.0f}));
 	EXPECT_EQ(registry.Get<const MapCellResident>(forest).cells.size(), 1u);
+	// The thing went into the cells again, thus the land paints its footprint again
+	EXPECT_EQ(registry.Get<const MapCellResident>(forest).filings, 2u);
 
 	// A thing that is not in the cells only changes
 	const auto held = registry.Create();
@@ -648,6 +651,7 @@ TEST_F(MapProductionFiling, AThingThatChangesItsSizeLeavesTheMapAtItsOldSizeAndC
 	map.FileNew();
 	ecs::thing_map_place::ReinsertWith(held, [&registry, held]() { registry.Get<Transform>(held).scale = glm::vec3(2.0f); });
 	EXPECT_EQ(registry.Get<const Transform>(held).scale.x, 2.0f);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(held));
 	EXPECT_EQ(footpaths.removed, std::vector {3.0f});
 	Locator::footpathSystem::reset();
 }

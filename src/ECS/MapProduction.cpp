@@ -376,9 +376,13 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 	KnowLandBlocks();
 	// The list of the cells uses the memory of the list that the thing had, so that a move gets no memory from the heap
 	std::vector<uint32_t> cells;
+	uint32_t filings = 0;
 	if (_registry->AllOf<MapCellResident>(entity))
 	{
-		_registry->Write<MapCellResident>(entity, [&cells](MapCellResident& resident) { cells = std::move(resident.cells); });
+		_registry->Write<MapCellResident>(entity, [&cells, &filings](MapCellResident& resident) {
+			cells = std::move(resident.cells);
+			filings = resident.filings;
+		});
 	}
 	CellsFor(entity, kind, cells);
 	for (const auto cell : cells)
@@ -390,7 +394,8 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 	                                                                     .coversOutline = kind.coversOutline,
 	                                                                     .moves = kind.moves,
 	                                                                     .cells = std::move(cells),
-	                                                                     .filedAt = at});
+	                                                                     .filedAt = at,
+	                                                                     .filings = filings + 1});
 	if (kind.moves && !_registry->AllOf<MapCellMover>(entity))
 	{
 		_registry->Assign<MapCellMover>(entity);
