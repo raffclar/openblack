@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -38,6 +39,17 @@ namespace openblack
 class SideThread;
 class WorkerPool;
 } // namespace openblack
+
+namespace openblack::ecs
+{
+class Registry;
+}
+
+namespace openblack::ecs::components
+{
+struct MapCellResident;
+struct Mesh;
+} // namespace openblack::ecs::components
 
 namespace openblack::graphics
 {
@@ -84,7 +96,7 @@ private:
 		glm::ivec2 lowBlock {0};
 		glm::ivec2 highBlock {0};
 	};
-	/// The part of a known thing that the search compares each frame. The search keeps it by the number of the entity,
+	/// The part of a known thing that the search compares. The search keeps it by the number of the entity,
 	/// thus it reads one small row for each thing. A number with no known thing holds the null entity.
 	struct KnownLook
 	{
@@ -126,9 +138,22 @@ private:
 	[[nodiscard]] bool TakeLandChanges();
 	/// Finds the changes of the rivers and the prints, and paints again the blocks that changed
 	void PaintChanges(const ThingStores& stores);
-	/// Finds the things with footprints that changed, and the blocks that take their footprints. It reads only the given
-	/// stores and the registry's list of entities, thus a side thread can do it while the game's thread draws.
-	void FindChangedThings(const ThingStores& stores);
+	/// Finds the things with footprints that changed, and the blocks that take their footprints. It looks only at the
+	/// marked things, or at all the things when there are no marks. It reads only the given stores and the registry's
+	/// list of entities, thus a side thread can do it while the game's thread draws.
+	void FindChangedThings(const ThingStores& stores, const std::optional<std::vector<uint32_t>>& marked);
+	/// Finds the changes of the things with the marked entity numbers
+	void FindMarkedThings(const ThingStores& stores, std::span<const uint32_t> marked);
+	/// Finds the changes of all the things in the map's cells and of all the known things
+	void FindChangedThingsInAll(const ThingStores& stores);
+	/// Compares a thing in the map's cells that shows its footprint with what is known of it. A changed or new thing
+	/// marks its blocks and becomes known. A thing whose model has no footprint does not become known.
+	void LookAt(const ThingStores& stores, uint32_t search, entt::entity entity,
+	            const ecs::components::MapCellResident& resident, const ecs::components::Mesh& mesh,
+	            const ecs::components::Transform& transform);
+	/// Takes the registry's marks of the things that can have changed since the last take. None when the search must
+	/// look at all the things.
+	[[nodiscard]] std::optional<std::vector<uint32_t>> TakeMarkedThings();
 	/// Finds whether the rivers changed, and the blocks that take their footprints
 	void FindChangedRivers();
 	/// Finds whether the prints of the things that show only as prints changed, and the blocks that take them
@@ -178,8 +203,8 @@ private:
 		const L3DMesh::Footprint* footprint {nullptr};
 	};
 	std::unordered_map<entt::id_type, FoundFootprint> _footprints;
-	/// The known things by their entities. A look-up by an entity costs little, as the walk of the things does it for each
-	/// thing in each frame.
+	/// The known things by their entities. A look-up by an entity costs little, as the search does it for each thing that
+	/// it looks at.
 	entt::storage<Known> _known;
 	/// The compared part of each known thing, by the number of its entity
 	std::vector<KnownLook> _looks;
@@ -218,6 +243,10 @@ private:
 	std::unique_ptr<WorkerPool> _workers;
 	/// The count of the searches for the changed things
 	uint32_t _searches {0};
+	/// The next search looks at all the things, as after a new land
+	bool _lookAtAll {true};
+	/// The registry whose marks the last search took
+	const ecs::Registry* _markedRegistry {nullptr};
 	/// The state of the search that StartSearch started
 	enum class Search : uint8_t
 	{

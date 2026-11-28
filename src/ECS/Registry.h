@@ -27,6 +27,7 @@
 #include "ECS/DrawLayoutComponents.h"
 #include "ECS/Reflection/RowMarks.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/ThingWrites.h"
 
 namespace openblack
 {
@@ -65,6 +66,8 @@ namespace openblack::ecs::components
 struct FixedOutline;
 struct MapCellResident;
 struct MapPlace;
+struct Mesh;
+struct Transform;
 } // namespace openblack::ecs::components
 
 namespace openblack::ecs
@@ -82,6 +85,21 @@ template <>
 inline constexpr bool k_MarksHashRows<components::MapCellResident> = true;
 template <>
 inline constexpr bool k_MarksHashRows<components::MapPlace> = true;
+
+/// The components whose every write marks the thing in ThingChanges: the place, the model and the map's cells of a thing.
+/// A request for one of these components that can change it marks the thing.
+template <typename Component>
+inline constexpr bool k_MarksThingWrites = false;
+template <>
+inline constexpr bool k_MarksThingWrites<components::Transform> = true;
+template <>
+inline constexpr bool k_MarksThingWrites<components::Mesh> = true;
+template <>
+inline constexpr bool k_MarksThingWrites<components::MapCellResident> = true;
+
+/// A request for a component that can change the place, the model or the map's cells of a thing
+template <typename Component>
+inline constexpr bool k_WritesThing = !std::is_const_v<Component> && k_MarksThingWrites<std::remove_cv_t<Component>>;
 
 /// A request for a component that can change it with no mark of its row
 template <typename Component>
@@ -172,6 +190,7 @@ public:
 	{
 		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
 		NoteRead<Components...>("Get");
+		MarkThingWrite<Components...>(entity);
 		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
@@ -185,6 +204,7 @@ public:
 	{
 		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
 		NoteRead<Components...>("TryGet");
+		MarkThingWrite<Components...>(entity);
 		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
@@ -204,7 +224,15 @@ public:
 	{
 		static_assert(!(k_WritesWithNoMark<Components> || ...), "Ask for a const component, or change it with Write");
 		NoteRead<Components...>("Each");
-		return _registry.view<Components...>(exclude...).each(func);
+		const auto view = _registry.view<Components...>(exclude...);
+		if constexpr ((k_WritesThing<Components> || ...))
+		{
+			for (const auto entity : view)
+			{
+				_thingWrites.Mark(entity);
+			}
+		}
+		return view.each(func);
 	}
 	/// Changes the component of an entity in place, and marks the row for the hash of the world. The function gets the
 	/// component and gives the result.
@@ -214,8 +242,13 @@ public:
 		NoteRead<Component>("Write");
 		auto& value = _registry.get<Component>(entity);
 		_rowMarks.Mark(entt::type_hash<Component>::value(), entity);
+		MarkThingWrite<Component>(entity);
 		return func(value);
 	}
+	/// The things whose place, model or map cells can have changed: each request that can write their Transform, Mesh or
+	/// MapCellResident marks them, and so do the gain and the loss of these components, of DeadTree and of Flowers. A
+	/// direct write to the stores and an empty registry mark all things. Only one reader can take the marks.
+	[[nodiscard]] ThingWrites& ThingChanges() noexcept { return _thingWrites; }
 	/// Gives the marks of the rows since the last call to the marks of a hash memo (see reflection::RowMarks::GiveTo)
 	void GiveRowMarks(reflection::RowMarks& taker) { _rowMarks.GiveTo(taker, &_registry); }
 	template <typename... Components, typename... Exclude, typename Func>
@@ -391,6 +424,23 @@ private:
 		_registry.on_construct<Component>().template connect<&Registry::LivingChanged>(*this);
 		_registry.on_destroy<Component>().template connect<&Registry::LivingChanged>(*this);
 	}
+	/// Marks the thing when a request for these components can change its place, its model or its map cells
+	template <typename... Components>
+	void MarkThingWrite(entt::entity entity) noexcept
+	{
+		if constexpr ((k_WritesThing<Components> || ...))
+		{
+			_thingWrites.Mark(entity);
+		}
+	}
+	void ThingChanged(entt::registry& /*registry*/, entt::entity entity) noexcept { _thingWrites.Mark(entity); }
+	template <typename Component>
+	void ConnectThingChanges()
+	{
+		_registry.on_construct<Component>().template connect<&Registry::ThingChanged>(*this);
+		_registry.on_update<Component>().template connect<&Registry::ThingChanged>(*this);
+		_registry.on_destroy<Component>().template connect<&Registry::ThingChanged>(*this);
+	}
 	template <typename Component>
 	void HashRowChanged(entt::registry& /*registry*/, entt::entity entity)
 	{
@@ -425,6 +475,8 @@ private:
 	entt::sigh<void(entt::entity)> _destroying;
 	/// The rows of the components of k_MarksHashRows that can have a change since the last hash of the world
 	reflection::RowMarks _rowMarks;
+	/// The things whose place, model or map cells can have changed since the last take
+	ThingWrites _thingWrites;
 	bool _freshIdsAtNextReset {false};
 };
 
