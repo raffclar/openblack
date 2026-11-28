@@ -42,6 +42,8 @@ check('the phases of the trace come from the reads of the films and the landscap
   assert.equal(assetPhaseOfRead('Data/logo.bik'), null);
   assert.equal(assetPhaseOfLog('[game] [info] Load land Land1: 812.4 ms in all'), 4);
   assert.equal(assetPhaseOfLog('[game] [info] Load land Land1: meshes 12.0 ms'), null);
+  // The map for 32 gods has no landscape file: the line of its map file starts the load of the land
+  assert.equal(assetPhaseOfLog('[game] [info] Load land obm_32p_1: map file 3.2 ms'), 3);
   assert.equal(assetPhaseOfLog('Load landscape Land1: 10.0 ms in all'), null);
 });
 
