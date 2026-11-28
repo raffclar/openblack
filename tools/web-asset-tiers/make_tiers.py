@@ -30,6 +30,10 @@ site when it first plays. A music bank that the game starts with a film comes be
 film plays while its blocks arrive, but the music must be there at the first frame.
 
 --check makes the tiers again from the traces that the tiers file names, and fails when the file is not the same.
+
+The service (bwgame-service) keeps a copy of the tiers file (scripts/asset_tiers.json). Its install puts the small
+files of each phase in the same packs, in the order of the game. After a change of the tiers file, put the new copy in
+the service and raise its install format, so that the next install makes the packs again.
 """
 
 import argparse
