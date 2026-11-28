@@ -1284,7 +1284,13 @@ bool Game::RunFrame() noexcept
 		// The web game asks for the art of the species that the scripts which started can make
 		if (Locator::creatureArtSystem::has_value())
 		{
-			Locator::creatureArtSystem::value().Update();
+			auto& art = Locator::creatureArtSystem::value();
+			art.Update();
+			// The species whose art arrived get the spare textures for their painted skins before their first frame
+			if (const auto skins = art.TakeSkinsToPrepare(); skins > 0 && Locator::rendererInterface::has_value())
+			{
+				Locator::rendererInterface::value().PrepareCreatureSkins(skins);
+			}
 		}
 		if (auto& screens = Locator::loadingScreenSystem::value();
 		    screens.TimesPrefetch() && resources.PendingCount() == resources.HeldCount())

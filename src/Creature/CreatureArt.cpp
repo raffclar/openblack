@@ -56,30 +56,52 @@ bool PushesInteger(const lhvm::VMInstruction& instruction)
 	       instruction.type == lhvm::DataType::Int;
 }
 
-/// The species that a creature which the code makes at the address has, when the address starts a creature that the
-/// code makes with a fixed species
+/// Whether the instruction calls a native of `makeNatives` that has the species at the place
+bool CallsMakeNative(const lhvm::VMInstruction& instruction, MakeNatives makeNatives, SpeciesPlace place)
+{
+	return instruction.code == lhvm::Opcode::Sys && std::ranges::any_of(makeNatives, [&instruction, place](const auto& native) {
+		       return native.number == instruction.data.uintVal && native.place == place;
+	       });
+}
+
+std::optional<CreatureType> SpeciesOfRow(int32_t row)
+{
+	return row >= 0 ? script::property_rules::CreatureTypeFromScript(static_cast<uint32_t>(row)) : std::nullopt;
+}
+
+/// The species that a creature which the code makes at the address has, when the push at the address starts the values
+/// of a creature that the code makes with a fixed species
 std::optional<CreatureType> SpeciesMadeAt(std::span<const lhvm::VMInstruction> code, size_t address, size_t end,
                                           MakeNatives makeNatives)
 {
 	constexpr auto k_CreatureType = static_cast<int32_t>(script::ObjectType::Creature);
-	const auto& type = code[address];
-	if (address + 1 >= end || !PushesInteger(type) || type.data.intVal != k_CreatureType)
+	const auto& first = code[address];
+	if (address + 1 >= end || !PushesInteger(first))
 	{
 		return std::nullopt;
 	}
-	const auto& subtype = code[address + 1];
-	if (!PushesInteger(subtype) || subtype.data.intVal < 0)
+	const auto& second = code[address + 1];
+	// The species is the last value, thus the call comes immediately after it
+	if (CallsMakeNative(second, makeNatives, SpeciesPlace::Last))
+	{
+		return SpeciesOfRow(first.data.intVal);
+	}
+	if (!PushesInteger(second))
 	{
 		return std::nullopt;
 	}
-	// The call that makes the creature is on the same line of the script as the type and the species
-	for (auto next = address + 2; next < end && code[next].line == type.line; ++next)
+	// The call that makes the creature is on the same line of the script as the first two values
+	const bool creature = first.data.intVal == k_CreatureType;
+	for (auto next = address + 2; next < end && code[next].line == first.line; ++next)
 	{
 		const auto& instruction = code[next];
-		if (instruction.code == lhvm::Opcode::Sys &&
-		    std::ranges::find(makeNatives, instruction.data.uintVal) != makeNatives.end())
+		if (creature && CallsMakeNative(instruction, makeNatives, SpeciesPlace::AfterThingType))
 		{
-			return script::property_rules::CreatureTypeFromScript(subtype.data.uintVal);
+			return SpeciesOfRow(second.data.intVal);
+		}
+		if (CallsMakeNative(instruction, makeNatives, SpeciesPlace::First))
+		{
+			return SpeciesOfRow(first.data.intVal);
 		}
 	}
 	return std::nullopt;

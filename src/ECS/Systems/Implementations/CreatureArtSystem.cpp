@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <string_view>
+#include <utility>
 
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
@@ -28,8 +29,20 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The natives that make a thing of the type and the subtype that a script pushes first
-constexpr std::array<std::string_view, 2> k_MakeNativeNames = {"CREATE", "CREATE_WITH_ANGLE_AND_SCALE"};
+/// A native that makes a creature: its name and the place of the species in its values
+struct MakeNativeName
+{
+	std::string_view name;
+	creature_art::SpeciesPlace place;
+};
+
+/// The natives that make a creature of a species that the script gives
+constexpr std::array<MakeNativeName, 4> k_MakeNativeNames = {{
+    {.name = "CREATE", .place = creature_art::SpeciesPlace::AfterThingType},
+    {.name = "CREATE_WITH_ANGLE_AND_SCALE", .place = creature_art::SpeciesPlace::AfterThingType},
+    {.name = "LOAD_CREATURE", .place = creature_art::SpeciesPlace::First},
+    {.name = "CREATURE_CREATE_RELATIVE_TO_CREATURE", .place = creature_art::SpeciesPlace::Last},
+}};
 
 /// The script that runs the control script of each land by the number of the land. A scan through the scripts that it
 /// runs finds the creatures of every land. Thus the system scans only its own code, and then the control script of the
@@ -55,12 +68,16 @@ void CreatureArtSystem::HoldSpecies(CreatureType species)
 	}
 }
 
-void CreatureArtSystem::HoldSkinFile(CreatureType species, entt::id_type file)
+void CreatureArtSystem::HoldSkinFile(CreatureType species, creature::CreatureBody::Appearance look, entt::id_type file)
 {
 	if (IsSpecies(species))
 	{
 		_held.set(Index(species));
 		_skinFiles.at(Index(species)).push_back(file);
+		if (look == creature::CreatureBody::Appearance::Base)
+		{
+			_baseSkinFiles.at(Index(species)) = file;
+		}
 	}
 }
 
@@ -120,9 +137,11 @@ void CreatureArtSystem::FollowScripts()
 	{
 		for (uint32_t i = 0; i < functions->size(); ++i)
 		{
-			if (std::ranges::find(k_MakeNativeNames, functions->at(i).name) != k_MakeNativeNames.end())
+			const auto& name = functions->at(i).name;
+			if (const auto found = std::ranges::find(k_MakeNativeNames, name, &MakeNativeName::name);
+			    found != k_MakeNativeNames.end())
 			{
-				_makeNatives.push_back(i);
+				_makeNatives.push_back({.number = i, .place = found->place});
 			}
 		}
 	}
@@ -143,9 +162,43 @@ void CreatureArtSystem::FollowScripts()
 	}
 }
 
+void CreatureArtSystem::PrepareSkins()
+{
+	const auto waiting = _asked & ~_skinsPrepared;
+	if (waiting.none() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	const auto& files = Locator::resources::value().GetL3DFiles();
+	for (size_t i = 0; i < k_SpeciesCount; ++i)
+	{
+		const auto fileId = _baseSkinFiles.at(i);
+		if (!waiting.test(i) || fileId == 0)
+		{
+			continue;
+		}
+		// This question does not load the file. The loading threads bring it.
+		if (const auto* file = files.FindLoaded(fileId); file != nullptr)
+		{
+			_skinsPrepared.set(i);
+			_skinsToPrepare = std::max(_skinsToPrepare, file->GetSkins().size());
+		}
+	}
+}
+
+size_t CreatureArtSystem::TakeSkinsToPrepare()
+{
+	return std::exchange(_skinsToPrepare, 0);
+}
+
 void CreatureArtSystem::Update()
 {
-	if (_held.none() || (_asked | ~_held).all() || !Locator::vm::has_value())
+	if (_held.none())
+	{
+		return;
+	}
+	PrepareSkins();
+	if ((_asked | ~_held).all() || !Locator::vm::has_value())
 	{
 		return;
 	}

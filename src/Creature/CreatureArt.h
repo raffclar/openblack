@@ -61,15 +61,34 @@ struct ScriptCode
 	uint32_t end {0};
 };
 
-/// The numbers of the natives that make a thing of a type and a subtype that the script pushes first, such as CREATE
-using MakeNatives = std::span<const uint32_t>;
+/// Where the species of the creature is in the values that a script pushes for a native that makes a creature
+enum class SpeciesPlace : uint8_t
+{
+	/// The script pushes a type of thing first and a subtype second, as for CREATE. The thing is a creature when the type
+	/// is the creature type of the scripts.
+	AfterThingType,
+	/// The script pushes the species first and a text second, as for LOAD_CREATURE
+	First,
+	/// The script pushes the species last, immediately before the call, as for CREATURE_CREATE_RELATIVE_TO_CREATURE
+	Last,
+};
+
+/// A native that makes a creature: its number in the scripts and the place of the species in its values
+struct MakeNative
+{
+	uint32_t number {0};
+	SpeciesPlace place {SpeciesPlace::AfterThingType};
+};
+
+/// The natives that make a creature
+using MakeNatives = std::span<const MakeNative>;
 
 /// The code of the script of a number, or nothing when there is no such script
 using CodeOfScript = std::function<std::optional<ScriptCode>(uint32_t scriptId)>;
 
 /// The species of the creatures that the code makes with a fixed species, and that the scripts it runs make, and so on.
-/// A creature that the code makes is a push of the creature type of the scripts, then a push of a fixed species, then a
-/// call to a native of `makeNatives` on the same line of the script. The code does not scan a script again whose first
+/// A fixed species is a push of a number, at the place that the native of `makeNatives` gives (see SpeciesPlace). The
+/// call to the native is on the same line of the script as the push. The code does not scan a script again whose first
 /// address is in `scanned`, and it adds the first address of each script that it scans. With `followRuns` false, it
 /// scans only the code of the script.
 [[nodiscard]] std::vector<CreatureType> SpeciesMade(std::span<const lhvm::VMInstruction> code, ScriptCode script,

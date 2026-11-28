@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureArt.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::creature_art;
@@ -33,7 +34,14 @@ namespace
 constexpr uint32_t k_Create = 27;
 constexpr uint32_t k_CreateWithAngle = 252;
 constexpr uint32_t k_GetPosition = 23;
-constexpr std::array<uint32_t, 2> k_Makes = {k_Create, k_CreateWithAngle};
+constexpr uint32_t k_LoadCreature = 329;
+constexpr uint32_t k_CreateRelative = 69;
+constexpr std::array<MakeNative, 4> k_Makes = {{
+    {.number = k_Create, .place = SpeciesPlace::AfterThingType},
+    {.number = k_CreateWithAngle, .place = SpeciesPlace::AfterThingType},
+    {.number = k_LoadCreature, .place = SpeciesPlace::First},
+    {.number = k_CreateRelative, .place = SpeciesPlace::Last},
+}};
 /// The creature type of the scripts
 constexpr int32_t k_Creature = 12;
 
@@ -70,6 +78,29 @@ void Create(std::vector<VMInstruction>& code, int32_t type, int32_t species, uin
 	code.push_back(PushVariable(4, line));
 	code.push_back(Sys(k_GetPosition, line));
 	code.push_back(Sys(native, line));
+}
+
+/// The pushes and the call of "load creature <species> <text> <player> at <marker>" on one line
+void LoadCreature(std::vector<VMInstruction>& code, int32_t species, uint32_t line)
+{
+	constexpr int32_t k_TextOffset = 348;
+	code.push_back(PushInt(species, line));
+	code.push_back(PushInt(k_TextOffset, line));
+	code.push_back(PushVariable(2, line));
+	code.push_back(PushVariable(4, line));
+	code.push_back(Sys(k_GetPosition, line));
+	code.push_back(Sys(k_LoadCreature, line));
+}
+
+/// The pushes and the call of "create creature from creature <creature> <scale> at <marker> <species>" on one line
+void CreateRelative(std::vector<VMInstruction>& code, int32_t species, uint32_t line)
+{
+	code.push_back(PushVariable(1, line));
+	code.push_back(PushVariable(3, line));
+	code.push_back(PushVariable(4, line));
+	code.push_back(Sys(k_GetPosition, line));
+	code.push_back(PushInt(species, line));
+	code.push_back(Sys(k_CreateRelative, line));
 }
 
 CodeOfScript NoScripts()
@@ -195,4 +226,46 @@ TEST(CreatureArt, FollowsTheScriptsThatTheScriptRuns)
 	std::unordered_set<uint32_t> once;
 	EXPECT_TRUE(SpeciesMade(code, scripts.at(1), k_Makes, codeOf, false, once).empty());
 	EXPECT_EQ(SpeciesMade(code, scripts.at(2), k_Makes, codeOf, false, once), (std::vector {CreatureType::Tiger}));
+}
+
+TEST(CreatureArt, FindsTheSpeciesOfACreatureMadeFromAFileOrFromACreature)
+{
+	std::vector<VMInstruction> code;
+	LoadCreature(code, 4, 30);
+	CreateRelative(code, 13, 31);
+	code.push_back(End(32));
+	std::unordered_set<uint32_t> scanned;
+	const auto species = SpeciesMade(code, {0, static_cast<uint32_t>(code.size())}, k_Makes, NoScripts(), true, scanned);
+	EXPECT_EQ(species, (std::vector {*script::property_rules::CreatureTypeFromScript(4),
+	                                 *script::property_rules::CreatureTypeFromScript(13)}));
+}
+
+TEST(CreatureArt, IgnoresAFileOrACreatureCopyWithASpeciesThatIsNotFixed)
+{
+	std::vector<VMInstruction> code;
+	// The species of the file in a variable
+	code.push_back(PushVariable(7, 40));
+	code.push_back(PushInt(348, 40));
+	code.push_back(PushVariable(2, 40));
+	code.push_back(Sys(k_LoadCreature, 40));
+	// The species of the copy in a variable
+	code.push_back(PushVariable(1, 41));
+	code.push_back(PushVariable(7, 41));
+	code.push_back(Sys(k_CreateRelative, 41));
+	// A number before the copy that is not its last value
+	code.push_back(PushInt(5, 42));
+	code.push_back(PushVariable(7, 42));
+	code.push_back(Sys(k_CreateRelative, 42));
+	// The values of a file with the call on the next line
+	code.push_back(PushInt(5, 43));
+	code.push_back(PushInt(348, 43));
+	code.push_back(Sys(k_LoadCreature, 44));
+	// A species after the creature type for a native that has the species first
+	code.push_back(PushInt(k_Creature, 45));
+	code.push_back(PushInt(5, 45));
+	code.push_back(PushVariable(7, 45));
+	code.push_back(Sys(k_CreateRelative, 45));
+	code.push_back(End(46));
+	std::unordered_set<uint32_t> scanned;
+	EXPECT_TRUE(SpeciesMade(code, {0, static_cast<uint32_t>(code.size())}, k_Makes, NoScripts(), true, scanned).empty());
 }

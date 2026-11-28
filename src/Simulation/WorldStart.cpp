@@ -226,7 +226,7 @@ void HoldCreatureMesh(const std::string& name, entt::id_type meshId, const std::
 	RegisterFile(files, fileId, path, resources::L3DFileLoader::FromDiskTag {}, path);
 	if (files.Hold(fileId))
 	{
-		art.HoldSkinFile(species, fileId);
+		art.HoldSkinFile(species, *look, fileId);
 	}
 }
 
