@@ -534,3 +534,8 @@ void creature_planner::NoPlanRuns(PlannerState& state)
 		state.current->priority = 0.0f;
 	}
 }
+
+creature_planner::Plan creature_planner::OrderWithNoSteps(uint32_t action, std::optional<uint32_t> object)
+{
+	return Plan {.desire = Desire::ObeyPlayer, .action = action, .object = object, .priority = k_ForcedScore};
+}

@@ -55,3 +55,11 @@ TEST(CreatureActionHistory, OnlyTheFirstThirtyActionsOfTheListGetOlder)
 	EXPECT_EQ(turns.at(30), 1u);
 	EXPECT_EQ(turns.at(31), 0u);
 }
+
+TEST(CreatureActionHistory, APlanKeptWithNoAgendaIsNewWhenItStopsAndNoOtherActionGetsOlder)
+{
+	// An order that makes no steps stops with no list and no turns of an agenda
+	std::vector<uint32_t> turns {7, 7, 7, 7};
+	PlanEnded(turns, 2, {}, 0);
+	EXPECT_EQ(turns, (std::vector<uint32_t> {7, 7, 0, 7}));
+}

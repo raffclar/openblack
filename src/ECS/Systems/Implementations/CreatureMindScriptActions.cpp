@@ -15,6 +15,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreaturePlanActions.h"
+#include "Creature/CreaturePlanner.h"
 #include "CreatureBodyBusy.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
@@ -40,6 +42,8 @@ namespace
 constexpr std::string_view k_FightAction = "Fight";
 /// The action of a dead creature. When a script orders it, the creature faints where it stands.
 constexpr std::string_view k_DieAction = "Die";
+/// The action that the script gives the creature before each order
+constexpr std::string_view k_FollowPlayerAction = "FollowPlayer";
 } // namespace
 
 bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object)
@@ -105,6 +109,22 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 		ComeAcross(creature, mind, *with);
 	}
 	const auto& name = tables->actions[action].name;
+	const bool done = DoForScript(creature, name, target, with);
+	// The script first gives the creature the plan to follow the player, and the forced action then stops that plan.
+	// Thus each order of a script sets the count of the turns since the creature followed the player to 0.
+	auto* after = registry.TryGet<CreatureMindState>(creature);
+	if (const auto follow = creature_mind_tables::FindAction(*tables, k_FollowPlayerAction);
+	    after != nullptr && follow.has_value() && after->learnt.has_value() && *follow < after->learnt->turnsSinceDone.size())
+	{
+		after->learnt->turnsSinceDone[*follow] = 0;
+	}
+	return done;
+}
+
+bool CreatureMindSystem::DoForScript(entt::entity creature, std::string_view name, entt::entity target,
+                                     std::optional<entt::entity> with)
+{
+	auto& mind = Locator::entitiesRegistry::value().Get<CreatureMindState>(creature);
 	if (name == k_FightAction)
 	{
 		return FightForScript(creature, target);
@@ -128,12 +148,32 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	                          .ordered = true,
 	                          .forced = false}))
 	{
-		return false;
+		return KeepOrderWithNoSteps(creature, name, target);
 	}
 	// The order of a script counts at the end of the plan, as the creature's own plans do
 	mind.forcedPlanCounts = true;
 	// When it falls dead, the faint step itself makes the reaction to the death. The order makes no other reaction.
 	return true;
+}
+
+bool CreatureMindSystem::KeepOrderWithNoSteps(entt::entity creature, std::string_view name, entt::entity target)
+{
+	// The order stops what the creature did as a failure, also when its action makes no steps. For example, an eat from
+	// a pile makes no steps while the creature holds food that it can eat. The creature keeps what it holds and does not
+	// eat it.
+	StopForUnbuiltPlan(creature);
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	const auto* tables = GetTables();
+	const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, name) : std::nullopt;
+	if (mind == nullptr || !action.has_value())
+	{
+		return false;
+	}
+	// It keeps the order as its plan, with no agenda. Under the control of the script it stands still. When the script
+	// lets it go, it chooses a new plan one turn later.
+	mind->planner.current = creature_planner::OrderWithNoSteps(*action, entt::to_integral(target));
+	// An action that openblack's creatures cannot do yet is not an action with no steps
+	return creature_plan_actions::For(name) != nullptr;
 }
 
 void CreatureMindSystem::StopForScript(entt::entity creature)

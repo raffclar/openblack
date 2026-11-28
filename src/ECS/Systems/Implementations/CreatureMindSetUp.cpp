@@ -488,6 +488,12 @@ void CreatureMindSystem::Abandon(entt::entity creature, CreatureMindState& mind)
 		const auto list = IsPlanValid(plan) ? ListOfStoppedPlan(creature, mind, plan) : std::vector<uint32_t> {};
 		creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, plan.action, list, mind.agendaTurns);
 	}
+	// A plan that it keeps with no agenda, such as an order that makes no steps, was also done just now. No agenda ran,
+	// so the other actions of its list do not get older.
+	else if (mind.learnt.has_value() && mind.planner.current.has_value())
+	{
+		creature_action_history::PlanEnded(mind.learnt->turnsSinceDone, mind.planner.current->action, {}, 0);
+	}
 	mind.planActive = false;
 	if (mind.planner.current.has_value())
 	{
