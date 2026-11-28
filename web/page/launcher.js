@@ -116,6 +116,8 @@ function log(text) {
     backgroundLandReady = true;
     startBackgroundFiles();
   }
+  prefetchLandOfLog(text);
+  followMusicAlignment(text);
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
     // The box gets all its text again at the next update
@@ -710,6 +712,9 @@ const k_BackgroundHiddenMs = 60000;
 // True when the land is ready, and when the page put the other files in the background queue in this visit
 let backgroundLandReady = false;
 let backgroundStarted = false;
+// The versions of the alignment music that the game can play now (musicAlignmentsOfLog). The alignment music banks
+// of these versions go first in the background queue.
+let musicAlignments = [];
 // True when the tab was hidden for k_BackgroundHiddenMs or more, and is still hidden
 let tabHiddenLong = false;
 
@@ -758,7 +763,9 @@ async function startBackgroundFiles() {
       'the site.');
     return;
   }
-  const items = planAssetBackground(store.files, { have: (sha256) => store.kept.has(sha256) });
+  const items = planAssetBackground(store.files, {
+    have: (sha256) => store.kept.has(sha256), alignments: musicAlignments,
+  });
   const rest = assetItemBytes(store.files, items, blockSize);
   const free = assetFreeSpace(await storageEstimate());
   let shownReason;
@@ -777,6 +784,24 @@ async function startBackgroundFiles() {
   };
   store.background(items);
   store.pump();
+}
+
+/**
+ * A line of the game log tells that the music changed. When the alignment music of another alignment can play now, the
+ * alignment music banks of that alignment go first in the background queue.
+ */
+function followMusicAlignment(text) {
+  const alignments = musicAlignmentsOfLog(text);
+  if (alignments === null || alignments.join() === musicAlignments.join()) {
+    return;
+  }
+  musicAlignments = alignments;
+  if (backgroundStarted && siteFiles) {
+    const { store } = siteFiles;
+    store.reorderBackground(planAssetBackground(store.files, {
+      have: (sha256) => store.kept.has(sha256), alignments: musicAlignments,
+    }));
+  }
 }
 
 /** Pauses the background download when the tab is hidden for a long time, and continues it when the tab shows again */
@@ -1216,6 +1241,24 @@ let assetPanelDismissed = false;
 let beginAssetPhases = () => {};
 // The longest time in milliseconds from the start of the game to the downloads of its phases
 const k_AssetPhasesLatestMs = 30000;
+
+// The lower-case names of the lands and the maps whose files the page got for later in this visit (prefetchLandOfLog)
+const prefetchedLands = new Set();
+
+/**
+ * The game starts to load a land or a map: the page gets the files that the tiers give for it, for later. The game
+ * makes some maps, such as the map for 32 gods, and reads no file of such a map. Thus only the game log tells the page
+ * which map loads.
+ */
+function prefetchLandOfLog(text) {
+  const land = assetLandOfLog(text);
+  if (land === null || !siteFiles?.tiers || prefetchedLands.has(land)) {
+    return;
+  }
+  prefetchedLands.add(land);
+  const { store, tiers } = siteFiles;
+  store.prefetch(planAssetPrefetch(store.files, { land, have: (sha256) => store.kept.has(sha256), tiers }));
+}
 
 /**
  * A game thread reads bytes of a game file that the page does not have. The page gets them first, then the files that
