@@ -1395,6 +1395,10 @@ struct Command
 		/// The dome of the sky shows the larger pictures of the sky pack (value 1) or the game's own pictures (value 0), as
 		/// the debug menu's choice does. Value 1 does nothing when no pack loaded. Needs no creature
 		SetSkyPictures,
+		/// A temple of the player comes into being at the point, turned by the amount in degrees, after the land started.
+		/// This is as a land script, the editor or an undo of a removal makes it. It joins the scenario's temples. Needs
+		/// no creature
+		MakeTemple,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

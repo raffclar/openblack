@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include <glm/geometric.hpp>
+
 #include "Common/X87Angle.h"
 
 using namespace openblack;
@@ -136,4 +138,23 @@ uint32_t temple_leashes::ToolTipOf(LeashType type)
 		break;
 	}
 	return k_LearningTip;
+}
+
+bool temple_leashes::HangsAt(const glm::vec3& leash, const glm::vec3& point)
+{
+	return glm::distance(leash, point) < k_SamePoint;
+}
+
+std::optional<std::array<glm::vec3, 3>> temple_leashes::PointsOn(const glm::mat4& temple, std::span<const glm::mat4> points)
+{
+	std::array<glm::vec3, 3> at {};
+	if (points.size() < at.size())
+	{
+		return std::nullopt;
+	}
+	for (size_t i = 0; i < at.size(); ++i)
+	{
+		at.at(i) = glm::vec3(temple * points[i][3]);
+	}
+	return at;
 }

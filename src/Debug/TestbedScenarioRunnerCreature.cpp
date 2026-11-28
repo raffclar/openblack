@@ -399,7 +399,9 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		std::optional<entt::entity> post;
 		Locator::entitiesRegistry::value().Each<const ecs::components::LeashPost>(
 		    [&post, &command](entt::entity entity, const ecs::components::LeashPost& at) {
-			    if (at.owner == command.player && at.type == creature_leash::k_Types.at(command.value))
+			    // The posts that the scenario hung in a row come before the posts on a temple
+			    if (at.owner == command.player && at.type == creature_leash::k_Types.at(command.value) &&
+			        (!post.has_value() || at.temple == entt::null))
 			    {
 				    post = entity;
 			    }
@@ -1117,6 +1119,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::LoadMapLand:
 	case Kind::KillVillagers:
 	case Kind::SetSkyPictures:
+	case Kind::MakeTemple:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
