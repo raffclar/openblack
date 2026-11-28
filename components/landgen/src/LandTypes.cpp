@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using landtypes::Type;
@@ -100,7 +101,7 @@ void ScaleForIslands(uint64_t seed, terrain::BaseSettings& base, terrain::Massif
 	}
 	const float extent = std::max(southCoast - northCoast, 0.05f);
 	const float span = climate.southTemperature - climate.northTemperature;
-	Random random(StageSeed(seed, 111));
+	Random random(StageSeed(seed, Stage::LandTypeIslandScale));
 	const float middle = climate.northTemperature + (span * random.NextRange(k_ClimateMiddleLow, k_ClimateMiddleHigh));
 	const float change = span * k_SmallClimateSpan / extent;
 	const float centre = (north + south) * 0.5f;
@@ -111,7 +112,7 @@ void ScaleForIslands(uint64_t seed, terrain::BaseSettings& base, terrain::Massif
 /// The islands of an archipelago, apart from each other
 std::vector<terrain::Outline> ArchipelagoIslands(uint64_t seed)
 {
-	Random random(StageSeed(seed, 112));
+	Random random(StageSeed(seed, Stage::LandTypeArchipelago));
 	const int count =
 	    landtypes::k_FewestIslands +
 	    static_cast<int>(random.NextBelow(static_cast<uint32_t>(landtypes::k_MostIslands - landtypes::k_FewestIslands + 1)));
@@ -140,7 +141,7 @@ std::vector<terrain::Outline> ArchipelagoIslands(uint64_t seed)
 /// One island in the middle of the map, with a size from the range
 terrain::Outline OneIsland(uint64_t seed, SizeRange size)
 {
-	Random random(StageSeed(seed, 113));
+	Random random(StageSeed(seed, Stage::LandTypeOneIsland));
 	return {.centreU = 0.5f, .centreV = 0.5f, .size = random.NextRange(size.low, size.high)};
 }
 } // namespace
@@ -179,7 +180,7 @@ Type landtypes::Pick(uint64_t seed, const Settings& settings)
 	{
 		return Type::BigIsland;
 	}
-	uint32_t pick = Random(StageSeed(seed, 110)).NextBelow(total);
+	uint32_t pick = Random(StageSeed(seed, Stage::LandTypePick)).NextBelow(total);
 	for (size_t i = 0; i < weights.size(); ++i)
 	{
 		if (pick < weights[i])
@@ -211,7 +212,7 @@ void landtypes::Apply(Type type, uint64_t seed, terrain::BaseSettings& base, ter
 	case Type::Valleys:
 	{
 		base.islands = {OneIsland(seed, k_ValleysSize)};
-		Random random(StageSeed(seed, 114));
+		Random random(StageSeed(seed, Stage::LandTypeApply));
 		base.ranges += k_ValleyRangesLow +
 		               static_cast<int>(random.NextBelow(static_cast<uint32_t>(k_ValleyRangesHigh - k_ValleyRangesLow + 1)));
 		break;

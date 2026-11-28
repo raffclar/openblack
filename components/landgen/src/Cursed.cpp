@@ -20,6 +20,7 @@
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::cursed;
@@ -488,7 +489,7 @@ Scorch cursed::ScorchAt(const Patch& patch, float x, float z, uint64_t seed, con
 	}
 	// The noise has waves of about 60 m, so that the edge has bays and points
 	constexpr float k_EdgeWave = 60.0f;
-	const float wave = noise::Fractal(StageSeed(seed, 101), x / k_EdgeWave, z / k_EdgeWave, 2);
+	const float wave = noise::Fractal(StageSeed(seed, Stage::CursedEdgeWave), x / k_EdgeWave, z / k_EdgeWave, 2);
 	const float inner = std::clamp(settings.scorchInner, 0.0f, 1.0f);
 	const float edge = patch.radius * (inner + ((1.0f - inner) * noise::SmoothStep(-0.6f, 0.6f, wave)));
 	if (distance >= edge)
@@ -513,13 +514,13 @@ uint32_t cursed::PatchCount(float unit, const Settings& settings)
 Result cursed::Place(const features::Ground& ground, std::vector<Feature>& placed, uint64_t seed, const Settings& settings)
 {
 	Result result;
-	const auto count = PatchCount(Random(StageSeed(seed, 50)).NextUnit(), settings);
+	const auto count = PatchCount(Random(StageSeed(seed, Stage::CursedCount)).NextUnit(), settings);
 	if (count == 0)
 	{
 		return result;
 	}
-	const auto siteSeed = StageSeed(seed, 51);
-	const auto partSeed = StageSeed(seed, 52);
+	const auto siteSeed = StageSeed(seed, Stage::CursedSites);
+	const auto partSeed = StageSeed(seed, Stage::CursedParts);
 	const auto last = static_cast<float>(ground.biomes.side - 1);
 	const int points = static_cast<int>(last / settings.spacing);
 	std::vector<Candidate> candidates;

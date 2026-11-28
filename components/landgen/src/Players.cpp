@@ -17,6 +17,7 @@
 #include <optional>
 
 #include "landgen/Random.h"
+#include "landgen/Stages.h"
 #include "landgen/Terrain.h"
 
 using namespace openblack::landgen;
@@ -26,8 +27,6 @@ namespace
 {
 constexpr float k_MetresPerCorner = 10.0f;
 constexpr float k_MetresPerAltitude = 0.67f;
-/// The stage of the seeds of the starts of the other players
-constexpr uint64_t k_PlayerStage = 130;
 
 [[nodiscard]] float Distance(float ax, float az, float bx, float bz)
 {
@@ -313,5 +312,5 @@ void players::EvenTheWoods(std::vector<features::Feature>& features, const featu
 
 uint64_t players::SeedOfPlayer(uint64_t seed, uint32_t player)
 {
-	return StageSeed(StageSeed(seed, k_PlayerStage), player);
+	return PartSeed(StageSeed(seed, Stage::Players), player);
 }

@@ -32,10 +32,11 @@ namespace openblack::landgen
 	return static_cast<uint32_t>(Mix(seed ^ Mix((ux << 32) | uz)) >> 32);
 }
 
-/// The seed of one stage of the generator, from the land's seed and the stage's own number
-[[nodiscard]] constexpr uint64_t StageSeed(uint64_t seed, uint64_t stage)
+/// The seed of one part of a seed, such as one octave of a noise or one town of a stage. Use StageSeed in Stages.h to get
+/// the seed of a stage from the land's seed.
+[[nodiscard]] constexpr uint64_t PartSeed(uint64_t seed, uint64_t part)
 {
-	return Mix(seed + (stage * 0x9E3779B97F4A7C15ull));
+	return Mix(seed + (part * 0x9E3779B97F4A7C15ull));
 }
 
 /// A generator of random numbers (PCG32). It gives the same numbers on every platform for the same seed, unlike the
