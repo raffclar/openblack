@@ -10,7 +10,7 @@ const {
   parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange, AssetStore,
   k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile,
   k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads, planAssetBackground, assetItemBytes,
-  assetBackgroundStop, assetFreeSpace,
+  assetBackgroundStop, assetFreeSpace, assetPackWorth, assetPackWatch, k_AssetPackShare,
 } = require('../web/page/launcher-assets.js');
 
 let count = 0;
@@ -171,7 +171,7 @@ check('the page refuses a list that is not correct', () => {
   const bad = [
     'not json',
     '[]',
-    JSON.stringify({ format: 3, files: { a: good } }),
+    JSON.stringify({ format: 4, files: { a: good } }),
     JSON.stringify({ format: 1 }),
     JSON.stringify({ format: 1, files: {} }),
     JSON.stringify({ format: 1, files: { 'Data/../../etc/passwd': good } }),
@@ -1234,6 +1234,245 @@ check('the page checks the free space before it downloads, and says why when the
   // A write before the start that finds no space stops with the reason
   await assert.rejects(streamAssets(index, { fetchFile: site.fetchFile, digest, root: new SmallFolder(3) }),
     /no more space for the game files/);
+});
+
+// The list of the third version with packs of the files at the paths of each group, and the body of each pack by its
+// address
+const packedIndex = (files, groups) => {
+  const packs = groups.map((paths) => {
+    let offset = 0;
+    const members = paths.map((path) => {
+      const size = Buffer.byteLength(files[path]);
+      const member = [sha(files[path]), offset, size];
+      offset += size;
+      return member;
+    });
+    const body = paths.map((path) => files[path]).join('');
+    return { sha256: sha(body), size: offset, members, body };
+  });
+  const text = indexText(files, { format: 3, hashed_addresses: true, packs: packs.map(({ body, ...pack }) => pack) });
+  return { text, bodies: new Map(packs.map((pack) => [hashedAssetAddress(pack.sha256), pack.body])) };
+};
+
+// A site with the packs of packedIndex. With broken, the last byte of each pack is not correct.
+const packedSite = (files, groups, { broken = false } = {}) => {
+  const { text, bodies } = packedIndex(files, groups);
+  const site = fakeSite(files, { index: text });
+  const fetchFile = async (address, options = {}) => {
+    if (!bodies.has(address)) {
+      return site.fetchFile(address, options);
+    }
+    site.requests.set(address, (site.requests.get(address) ?? 0) + 1);
+    const body = bodies.get(address);
+    return fakeResponse(200, broken ? `${body.slice(0, -1)}?` : body);
+  };
+  return { ...site, fetchFile, index: parseAssetIndex(text) };
+};
+
+const k_Packed = {
+  'Scripts/a.txt': 'alpha',
+  'Scripts/b.txt': 'bravo',
+  'Data/c.raw': 'charlie',
+  'Data/big.raw': 'x'.repeat(40),
+};
+const k_PackGroups = [['Scripts/a.txt', 'Scripts/b.txt', 'Data/c.raw']];
+
+check('the page reads the packs of the third version of the list', () => {
+  const { index } = packedSite(k_Packed, k_PackGroups);
+  assert.equal(index.packs.length, 1);
+  const [pack] = index.packs;
+  assert.equal(pack.size, 17);
+  assert.equal(pack.address, hashedAssetAddress(pack.sha256));
+  assert.deepEqual(pack.members, [
+    { sha256: sha('alpha'), offset: 0, size: 5, path: 'Scripts/a.txt' },
+    { sha256: sha('bravo'), offset: 5, size: 5, path: 'Scripts/b.txt' },
+    { sha256: sha('charlie'), offset: 10, size: 7, path: 'Data/c.raw' },
+  ]);
+  // A list of the second version has no packs
+  assert.deepEqual(parseAssetIndex(indexText(k_Packed, { format: 2 })).packs, []);
+});
+
+check('the page refuses packs that are not correct', () => {
+  const { text } = packedIndex(k_Packed, k_PackGroups);
+  const good = JSON.parse(text);
+  const changed = (change) => {
+    const index = structuredClone(good);
+    change(index, index.packs[0]);
+    return JSON.stringify(index);
+  };
+  const bad = [
+    changed((index) => delete index.hashed_addresses),
+    changed((index) => {
+      index.packs = {};
+    }),
+    changed((index, pack) => {
+      pack.sha256 = 'X'.repeat(64);
+    }),
+    changed((index, pack) => {
+      pack.members = pack.members.slice(0, 1);
+      pack.size = 5;
+    }),
+    changed((index, pack) => {
+      pack.members[1][1] = 6;
+    }),
+    changed((index, pack) => {
+      pack.members[2][2] = 8;
+    }),
+    changed((index, pack) => {
+      pack.size = 18;
+    }),
+    changed((index, pack) => {
+      pack.members[0][0] = 'c'.repeat(64);
+    }),
+    changed((index, pack) => {
+      pack.members.push([sha('alpha'), 17, 5]);
+      pack.size = 22;
+    }),
+    changed((index, pack) => index.packs.push(structuredClone(pack))),
+    changed((index, pack) => {
+      pack.members[0] = { sha256: sha('alpha') };
+    }),
+  ];
+  for (const text of bad) {
+    assert.throws(() => parseAssetIndex(text), Error, text);
+  }
+});
+
+check('the page gets a pack when the files that it wants have half of the bytes of the pack or more', () => {
+  const pack = { size: 20, members: [{ sha256: 'a', size: 10 }, { sha256: 'b', size: 6 }, { sha256: 'c', size: 4 }] };
+  assert.equal(k_AssetPackShare, 0.5);
+  assert.equal(assetPackWorth(pack, (sha256) => sha256 === 'a'), true);
+  assert.equal(assetPackWorth(pack, (sha256) => sha256 !== 'a'), true);
+  assert.equal(assetPackWorth(pack, (sha256) => sha256 === 'b'), false);
+  assert.equal(assetPackWorth(pack, () => false), false);
+  assert.equal(assetPackWorth({ size: 0, members: [] }, () => true), false);
+});
+
+check('the map sees the bytes of a pack as the bytes of its files, in their order', () => {
+  const pack = { members: [{ sha256: 'a', offset: 0, size: 5 }, { sha256: 'b', offset: 5, size: 2 }] };
+  const events = [];
+  const watch = assetPackWatch(pack, (...event) => events.push(event), (sha256) => sha256 === 'b');
+  watch.event('started');
+  watch.bytes(3);
+  watch.bytes(3);
+  watch.bytes(1);
+  assert.deepEqual(events, [
+    ['started', 'file b', undefined], ['bytes', 'file a', 3], ['bytes', 'file a', 2], ['bytes', 'file b', 1],
+    ['bytes', 'file b', 1],
+  ]);
+});
+
+check('before the start the page gets the small files of a pack in one request and keeps each file', async () => {
+  const site = packedSite(k_Packed, k_PackGroups);
+  const root = new FakeFolder();
+  const progress = [];
+  await streamWithTiers(site.index, {
+    fetchFile: site.fetchFile, digest, root, all: true, progress: (state) => progress.push(state),
+  });
+  const [pack] = site.index.packs;
+  assert.equal(site.requests.get(pack.address), 1);
+  for (const path of k_PackGroups[0]) {
+    assert.equal(site.requests.get(hashedAssetAddress(sha(k_Packed[path]))), undefined);
+  }
+  assert.equal(site.requests.get(hashedAssetAddress(sha(k_Packed['Data/big.raw']))), 1);
+  const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+  for (const [path, text] of Object.entries(k_Packed)) {
+    assert.equal(Buffer.from((await folder.getFileHandle(sha(text))).bytes).toString(), text, path);
+  }
+  assert.deepEqual(progress.at(-1), { bytes: 57, totalBytes: 57, files: 4, totalFiles: 4 });
+  // A second visit that lost one small file gets it alone: it has less than half of the bytes of the pack
+  await folder.removeEntry(sha('charlie'));
+  site.requests.clear();
+  await streamWithTiers(site.index, { fetchFile: site.fetchFile, digest, root, all: true });
+  assert.deepEqual([...site.requests.keys()].sort(), [hashedAssetAddress(sha('charlie'))]);
+});
+
+check('before the start a pack that fails brings its files alone', async () => {
+  const site = packedSite(k_Packed, k_PackGroups, { broken: true });
+  const root = new FakeFolder();
+  const logged = [];
+  const result = await streamWithTiers(site.index, {
+    fetchFile: site.fetchFile, digest, root, all: true, log: (line) => logged.push(line),
+  });
+  assert.equal(site.requests.get(site.index.packs[0].address), 2);
+  for (const path of Object.keys(k_Packed)) {
+    assert.equal(site.requests.get(hashedAssetAddress(sha(k_Packed[path]))), 1, path);
+  }
+  assert.ok(logged.some((line) => /cannot get a pack/.test(line)));
+  assert.equal(result.all, true);
+});
+
+// The store of the files of a packed site, with the numbers of the files that it gave to the game threads
+const packedStore = (options = {}) => {
+  const site = packedSite(k_Packed, k_PackGroups, options);
+  const shared = [];
+  const logged = [];
+  const events = [];
+  const store = new AssetStore(site.index.files, {
+    fetchFile: site.fetchFile, digest, folder: new FakeFolder(), packs: site.index.packs,
+    share: (number, block) => shared.push({ number, block }), log: (line) => logged.push(line),
+    watch: (...event) => events.push(event),
+  });
+  const number = (path) => numberOf(site.index.files, path);
+  return { site, store, shared, logged, events, number };
+};
+
+check('after the start the store gets the small files for later in their pack', async () => {
+  const { site, store, shared, events, number } = packedStore();
+  store.prefetch(site.index.files.map((_, at) => at));
+  await store.drained();
+  const [pack] = site.index.packs;
+  assert.equal(site.requests.get(pack.address), 1);
+  assert.equal(site.requests.size, 2);
+  for (const path of Object.keys(k_Packed)) {
+    assert.equal(Buffer.from(store.fileOf(number(path)).bytes).toString(), k_Packed[path]);
+  }
+  assert.deepEqual(shared.map((share) => share.number).sort(), [0, 1, 2, 3]);
+  // The map sees each file of the pack wait, start, fill and end
+  for (const member of pack.members) {
+    const key = `file ${member.sha256}`;
+    const own = events.filter((event) => event[1] === key);
+    assert.deepEqual(own.filter((event) => event[0] !== 'bytes').map((event) => event[0]),
+      ['queued', 'started', 'done'], key);
+    assert.equal(own.filter((event) => event[0] === 'bytes').reduce((sum, event) => sum + event[2], 0), member.size);
+  }
+  assert.equal(events.some((event) => event[1].startsWith('pack ')), false);
+  assert.equal(store.received.files, 4);
+});
+
+check('the store gets a small file alone for the game, and the pack only when it is still worth it', async () => {
+  const { site, store, number } = packedStore();
+  // The game waits for one small file and no pack job brings it: the file comes alone
+  await store.obtain(number('Scripts/a.txt'));
+  assert.deepEqual([...site.requests.keys()], [hashedAssetAddress(sha('alpha'))]);
+  // The other two files have 12 of the 17 bytes of the pack: the pack brings them
+  store.prefetch([number('Scripts/b.txt'), number('Data/c.raw')]);
+  await store.drained();
+  assert.equal(site.requests.get(site.index.packs[0].address), 1);
+  assert.equal(site.requests.size, 2);
+  assert.equal(Buffer.from(store.fileOf(number('Data/c.raw')).bytes).toString(), 'charlie');
+});
+
+check('a file that the game reads while its pack waits in a queue comes with the pack', async () => {
+  const { site, store, number } = packedStore();
+  store.queuePhases([[], [{ number: number('Scripts/a.txt'), block: null }], [], [], []]);
+  await store.obtain(number('Data/c.raw'));
+  await store.drained();
+  assert.equal(site.requests.get(site.index.packs[0].address), 1);
+  assert.equal(site.requests.size, 1);
+  assert.equal(Buffer.from(store.fileOf(number('Scripts/b.txt')).bytes).toString(), 'bravo');
+});
+
+check('the store gets the files of a pack that fails alone', async () => {
+  const { site, store, logged, number } = packedStore({ broken: true });
+  store.prefetch(k_PackGroups[0].map(number));
+  await store.drained();
+  assert.equal(site.requests.get(site.index.packs[0].address), 2);
+  for (const path of k_PackGroups[0]) {
+    assert.equal(site.requests.get(hashedAssetAddress(sha(k_Packed[path]))), 1, path);
+    assert.equal(Buffer.from(store.fileOf(number(path)).bytes).toString(), k_Packed[path]);
+  }
+  assert.equal(logged.filter((line) => /cannot get a pack/.test(line)).length, 1);
 });
 
 check('the scripts of the page about the game files load in one scope with no name twice', () => {
