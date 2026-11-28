@@ -1,0 +1,453 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index 1f41669..c06ddd6 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -3413,6 +3413,83 @@ WGPU_IMPORT
+ 			return entryCount;
+ 		}
+ 
++		// The values of one binding that addBindingFormats and addBindingLayoutKey read.
++		struct BindingLayoutKey
++		{
++			WGPUTextureFormat        fmt;
++			WGPUTextureViewDimension viewDimension;
++			uint8_t                  textureFormat;
++			uint8_t                  access;
++			bool                     hasFormat;
++			bool                     unbound;
++			bool                     sampleStencil;
++		};
++
++		BindingLayoutKey getBindingLayoutKey(const ShaderBinding& _shaderBind, const Binding& _bind) const
++		{
++			BindingLayoutKey key;
++			bx::memSet(&key, 0, sizeof(key) );
++
++			if (kInvalidHandle != _bind.m_idx
++			&&  (Binding::Image == _bind.m_type || Binding::Texture == _bind.m_type) )
++			{
++				const TextureWGPU& texture = m_textures[_bind.m_idx];
++				key.hasFormat     = true;
++				key.fmt           = texture.m_fmt;
++				key.textureFormat = texture.m_textureFormat;
++				key.viewDimension = texture.m_viewDimension;
++			}
++
++			if (ShaderBinding::Type::Image == _shaderBind.type)
++			{
++				key.access = _bind.m_access;
++			}
++			else if (ShaderBinding::Type::Sampler == _shaderBind.type)
++			{
++				key.unbound = kInvalidHandle == _bind.m_idx;
++				const uint32_t resolvedFlags = key.unbound ? 0
++					: 0 == (BGFX_SAMPLER_INTERNAL_DEFAULT & _bind.m_samplerFlags)
++					? _bind.m_samplerFlags
++					: uint32_t(m_textures[_bind.m_idx].m_flags)
++					;
++				key.sampleStencil = 0 != (resolvedFlags & BGFX_SAMPLER_SAMPLE_STENCIL);
++			}
++
++			return key;
++		}
++
++		// Returns true when the pipeline keys of the two bindings of a program are the same. The textures and
++		// samplers can be different.
++		bool sameBindingLayout(const ProgramWGPU& _program, const Binding* _kept, const RenderBind& _renderBind) const
++		{
++			for (uint32_t stage = 0; stage < BGFX_CONFIG_MAX_TEXTURE_SAMPLERS; ++stage)
++			{
++				const ShaderBinding& shaderBind = _program.m_shaderBinding[stage];
++
++				if (!isValid(shaderBind.uniformHandle)
++				||  0 == bx::memCmp(&_kept[stage], &_renderBind.m_bind[stage], sizeof(Binding) ) )
++				{
++					continue;
++				}
++
++				const BindingLayoutKey kept = getBindingLayoutKey(shaderBind, _kept[stage]);
++				const BindingLayoutKey bind = getBindingLayoutKey(shaderBind, _renderBind.m_bind[stage]);
++
++				if (kept.hasFormat     != bind.hasFormat
++				||  kept.fmt           != bind.fmt
++				||  kept.textureFormat != bind.textureFormat
++				||  kept.viewDimension != bind.viewDimension
++				||  kept.access        != bind.access
++				||  kept.unbound       != bind.unbound
++				||  kept.sampleStencil != bind.sampleStencil)
++				{
++					return false;
++				}
++			}
++
++			return true;
++		}
++
+ 		void addBindingFormats(bx::HashMurmur3& _murmur, const ProgramWGPU& _program, const RenderBind& _renderBind) const
+ 		{
+ 			for (uint32_t stage = 0; stage < BGFX_CONFIG_MAX_TEXTURE_SAMPLERS; ++stage)
+@@ -4446,7 +4523,8 @@ WGPU_IMPORT
+ 		HandleArenaT<FrameBufferWGPU,  BGFX_CONFIG_MAX_FRAME_BUFFERS>  m_frameBuffers;
+ 
+ 		StateCacheLru<ComputePipeline, 1024> m_computePipelineCache;
+-		StateCacheLru<RenderPipeline, 1024>  m_renderPipelineCache;
++		static constexpr uint32_t kMaxRenderPipelines = 1024;
++		StateCacheLru<RenderPipeline, kMaxRenderPipelines> m_renderPipelineCache;
+ 
+ 		// A pipeline that a prefetch started: its key in the pipeline cache and the bind group layout of its
+ 		// pipeline layout
+@@ -7675,8 +7753,13 @@ WGPU_IMPORT
+ 			bool                  isIndex16;
+ 		};
+ 
+-		PipelineState pipelineState;
+-		bx::memSet(&pipelineState, 0, sizeof(pipelineState) );
++		// The draws of a view often change between a few pipelines and bind groups. Thus the submit keeps the last
++		// few of each, and a draw that matches one of them does not calculate the hash again.
++		constexpr uint32_t kNumRecentStates = 8;
++
++		PipelineState pipelineStates[kNumRecentStates];
++		bx::memSet(pipelineStates, 0, sizeof(pipelineStates) );
++		uint32_t nextPipelineState = 0;
+ 
+ 		struct BindState
+ 		{
+@@ -7690,23 +7773,55 @@ WGPU_IMPORT
+ 			bool             valid;
+ 		};
+ 
+-		BindState bindState;
+-		bx::memSet(&bindState, 0, sizeof(bindState) );
++		BindState bindStates[kNumRecentStates];
++		bx::memSet(bindStates, 0, sizeof(bindStates) );
++		uint32_t nextBindState = 0;
+ 
+-		// The last uniform block that a draw wrote in this frame. All blocks of the frame stay in the scratch
+-		// buffer until the end of the frame, thus a later draw of any view can use the block again.
+-		struct UniformReuse
++		// The vertex buffers that the current render pass has in each slot. The submit does not set a slot again when
++		// the next draw has the same buffer, offset and size in it.
++		struct PassVertexBuffer
+ 		{
+-			ChunkedScratchBufferOffset sbo;
+-			const uint8_t* vsData;
+-			const uint8_t* fsData;
+-			uint32_t       vsSize;
+-			uint32_t       fsSize;
+-			bool           valid;
++			WGPUBuffer buffer;
++			uint32_t   offset;
++			uint32_t   size;
+ 		};
+ 
+-		UniformReuse lastUniforms;
+-		bx::memSet(&lastUniforms, 0, sizeof(lastUniforms) );
++		PassVertexBuffer passVertexBuffers[BGFX_CONFIG_MAX_VERTEX_STREAMS + 1];
++		bx::memSet(passVertexBuffers, 0, sizeof(passVertexBuffers) );
++
++		// The last uniform block that the draws wrote for each stage in this frame. All blocks of the frame stay in the
++		// scratch buffer until the end of the frame, thus a later draw of any view can use a block again. The two
++		// stages of a draw must use the same buffer.
++		struct UniformBlock
++		{
++			const UniformBlock* find(const uint8_t* _data, uint32_t _size) const
++			{
++				return NULL != data
++					&& size == _size
++					&& sameBytes(data, _data, _size)
++					? this
++					: NULL
++					;
++			}
++
++			void set(WGPUBuffer _buffer, const uint8_t* _chunkData, uint32_t _offset, uint32_t _size)
++			{
++				buffer = _buffer;
++				data   = NULL != _chunkData ? &_chunkData[_offset] : NULL;
++				offset = _offset;
++				size   = _size;
++			}
++
++			WGPUBuffer     buffer;
++			const uint8_t* data;
++			uint32_t       offset;
++			uint32_t       size;
++		};
++
++		UniformBlock lastVs;
++		UniformBlock lastFs;
++		bx::memSet(&lastVs, 0, sizeof(lastVs) );
++		bx::memSet(&lastFs, 0, sizeof(lastFs) );
+ 
+ 		// The bind group and the offsets that the current render pass has.
+ 		struct PassBind
+@@ -7756,8 +7871,11 @@ WGPU_IMPORT
+ 					currentProgram = BGFX_INVALID_HANDLE;
+ 					currentState.clear();
+ 					hasPredefined = false;
+-					pipelineState.valid = false;
+-					bindState.valid     = false;
++					for (uint32_t ii = 0; ii < kNumRecentStates; ++ii)
++					{
++						pipelineStates[ii].valid = false;
++						bindStates[ii].valid     = false;
++					}
+ 
+ 					if (renderView->m_fbh.idx != fbh.idx)
+ 					{
+@@ -7991,6 +8109,7 @@ WGPU_IMPORT
+ 						currentPipeline   = NULL;
+ 						blendFactor       = 0;
+ 						passBind.valid    = false;
++						bx::memSet(passVertexBuffers, 0, sizeof(passVertexBuffers) );
+ 
+ 						currentState.m_stencil = UINT64_MAX;
+ 
+@@ -8195,26 +8314,37 @@ WGPU_IMPORT
+ 				uint16_t drawLayouts[BGFX_CONFIG_MAX_VERTEX_STREAMS];
+ 				layoutsOf(draw, drawLayouts);
+ 
+-				const RenderPipeline* renderPipelinePtr;
+-				if (pipelineState.valid
+-				&&  pipelineState.program         == key.m_program.idx
+-				&&  pipelineState.fbh             == fbh.idx
+-				&&  pipelineState.msaaCount       == msaaCount
+-				&&  pipelineState.state           == state
+-				&&  pipelineState.rgba            == draw.m_rgba
+-				&&  pipelineState.stencil         == draw.m_stencil
+-				&&  pipelineState.streamMask      == draw.m_streamMask
+-				&&  pipelineState.numInstanceData == numInstanceData
+-				&&  pipelineState.isIndex16       == drawIsIndex16
+-				&&  pipelineState.depthBias       == draw.m_depthBias
+-				&&  pipelineState.sampleMask      == sampleMask
+-				&&  0 == bx::memCmp(pipelineState.layouts, drawLayouts, sizeof(drawLayouts) )
+-				&&  sameBindings(drawProgram, pipelineState.bind, renderBind) )
+-				{
+-					renderPipelinePtr = pipelineState.pipeline;
++				const RenderPipeline* renderPipelinePtr = NULL;
++				for (uint32_t ii = 0; ii < kNumRecentStates; ++ii)
++				{
++					const PipelineState& pipelineState = pipelineStates[ii];
++
++					if (pipelineState.valid
++					&&  pipelineState.program         == key.m_program.idx
++					&&  pipelineState.fbh             == fbh.idx
++					&&  pipelineState.msaaCount       == msaaCount
++					&&  pipelineState.state           == state
++					&&  pipelineState.rgba            == draw.m_rgba
++					&&  pipelineState.stencil         == draw.m_stencil
++					&&  pipelineState.streamMask      == draw.m_streamMask
++					&&  pipelineState.numInstanceData == numInstanceData
++					&&  pipelineState.isIndex16       == drawIsIndex16
++					&&  pipelineState.depthBias       == draw.m_depthBias
++					&&  pipelineState.sampleMask      == sampleMask
++					&&  0 == bx::memCmp(pipelineState.layouts, drawLayouts, sizeof(drawLayouts) )
++					&&  sameBindingLayout(drawProgram, pipelineState.bind, renderBind) )
++					{
++						renderPipelinePtr = pipelineState.pipeline;
++						break;
++					}
+ 				}
+-				else
++
++				if (NULL == renderPipelinePtr)
+ 				{
++					// A full cache removes its oldest pipeline to add a new one. The removed pipeline can be one of the
++					// recent states, thus the submit forgets them all.
++					const bool pipelineCacheFull = m_renderPipelineCache.getCount() >= kMaxRenderPipelines;
++
+ 					const DepthControl& depthControl = (UINT16_MAX != draw.m_depthBias)
+ 						? _render->m_frameCache.m_depthBiasCache.m_cache[draw.m_depthBias]
+ 						: renderView->m_depthBias
+@@ -8245,6 +8375,14 @@ WGPU_IMPORT
+ 
+ 					// The pipeline is not ready yet: leave out the draw. The next draw sets its program, its
+ 					// constants and its stencil reference again.
++					if (pipelineCacheFull)
++					{
++						for (uint32_t ii = 0; ii < kNumRecentStates; ++ii)
++						{
++							pipelineStates[ii].valid = false;
++						}
++					}
++
+ 					if (NULL == renderPipelinePtr)
+ 					{
+ 						currentState.m_stencil = newStencil ^ changedStencil;
+@@ -8252,6 +8390,9 @@ WGPU_IMPORT
+ 						continue;
+ 					}
+ 
++					PipelineState& pipelineState = pipelineStates[nextPipelineState];
++					nextPipelineState = (nextPipelineState + 1) % kNumRecentStates;
++
+ 					pipelineState.valid           = true;
+ 					pipelineState.program         = key.m_program.idx;
+ 					pipelineState.fbh             = fbh.idx;
+@@ -8316,41 +8457,103 @@ WGPU_IMPORT
+ 				const uint32_t vsSize = program.m_vsh->m_size;
+ 				const uint32_t fsSize = NULL != program.m_fsh ? program.m_fsh->m_size : 0;
+ 
+-				// A draw with the same uniform values as the last written block uses that block again. Thus the
+-				// frame writes fewer bytes to the device, and the next draws keep the same bind group offsets.
+-				if (lastUniforms.valid
+-				&&  lastUniforms.vsSize == vsSize
+-				&&  lastUniforms.fsSize == fsSize
+-				&&  sameBytes(lastUniforms.vsData, m_vsScratch, vsSize)
+-				&&  sameBytes(lastUniforms.fsData, m_fsScratch, fsSize) )
++				// A stage with the same uniform values as the last block of that stage uses the block again. Thus the
++				// frame writes fewer bytes to the device, and more draws keep the same bind group offsets.
++				const UniformBlock* vsBlock = 0 < vsSize ? lastVs.find(m_vsScratch, vsSize) : NULL;
++				const UniformBlock* fsBlock = 0 < fsSize ? lastFs.find(m_fsScratch, fsSize) : NULL;
++				const bool vsFound = 0 == vsSize || NULL != vsBlock;
++				const bool fsFound = 0 == fsSize || NULL != fsBlock;
++				const WGPUBuffer foundBuffer = NULL != vsBlock ? vsBlock->buffer : NULL != fsBlock ? fsBlock->buffer : NULL;
++				bool written = false;
++
++				if (vsFound
++				&&  fsFound
++				&&  NULL != foundBuffer
++				&&  (NULL == vsBlock || NULL == fsBlock || vsBlock->buffer == fsBlock->buffer) )
++				{
++					sbo.buffer     = foundBuffer;
++					sbo.offsets[0] = NULL != vsBlock ? vsBlock->offset : fsBlock->offset;
++					sbo.offsets[1] = NULL != fsBlock ? fsBlock->offset : sbo.offsets[0];
++				}
++				else if (NULL != vsBlock
++				&&       !fsFound)
++				{
++					// Write only the fragment block. The vertex block must be in the same buffer.
++					ChunkedScratchBufferOffset fsSbo;
++					m_uniformScratchBuffer.write(fsSbo, m_fsScratch, fsSize);
++
++					if (fsSbo.buffer == vsBlock->buffer)
++					{
++						sbo.buffer     = fsSbo.buffer;
++						sbo.offsets[0] = vsBlock->offset;
++						sbo.offsets[1] = fsSbo.offsets[0];
++						lastFs.set(fsSbo.buffer, m_uniformScratchBuffer.findData(fsSbo.buffer), fsSbo.offsets[0], fsSize);
++					}
++					else
++					{
++						written = true;
++					}
++				}
++				else if (NULL != fsBlock
++				&&       !vsFound)
+ 				{
+-					sbo = lastUniforms.sbo;
++					// Write only the vertex block. The fragment block must be in the same buffer.
++					ChunkedScratchBufferOffset vsSbo;
++					m_uniformScratchBuffer.write(vsSbo, m_vsScratch, vsSize);
++
++					if (vsSbo.buffer == fsBlock->buffer)
++					{
++						sbo.buffer     = vsSbo.buffer;
++						sbo.offsets[0] = vsSbo.offsets[0];
++						sbo.offsets[1] = fsBlock->offset;
++						lastVs.set(vsSbo.buffer, m_uniformScratchBuffer.findData(vsSbo.buffer), vsSbo.offsets[0], vsSize);
++					}
++					else
++					{
++						written = true;
++					}
+ 				}
+ 				else
++				{
++					written = true;
++				}
++
++				if (written)
+ 				{
+ 					m_uniformScratchBuffer.write(sbo, m_vsScratch, vsSize, m_fsScratch, fsSize);
+ 
+ 					const uint8_t* chunkData = m_uniformScratchBuffer.findData(sbo.buffer);
+-					lastUniforms.valid  = NULL != chunkData;
+-					lastUniforms.sbo    = sbo;
+-					lastUniforms.vsData = NULL != chunkData ? &chunkData[sbo.offsets[0] ] : NULL;
+-					lastUniforms.fsData = NULL != chunkData ? &chunkData[sbo.offsets[1] ] : NULL;
+-					lastUniforms.vsSize = vsSize;
+-					lastUniforms.fsSize = fsSize;
++
++					if (0 < vsSize)
++					{
++						lastVs.set(sbo.buffer, chunkData, sbo.offsets[0], vsSize);
++					}
++
++					if (0 < fsSize)
++					{
++						lastFs.set(sbo.buffer, chunkData, sbo.offsets[1], fsSize);
++					}
+ 				}
+ 
+-				const BindGroup* bindGroupCached;
+-				if (bindState.valid
+-				&&  bindState.program == key.m_program.idx
+-				&&  bindState.layout  == bindGroupLayout
+-				&&  bindState.buffer  == sbo.buffer
+-				&&  bindState.vsSize  == vsSize
+-				&&  bindState.fsSize  == fsSize
+-				&&  sameBindings(program, bindState.bind, renderBind) )
++				const BindGroup* bindGroupCached = NULL;
++				for (uint32_t ii = 0; ii < kNumRecentStates; ++ii)
+ 				{
+-					bindGroupCached = bindState.bindGroup;
++					const BindState& bindState = bindStates[ii];
++
++					if (bindState.valid
++					&&  bindState.program == key.m_program.idx
++					&&  bindState.layout  == bindGroupLayout
++					&&  bindState.buffer  == sbo.buffer
++					&&  bindState.vsSize  == vsSize
++					&&  bindState.fsSize  == fsSize
++					&&  sameBindings(program, bindState.bind, renderBind) )
++					{
++						bindGroupCached = bindState.bindGroup;
++						break;
++					}
+ 				}
+-				else
++
++				if (NULL == bindGroupCached)
+ 				{
+ 					bx::HashMurmur3 murmur;
+ 					murmur.begin(0x44524157);
+@@ -8378,6 +8581,9 @@ WGPU_IMPORT
+ 
+ 					bindGroupCached = &bindIt->second;
+ 
++					BindState& bindState = bindStates[nextBindState];
++					nextBindState = (nextBindState + 1) % kNumRecentStates;
++
+ 					bindState.valid     = true;
+ 					bindState.program   = key.m_program.idx;
+ 					bindState.layout    = bindGroupLayout;
+@@ -8550,7 +8756,18 @@ WGPU_IMPORT
+ 
+ 					for (uint8_t ii = 0; ii < numStreams; ++ii)
+ 					{
+-						WGPU_CHECK(wgpuRenderPassEncoderSetVertexBuffer(renderPassEncoder, ii, buffers[ii], offsets[ii], sizes[ii]) );
++						PassVertexBuffer& passVertexBuffer = passVertexBuffers[ii];
++
++						if (passVertexBuffer.buffer != buffers[ii]
++						||  passVertexBuffer.offset != offsets[ii]
++						||  passVertexBuffer.size   != sizes[ii])
++						{
++							passVertexBuffer.buffer = buffers[ii];
++							passVertexBuffer.offset = offsets[ii];
++							passVertexBuffer.size   = sizes[ii];
++
++							WGPU_CHECK(wgpuRenderPassEncoderSetVertexBuffer(renderPassEncoder, ii, buffers[ii], offsets[ii], sizes[ii]) );
++						}
+ 					}
+ 				}
+ 
+@@ -8789,7 +9006,7 @@ WGPU_IMPORT
+ 
+ 		Stats& perfStats = _render->m_perfStats;
+ 		perfStats.cpuTimeBegin  = timeBegin;
+-		perfStats.cpuTimeEnd    = timeBegin;
++		perfStats.cpuTimeEnd    = timeEnd;
+ 		perfStats.cpuTimerFreq  = timerFreq;
+ 
+ 		perfStats.gpuTimeBegin  = result.m_begin;
