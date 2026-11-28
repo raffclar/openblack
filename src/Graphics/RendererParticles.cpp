@@ -1077,19 +1077,41 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 	}
 
 	// All the sprites of the pass in one buffer of instances, in the order drawn. When the buffer has no room for all of
-	// them, each centre asks for its own sprites, as a frame of its own does.
-	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
-	const auto fill = [&effects, &places](bgfx::InstanceDataBuffer& instances, uint32_t first, uint32_t count) {
-		bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
-		auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
-		for (uint32_t i = first; i < first + count; ++i)
+	// them, each centre asks for its own sprites, as a frame of its own does. The symbols' sprites go to the GPU in fewer
+	// bytes, with a shader that puts the same pixels on the screen. If one sprite does not have the shape of a symbol's
+	// sprite, all the sprites of the pass go in the full size.
+	using particles::sprites::AsSymbolSprite;
+	using particles::sprites::SpriteInstance;
+	using particles::sprites::SymbolSpriteInstance;
+	const auto* fullProgram = _shaderManager->GetShader("ParticleInstanced");
+	const auto* symbolProgram = _shaderManager->GetShader("ParticleSymbol");
+	const bool asSymbols = symbolProgram != nullptr && std::ranges::all_of(places, [&effects](uint32_t place) {
+		                       return AsSymbolSprite(effects.townBeliefSymbols.Sprite(place)).has_value();
+	                       });
+	const auto* program = asSymbols ? symbolProgram : fullProgram;
+	const auto stride = static_cast<uint16_t>(asSymbols ? sizeof(SymbolSpriteInstance) : sizeof(SpriteInstance));
+	const auto fill = [&effects, &places, asSymbols, stride](bgfx::InstanceDataBuffer& instances, uint32_t first,
+	                                                         uint32_t count) {
+		bgfx::allocInstanceDataBuffer(&instances, count, stride);
+		const auto sprites = std::span(places).subspan(first, count);
+		if (asSymbols)
 		{
-			*out++ = effects.townBeliefSymbols.Sprite(places[i]);
+			auto* out = reinterpret_cast<SymbolSpriteInstance*>(instances.data);
+			for (const auto place : sprites)
+			{
+				*out++ = *AsSymbolSprite(effects.townBeliefSymbols.Sprite(place));
+			}
+			return;
+		}
+		auto* out = reinterpret_cast<SpriteInstance*>(instances.data);
+		for (const auto place : sprites)
+		{
+			*out++ = effects.townBeliefSymbols.Sprite(place);
 		}
 	};
 	const auto total = static_cast<uint32_t>(places.size());
 	bgfx::InstanceDataBuffer passInstances {};
-	const bool onePass = total > 0 && bgfx::getAvailInstanceDataBuffer(total, k_Stride) >= total;
+	const bool onePass = total > 0 && bgfx::getAvailInstanceDataBuffer(total, stride) >= total;
 	if (onePass)
 	{
 		fill(passInstances, 0, total);
@@ -1102,8 +1124,8 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 		const auto extent = desc.frame->land.island->GetExtent();
 		islandExtent = glm::vec4(extent.minimum, extent.maximum);
 	}
-	const auto* program = _shaderManager->GetShader("ParticleInstanced");
-	// The uniforms of the program, found by name one time for all the centres of the pass
+	// The uniforms of the program, found by name one time for all the centres of the pass. The symbols' shader reads no
+	// light of the land.
 	std::optional<ProgramUniform> diffuse;
 	std::optional<ProgramUniform> alpha;
 	std::optional<ProgramUniform> landLuminosity;
@@ -1113,9 +1135,12 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 	{
 		diffuse.emplace(*program, "s_diffuse");
 		alpha.emplace(*program, "s_alpha");
-		landLuminosity.emplace(*program, "s_landLuminosity");
-		landLight.emplace(*program, "s_landLight");
-		islandExtentUniform.emplace(*program, "u_islandExtent");
+		if (!asSymbols)
+		{
+			landLuminosity.emplace(*program, "s_landLuminosity");
+			landLight.emplace(*program, "s_landLight");
+			islandExtentUniform.emplace(*program, "u_islandExtent");
+		}
 	}
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	// Each run of sprites makes the same calls as in the draw of a frame of its own
@@ -1128,7 +1153,7 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 		uint32_t base = 0;
 		if (!onePass)
 		{
-			if (bgfx::getAvailInstanceDataBuffer(draw.spriteCount, k_Stride) < draw.spriteCount)
+			if (bgfx::getAvailInstanceDataBuffer(draw.spriteCount, stride) < draw.spriteCount)
 			{
 				return;
 			}
@@ -1152,9 +1177,12 @@ void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const 
 			alpha->Set(1, *alphaTexture);
 			bgfx::setState(BlendState(material.mode));
 			// The sprites tinted by the land read its light
-			landLuminosity->Set(6, GetLandLuminosity());
-			landLight->Set(7, GetLandLightTexture());
-			islandExtentUniform->Set(&islandExtent);
+			if (!asSymbols)
+			{
+				landLuminosity->Set(6, GetLandLuminosity());
+				landLight->Set(7, GetLandLightTexture());
+				islandExtentUniform->Set(&islandExtent);
+			}
 			_plane->GetVertexBuffer().Bind();
 			bgfx::setInstanceDataBuffer(&instances, command.first - base, command.count);
 			program->Submit(viewId, command.depth);
@@ -1445,6 +1473,25 @@ void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 				bgfx::setInstanceDataBuffer(&instances, instance++, 1);
 				program->Submit(view);
 			}
+		}
+	}
+	// A sprite of a symbol of belief of no size, in the way that the symbols blend
+	constexpr auto k_SymbolStride = static_cast<uint16_t>(sizeof(particles::sprites::SymbolSpriteInstance));
+	const auto symbols = static_cast<uint32_t>(views.size());
+	const auto* symbolProgram = _shaderManager->GetShader("ParticleSymbol");
+	if (symbolProgram != nullptr && bgfx::getAvailInstanceDataBuffer(symbols, k_SymbolStride) >= symbols)
+	{
+		bgfx::InstanceDataBuffer instances {};
+		bgfx::allocInstanceDataBuffer(&instances, symbols, k_SymbolStride);
+		std::fill_n(reinterpret_cast<particles::sprites::SymbolSpriteInstance*>(instances.data), symbols,
+		            particles::sprites::SymbolSpriteInstance {});
+		uint32_t instance = 0;
+		for (const auto view : views)
+		{
+			bgfx::setState(BlendState(particles::draw::k_SymbolMode));
+			_plane->GetVertexBuffer().Bind();
+			bgfx::setInstanceDataBuffer(&instances, instance++, 1);
+			symbolProgram->Submit(view);
 		}
 	}
 

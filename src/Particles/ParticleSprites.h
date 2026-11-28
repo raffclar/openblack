@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -48,6 +49,24 @@ constexpr float k_MinimumHalfWidth = 1e-4f;
 	return static_cast<float>((static_cast<uint32_t>(specular[0]) << 16u) | (static_cast<uint32_t>(specular[1]) << 8u) |
 	                          specular[2]);
 }
+
+/// A sprite of a symbol of belief in fewer bytes, three vec4 as the symbols' instanced shader reads them. It faces the
+/// screen, its height is its width, its origin is at its centre, its sheet cell is square, and it has no added light
+/// and no colour of the land.
+struct SymbolSpriteInstance
+{
+	/// Where the sprite is, and half its width
+	glm::vec4 positionHalfWidth;
+	/// Its roll, the top left corner of its sheet cell in texture space, and the size of the cell
+	glm::vec4 rollCell;
+	/// Its colour and alpha, 0..1
+	glm::vec4 colour;
+};
+static_assert(sizeof(SymbolSpriteInstance) == 3 * sizeof(glm::vec4));
+
+/// The sprite in fewer bytes, when it has the shape of a symbol's sprite (see SymbolSpriteInstance). The shader of the
+/// symbols then puts the same pixels on the screen. Nothing for any other sprite.
+[[nodiscard]] std::optional<SymbolSpriteInstance> AsSymbolSprite(const SpriteInstance& sprite);
 
 /// The sprite of a drawn atom
 [[nodiscard]] SpriteInstance InstanceOf(const Effect::DrawAtom& atom);

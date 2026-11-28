@@ -93,6 +93,7 @@
 #include "Graphics/MeshDetail.h"
 #include "Graphics/PipelineCache.h"
 #include "Graphics/Primitive.h"
+#include "Graphics/QuadIndices.h"
 #include "Graphics/RendererDetail.h"
 #include "Graphics/ScreenGlow.h"
 #include "Graphics/ScreenGlowPass.h"
@@ -527,6 +528,8 @@ Renderer::~Renderer() noexcept
 	_objectShadowFrameBuffer.reset();
 	_landShadowBake.reset();
 	_landFootprints.reset();
+	_groundBlobQuads.reset();
+	_footprintQuads.reset();
 	_templeMapFrameBuffer.reset();
 	_templeMapHalfFrameBuffer.reset();
 	if (_landLightTexture)

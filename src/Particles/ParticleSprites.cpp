@@ -51,6 +51,21 @@ sprites::SpriteInstance sprites::InstanceOf(const Effect::DrawAtom& atom)
 	};
 }
 
+std::optional<sprites::SymbolSpriteInstance> sprites::AsSymbolSprite(const SpriteInstance& sprite)
+{
+	const float halfWidth = sprite.positionHalfWidth.w;
+	if (sprite.shape.x != halfWidth || sprite.shape.z != 0.0f || sprite.shape.w != 0.0f || sprite.uv.z != sprite.uv.w ||
+	    sprite.flags != glm::vec4(0.0f))
+	{
+		return std::nullopt;
+	}
+	return SymbolSpriteInstance {
+	    .positionHalfWidth = sprite.positionHalfWidth,
+	    .rollCell = {sprite.shape.y, sprite.uv.x, sprite.uv.y, sprite.uv.z},
+	    .colour = sprite.colour,
+	};
+}
+
 render_modes::Mode sprites::RenderMode(const Creator& creator)
 {
 	if (creator.alphaTest)
