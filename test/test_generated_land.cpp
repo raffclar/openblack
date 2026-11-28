@@ -243,9 +243,9 @@ TEST(GeneratedLand, TheTownIsTheLinesOfALandScript)
 	{
 		names.push_back(command.name);
 	}
-	// The town first, the town centre after the other buildings, then the people, the temple and its site
+	// The town first, the town centre before the other buildings, then the people, the temple and its site
 	const std::vector<std::string> expected {"CREATE_TOWN",          "SET_TOWN_BELIEF", "CREATE_NEW_TOWN_FIELD",
-	                                         "CREATE_ABODE",         "CREATE_ABODE",    "CREATE_TOWN_CENTRE",
+	                                         "CREATE_TOWN_CENTRE",   "CREATE_ABODE",    "CREATE_ABODE",
 	                                         "CREATE_TOWN_VILLAGER", "CREATE_CITADEL",  "CREATE_WORSHIP_SITE"};
 	EXPECT_EQ(names, expected);
 	EXPECT_NE(script.find(R"(CREATE_TOWN(0, "195.00,200.00", "PLAYER_ONE", 7, "NORSE"))"), std::string::npos);
@@ -385,12 +385,11 @@ TEST(GeneratedLand, EachPlayerGetsATownAndATempleBeforeTheNeutralTowns)
 	EXPECT_NE(script.find(R"(CREATE_WORSHIP_SITE("1000.00,100.00", 0, "PLAYER_TWO", "CELTIC", 0, 1000))"), std::string::npos);
 	EXPECT_NE(script.find(R"(CREATE_TOWN(2, "2095.00,100.00", "PLAYER_THREE", 3, "JAPANESE"))"), std::string::npos);
 	EXPECT_NE(script.find(R"(CREATE_CITADEL("2000.00,100.00", 0, "PLAYER_THREE", 50, 1000))"), std::string::npos);
-	// The town centre of another player comes before its other buildings, so that they leave room for it
+	// The town centre of each player comes before its other buildings, so that they leave room for it
 	const auto centreTwo = script.find(R"(CREATE_TOWN_CENTRE(1, "1095.00,100.00", "CELTIC_ABODE_TOWN_CENTRE", 1, 1000, 0))");
 	ASSERT_NE(centreTwo, std::string::npos);
 	EXPECT_LT(centreTwo, script.find(R"(CREATE_ABODE(1, "1095.00,122.00")"));
-	// The town centre of player one stays after its other buildings
-	EXPECT_GT(script.find(R"(CREATE_TOWN_CENTRE(0, )"), script.find(R"(CREATE_ABODE(0, )"));
+	EXPECT_LT(script.find(R"(CREATE_TOWN_CENTRE(0, )"), script.find(R"(CREATE_ABODE(0, )"));
 	// The neutral town comes last, with the next number
 	const auto third = script.find(R"(CREATE_WORSHIP_SITE("2000.00,100.00", 0, "PLAYER_THREE", "JAPANESE", 0, 1000))");
 	const auto neutralTown = script.find(R"(CREATE_TOWN(3, "3000.00,3000.00", "NEUTRAL", 6, "GREEK"))");

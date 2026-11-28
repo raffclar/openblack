@@ -442,22 +442,12 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 	const auto others = std::min(otherPlayers.size(), k_PlayerNames.size() - 1);
 	// On a land with more than one player, each other player is a computer god, as on the skirmish lands
 	const auto* gods = others > 0 ? &k_ComputerGods.at(others - 1) : nullptr;
-	// The lines of one town, as a land of the story gives them. The centre of a neutral town comes before its other
+	// The lines of one town, as a land of the story gives them. The centre of each town comes before its other
 	// buildings, as in many towns of the story: the centre goes up only where it has room, but a house always goes up.
 	// The owner is the number of the player from 0, or no value for a neutral town.
 	const auto town = [&line, others, gods](const landgen::settlement::Town& entry, int number, std::string_view player,
-	                                        const TownStart& start, bool centreFirst, std::optional<size_t> owner) {
+	                                        const TownStart& start, std::optional<size_t> owner) {
 		const auto tribe = TribeName(entry.tribe);
-		const auto centre = [&]() {
-			for (const auto& placed : entry.buildings)
-			{
-				if (placed.building == Building::TownCentre)
-				{
-					line(fmt::format(R"(CREATE_TOWN_CENTRE({}, {}, "{}_ABODE_TOWN_CENTRE", {}, {}, 0))", number,
-					                 Place(placed.x, placed.z), tribe, placed.rotation, k_FullSize));
-				}
-			}
-		};
 		line(fmt::format(R"(CREATE_TOWN({}, {}, "{}", {}, "{}"))", number, Place(entry.x, entry.z), player,
 		                 static_cast<int>(entry.tribe), tribe));
 		// Each town limits the belief in each computer god, as on the skirmish lands
@@ -471,9 +461,13 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 		{
 			line(fmt::format("CREATE_NEW_TOWN_FIELD({}, {}, 0, 0.000000)", number, Place(field.x, field.z)));
 		}
-		if (centreFirst)
+		for (const auto& placed : entry.buildings)
 		{
-			centre();
+			if (placed.building == Building::TownCentre)
+			{
+				line(fmt::format(R"(CREATE_TOWN_CENTRE({}, {}, "{}_ABODE_TOWN_CENTRE", {}, {}, 0))", number,
+				                 Place(placed.x, placed.z), tribe, placed.rotation, k_FullSize));
+			}
 		}
 		// The planned buildings come before the buildings that stand, as on the lands of the story. They hold no food or
 		// wood.
@@ -496,11 +490,6 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 			                 BuildingName(placed.building), placed.rotation, k_FullSize, store ? start.food : 0,
 			                 store ? start.wood : 0));
 		}
-		// The centre of the town of the start comes after its other buildings
-		if (!centreFirst)
-		{
-			centre();
-		}
 		for (const auto& person : entry.villagers)
 		{
 			const std::string_view kind = person.kind == landgen::settlement::Villager::Forester ? "FORESTER" : "HOUSEWIFE";
@@ -517,7 +506,7 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 	const auto start = [&line, &town](const landgen::settlement::Plan& entry, size_t owner) {
 		const auto number = k_Town + static_cast<int>(owner);
 		const auto player = k_PlayerNames.at(owner);
-		town(entry.town, number, player, k_PlayerStart, number != k_Town, owner);
+		town(entry.town, number, player, k_PlayerStart, owner);
 		line(fmt::format(R"(CREATE_CITADEL({}, 0, "{}", {}, {}))", Place(entry.citadelX, entry.citadelZ), player,
 		                 entry.citadelRotation, k_FullSize));
 		// The worship site goes to the place of its tribe round the temple, whatever place the line gives
@@ -540,7 +529,7 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 	// The neutral towns have no worship site at the start, as on the lands of the story
 	for (size_t i = 0; i < plan.neutral.size(); ++i)
 	{
-		town(plan.neutral[i], k_Town + 1 + static_cast<int>(others + i), "NEUTRAL", k_NeutralStart, true, std::nullopt);
+		town(plan.neutral[i], k_Town + 1 + static_cast<int>(others + i), "NEUTRAL", k_NeutralStart, std::nullopt);
 	}
 	return script;
 }
