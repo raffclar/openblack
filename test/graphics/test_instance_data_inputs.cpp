@@ -39,6 +39,7 @@
 #include "generated/shaders/dxbc/vs_object_palette_instanced.sc.bin.h"
 #include "generated/shaders/dxbc/vs_object_static_instanced.sc.bin.h"
 #include "generated/shaders/dxbc/vs_particle_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_particle_symbol.sc.bin.h"
 #include "generated/shaders/dxbc/vs_vegetation_hm_instanced.sc.bin.h"
 #endif // defined(_WIN32)
 
@@ -201,6 +202,7 @@ TEST(InstanceDataInputs, CompiledForDirect3DNoInstanceColumnIsAVertexAttribute)
 	    {"vs_object_palette_instanced", vs_object_palette_instanced_dxbc},
 	    {"vs_object_static_instanced", vs_object_static_instanced_dxbc},
 	    {"vs_particle_instanced", vs_particle_instanced_dxbc},
+	    {"vs_particle_symbol", vs_particle_symbol_dxbc},
 	    {"vs_vegetation_hm_instanced", vs_vegetation_hm_instanced_dxbc},
 	};
 	for (const auto& [name, binary] : binaries)
