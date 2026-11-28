@@ -128,4 +128,10 @@ bool WarningDue(std::optional<int64_t> deadline, int64_t now) noexcept
 	return deadline.has_value() && now >= *deadline - k_WarningSeconds;
 }
 
+std::string WarningLine(int64_t secondsLeft)
+{
+	const auto minutes = std::max<int64_t>(1, (secondsLeft + 59) / 60);
+	return fmt::format("The game server ends in {} {}.", minutes, minutes == 1 ? "minute" : "minutes");
+}
+
 } // namespace openblack::server::game_lifetime
