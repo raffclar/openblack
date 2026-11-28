@@ -203,7 +203,8 @@ public:
 	}
 
 private:
-	static constexpr size_t k_InlineBones = 128;
+	// A creature's skeleton can have more than 128 bones, and each pose sample makes four tables
+	static constexpr size_t k_InlineBones = 256;
 	static constexpr uint32_t k_None = 0xFFFFFFFF;
 	std::array<uint32_t, k_InlineBones> _onStack;
 	std::vector<uint32_t> _heap;

@@ -11,6 +11,7 @@
 #define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -66,7 +67,6 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/DrawnRegistry.h"
-#include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -553,6 +553,10 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	const auto* program = _shaderManager->GetShader("WorldTextured");
+	// Outside the temple, after the draws that the game makes at once and before every sorted key
+	const auto viewId =
+	    onMap.has_value() ? static_cast<bgfx::ViewId>(desc.viewId) : static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	const uint32_t depth = onMap.has_value() ? 0 : graphics::zsort::k_AtOnceAfterLand;
 	// A warm-up draws one triangle of no size, with the border's textures and states
 	if (_warmingUp)
 	{
@@ -568,7 +572,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
 		bgfx::setVertexBuffer(0, &vertexBuffer);
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		program->Submit(viewId, depth);
 		return;
 	}
 	// The fill copied only the circles of the borders that show
@@ -590,7 +594,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), indexCount);
 		// The player's colour; only the middle row shows, the ground and top fading out to it, and not where the
 		// circle is inside another of the player's. A hidden closing column fades to white, as the game's does.
-		const auto rgb = ecs::game_players::Colour(influence::k_PlayerColours, circle.player);
+		const auto rgb = player_colour::FromTableOnLand(influence::k_PlayerColours, circle.player, desc.frame->land.number);
 		const auto abgr = ((rgb & 0xFFu) << 16u) | (rgb & 0xFF00u) | ((rgb >> 16u) & 0xFFu);
 		const auto lastColumn = circle.Columns() - 1;
 		for (size_t i = 0; i < vertices.size(); ++i)
@@ -612,7 +616,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		bgfx::setIndexBuffer(&indexBuffer);
 		// Blended over what is behind, tested against depth but leaving none, both sides
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		program->Submit(viewId, depth);
 	}
 }
 
@@ -820,7 +824,8 @@ void Renderer::CollectMistsAndSmoke(DrawnEffects& effects, const DrawSceneDesc& 
 		    }
 	    });
 	// The border shows on the temple's map, or from high enough over the land. Only then the fill copies its circles.
-	effects.borderCircles.clear();
+	// Each copy goes over a circle of the last frame, so that the copies keep the memory of their curtains.
+	size_t borderCirclesKept = 0;
 	effects.borderRipples.clear();
 	effects.borderScroll = glm::vec2(0.0f);
 	if (Locator::influenceSystem::has_value())
@@ -835,13 +840,24 @@ void Renderer::CollectMistsAndSmoke(DrawnEffects& effects, const DrawSceneDesc& 
 		{
 			for (const auto& circle : influenceSystem.GetCircles())
 			{
-				if (influenceSystem.IsBorderShown(circle.player))
+				if (!influenceSystem.IsBorderShown(circle.player))
+				{
+					continue;
+				}
+				if (borderCirclesKept < effects.borderCircles.size())
+				{
+					effects.borderCircles[borderCirclesKept] = circle;
+				}
+				else
 				{
 					effects.borderCircles.push_back(circle);
 				}
+				++borderCirclesKept;
 			}
 		}
 	}
+	effects.borderCircles.erase(effects.borderCircles.begin() + static_cast<std::ptrdiff_t>(borderCirclesKept),
+	                            effects.borderCircles.end());
 	effects.ghostsShown = Locator::entitiesRegistry::has_value() && Locator::explosionSystem::has_value();
 	effects.destructionGhosts.clear();
 	if (effects.ghostsShown)

@@ -96,9 +96,17 @@ if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScop
       const folder = globalThis.openblackWeb && globalThis.openblackWeb.folder;
       if (folder && Number.isInteger(given.file) && given.file >= 0 && given.file < folder.files.length) {
         if (given.blob && Number.isInteger(given.block)) {
-          folder.blocks[given.file][given.block] = given.blob;
+          // A block that the thread found removed (false) stays removed: the thread waits for the whole file. The
+          // thread also does not need a block of a file that it has whole.
+          if (folder.blocks[given.file][given.block] !== false && !folder.files[given.file]) {
+            folder.blocks[given.file][given.block] = given.blob;
+          }
         } else if (given.blob) {
           folder.files[given.file] = given.blob;
+          // The page removes the blocks of a file that it keeps whole. The thread reads the whole file from now on.
+          if (folder.blocks && folder.blocks[given.file]) {
+            folder.blocks[given.file].fill(null);
+          }
         }
         answer(folder, given.file, !given.blob);
       }

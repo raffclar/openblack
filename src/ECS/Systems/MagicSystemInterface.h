@@ -85,6 +85,13 @@ struct ImportedCast
 	float duration {-1.0f};
 	float age {0.0f};
 	float magnitude {k_DefaultSpellMagnitude};
+	/// The value that multiplies the strength of the spell, which a script can set
+	float strengthMultiplier {1.0f};
+	/// The prayer power that a spell of a worship site spent each turn and at each event since its last mote of light
+	float upkeepMotes {0.0f};
+	float eventMotes {0.0f};
+	/// The movement of the spell
+	glm::vec3 movement {1.0f, 0.0f, 0.0f};
 	/// What the spell gives its particles each turn
 	particles::ProcessInfo processInfo;
 	/// The hand of a player cast the spell
@@ -350,6 +357,9 @@ public:
 	/// Takes a dispenser away with its bubble and its swirl, or a bubble with the seed spinning in it; false for anything
 	/// else, which is left alone
 	virtual bool Remove(entt::entity entity) = 0;
+	/// Takes the bubble and the swirl of a dispenser away and leaves the dispenser itself, for a removal that goes on
+	/// through the world's own removal of a building
+	virtual void ReleaseDispenser(entt::entity /*dispenser*/) {}
 	/// A seed straight into the player's hand, fully charged and ready, as from a bubble, if the hand is free: the seed,
 	/// or none
 	virtual entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) = 0;

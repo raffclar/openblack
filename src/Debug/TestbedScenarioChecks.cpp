@@ -114,6 +114,8 @@ std::string_view Name(Quantity quantity)
 		return "a local variable of a script";
 	case Quantity::CreatureLeashed:
 		return "the creature wears a leash";
+	case Quantity::CreatureOutOfLeashArea:
+		return "how far the creature is out of the area of its leash";
 	case Quantity::TempleScriptHasDialogue:
 		return "a script of the temple has the dialogue";
 	case Quantity::FootballPlayersWaiting:
@@ -126,6 +128,12 @@ std::string_view Name(Quantity quantity)
 		return "the distance from the point that the camera looks at to the temple of player one";
 	case Quantity::VillagerAsleepAtHome:
 		return "the villager sleeps in its home";
+	case Quantity::ArtefactWorth:
+		return "the worth of the artefact";
+	case Quantity::ArtefactDancing:
+		return "the dance of the artefact is under way";
+	case Quantity::TownBeliefInPlayer:
+		return "the belief of the town in the player";
 	}
 	return "";
 }

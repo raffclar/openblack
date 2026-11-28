@@ -366,6 +366,10 @@ struct GameStop
 /// The most characters of a line of the room's chat, as the chat box of the game takes them (UTF-16 code units)
 inline constexpr size_t k_MostRoomChatCharacters = 254;
 
+/// The name in the "from" of a "room.chat" frame that the game server sends in a game: the line is for the chat of every
+/// player, not from a player
+inline constexpr std::string_view k_ServerSpeaker = "Server";
+
 /// "room.chat", in a room on the local network before the start. Client to server: a line that the player typed. Server
 /// to client: a line of another player in the room. A line with no addressee goes to every player in the room but the
 /// sender, whose game shows its own line when it sends it. A line with an addressee goes only to that player.

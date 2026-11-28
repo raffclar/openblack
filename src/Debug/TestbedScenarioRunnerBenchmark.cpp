@@ -46,6 +46,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/StreetLantern.h"
@@ -324,6 +325,25 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	size_t hungPosts = 0;
 	registry.Each<const ecs::components::LeashPost>(
 	    [&hungPosts](const ecs::components::LeashPost& post) { hungPosts += post.hung ? 1 : 0; });
+	// The picked aggression leashes on the own temple of their player, and on the other temples
+	std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> ownTemples {};
+	ownTemples.fill(entt::null);
+	registry.Each<const ecs::components::Player>([&ownTemples](const ecs::components::Player& player) {
+		if (static_cast<size_t>(player.name) < ownTemples.size())
+		{
+			ownTemples.at(static_cast<size_t>(player.name)) = player.temple;
+		}
+	});
+	size_t pickedOnOwn = 0;
+	size_t pickedOnOther = 0;
+	registry.Each<const ecs::components::LeashPost>([&](const ecs::components::LeashPost& post) {
+		if (!post.selected || post.type != LeashType::Evil || post.temple == entt::null ||
+		    static_cast<size_t>(post.owner) >= ownTemples.size())
+		{
+			return;
+		}
+		(post.temple == ownTemples.at(static_cast<size_t>(post.owner)) ? pickedOnOwn : pickedOnOther) += 1;
+	});
 	return {
 	    {"placed", registry.Size<Transform>()},
 	    {"creatures", registry.Size<Creature>()},
@@ -342,6 +362,8 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"shield fall reactions", fallReactions},
 	    {"leash posts", registry.Size<ecs::components::LeashPost>()},
 	    {"hung leash posts", hungPosts},
+	    {"picked aggression leashes on the own temple", pickedOnOwn},
+	    {"picked aggression leashes on other temples", pickedOnOther},
 	};
 }
 

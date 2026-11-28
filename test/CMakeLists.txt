@@ -178,8 +178,32 @@ openblack_setup_and_add_test(test_hand_grab hand/test_hand_grab.cpp)
 openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
+openblack_setup_and_add_test(
+  test_hand_grab_system_tree hand/test_hand_grab_system_tree.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_giving hand/test_hand_grab_system_giving.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_clicks hand/test_hand_grab_system_clicks.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_pull hand/test_hand_grab_system_pull.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_scoop hand/test_hand_grab_system_scoop.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_grab_system_turns hand/test_hand_grab_system_turns.cpp
+)
 if(MSVC)
   target_compile_options(test_hand_grab_system PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_tree PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_giving PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_clicks PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_pull PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_scoop PRIVATE /bigobj)
+  target_compile_options(test_hand_grab_system_turns PRIVATE /bigobj)
 endif()
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
 openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
@@ -1998,6 +2022,7 @@ openblack_setup_and_add_test(test_portable_math test_portable_math.cpp)
 openblack_setup_and_add_test(test_build_sized_save test_build_sized_save.cpp)
 openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp)
 openblack_setup_and_add_test(test_registry_row_marks test_registry_row_marks.cpp)
+openblack_setup_and_add_test(test_thing_writes test_thing_writes.cpp)
 openblack_setup_and_add_test(test_saved_world_ids test_saved_world_ids.cpp)
 openblack_setup_and_add_test(test_particle_turn_order test_particle_turn_order.cpp)
 openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
@@ -2420,6 +2445,26 @@ openblack_setup_and_add_test(
 target_link_libraries(test_script_prayer_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_audio_library_log audio/test_audio_library_log.cpp)
 target_link_libraries(test_vanilla_world_import PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_2 test_vanilla_world_import_2.cpp
+)
+target_link_libraries(test_vanilla_world_import_2 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_3 test_vanilla_world_import_3.cpp
+)
+target_link_libraries(test_vanilla_world_import_3 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_4 test_vanilla_world_import_4.cpp
+)
+target_link_libraries(test_vanilla_world_import_4 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_5 test_vanilla_world_import_5.cpp
+)
+target_link_libraries(test_vanilla_world_import_5 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_6 test_vanilla_world_import_6.cpp
+)
+target_link_libraries(test_vanilla_world_import_6 PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_vanilla_script_import test_vanilla_script_import.cpp)
 target_link_libraries(test_vanilla_script_import PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_creature_stop_plays_rest test_creature_stop_plays_rest.cpp)
@@ -2551,6 +2596,7 @@ openblack_setup_and_add_test(test_scaffold_push_zero test_scaffold_push_zero.cpp
 openblack_setup_and_add_test(test_night_whisper test_night_whisper.cpp)
 openblack_setup_and_add_test(test_creature_learn_every_leash test_creature_learn_every_leash.cpp)
 openblack_setup_and_add_test(test_creature_fishing_adopt test_creature_fishing_adopt.cpp)
+openblack_setup_and_add_test(test_creature_kept_plans test_creature_kept_plans.cpp)
 openblack_setup_and_add_test(test_worship_site_food_pot test_worship_site_food_pot.cpp)
 openblack_setup_and_add_test(test_creature_hand_draw test_creature_hand_draw.cpp)
 openblack_setup_and_add_test(test_script_sound_stop audio/test_script_sound_stop.cpp)
@@ -2841,3 +2887,57 @@ openblack_setup_and_add_test(test_growth_map_places test_growth_map_places.cpp)
 openblack_setup_and_add_test(test_sky_picture_pack test_sky_picture_pack.cpp)
 openblack_setup_and_add_test(test_blue_noise graphics/test_blue_noise.cpp)
 openblack_setup_and_add_test(test_draw_read_watch test_draw_read_watch.cpp)
+openblack_setup_and_add_test(
+  test_map_parser_fuzz online/test_map_parser_fuzz.cpp
+)
+target_link_libraries(test_map_parser_fuzz PRIVATE lnd onlinemap)
+
+# The fuzz tests of the land reader in a program of their own, with the address and undefined behaviour sanitizers.
+# The program compiles the sources of the reader itself, so that the sanitizers check each access of the reader. It is
+# small, so it builds quickly and needs little disk, unlike a full build with OPENBLACK_SANITIZE.
+if (OPENBLACK_PARSER_SANITIZERS)
+  if (MSVC)
+    message(FATAL_ERROR "OPENBLACK_PARSER_SANITIZERS needs clang or gcc")
+  endif ()
+  set(OPENBLACK_SANITIZER_FLAGS
+      -fsanitize=address,undefined -fno-sanitize-recover=all
+      -fno-omit-frame-pointer
+  )
+  add_executable(
+    openblack_parser_sanitizer_tests
+    online/test_map_parser_fuzz.cpp
+    ${CMAKE_SOURCE_DIR}/components/lnd/src/LNDFile.cpp
+    ${CMAKE_SOURCE_DIR}/components/onlinemap/src/OnlineMapFile.cpp
+    ${CMAKE_SOURCE_DIR}/src/3D/LandData.cpp
+    ${CMAKE_SOURCE_DIR}/src/3D/BlockTexture.cpp
+    ${CMAKE_SOURCE_DIR}/src/Common/WorkerPool.cpp
+  )
+  target_include_directories(
+    openblack_parser_sanitizer_tests
+    PRIVATE ${CMAKE_SOURCE_DIR}/components/lnd/include
+            ${CMAKE_SOURCE_DIR}/components/onlinemap/include
+            ${CMAKE_SOURCE_DIR}/components/landgen/include
+            ${CMAKE_SOURCE_DIR}/src
+  )
+  target_link_libraries(
+    openblack_parser_sanitizer_tests PRIVATE GTest::gtest_main glm::glm
+  )
+  target_compile_definitions(
+    openblack_parser_sanitizer_tests
+    PRIVATE GLM_FORCE_LEFT_HANDED GLM_FORCE_RADIANS OPENBLACK_FUZZ_RUNS=20000
+  )
+  target_compile_options(
+    openblack_parser_sanitizer_tests PRIVATE ${OPENBLACK_SANITIZER_FLAGS}
+  )
+  target_link_options(
+    openblack_parser_sanitizer_tests PRIVATE ${OPENBLACK_SANITIZER_FLAGS}
+  )
+  set_property(TARGET openblack_parser_sanitizer_tests PROPERTY FOLDER "tests")
+  add_test(NAME test_map_parser_sanitizers
+           COMMAND openblack_parser_sanitizer_tests
+  )
+  set_tests_properties(
+    test_map_parser_sanitizers PROPERTIES ENVIRONMENT
+                                          "UBSAN_OPTIONS=print_stacktrace=1"
+  )
+endif ()

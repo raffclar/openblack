@@ -174,7 +174,7 @@ void CreatureMindSystem::CastOnLeashAfterReaction(entt::entity creature, size_t 
 	// The cast replaces what waits for the end of its work, and the leash leads the reaction now
 	mind->followUp = creature_follow_up::FollowUp::CastOnLeash;
 	mind->leashCast = CreatureMindState::LeashCast {.thing = thing, .miracle = static_cast<uint32_t>(miracle)};
-	mind->ledByLeash = true;
+	mind->leashLead = creature_leash::Lead::Pull;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} on the leash will cast miracle {} at {} after its reaction",
 	                    entt::to_integral(creature), miracle, entt::to_integral(thing));
 }

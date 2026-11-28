@@ -61,6 +61,17 @@ set_property(
 )
 set(CMAKE_JOB_POOL_COMPILE openblack_compile_pool)
 
+# The RelWithDebInfo build of MSVC inlines only the functions that are marked inline (/Ob1). The Release build that
+# players get inlines all functions that suit (/Ob2), as the RelWithDebInfo builds of the other compilers do. The
+# RelWithDebInfo build uses /Ob2 too, so that its profiles and frame times show the code that players run.
+if (MSVC)
+  foreach (language C CXX)
+    string(REPLACE "/Ob1" "/Ob2" CMAKE_${language}_FLAGS_RELWITHDEBINFO
+                   "${CMAKE_${language}_FLAGS_RELWITHDEBINFO}"
+    )
+  endforeach ()
+endif ()
+
 # Configure C++ standard
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -106,6 +117,13 @@ option(
   OPENBLACK_BINK_DECODER
   "Decode the game's Bink videos (without it they keep their timing and show black)"
   ON
+)
+# A small test program that builds the reader of a downloaded land (the ".map" file, the landscape, the land data and
+# the paint of the block textures) with the address and undefined behaviour sanitizers, for clang or gcc only
+option(
+  OPENBLACK_PARSER_SANITIZERS
+  "Build openblack_parser_sanitizer_tests: the land reader under ASan and UBSan (clang or gcc)"
+  OFF
 )
 option(OPENBLACK_TRACE_TIME
        "Compilation Time analysis (only available with clang)" OFF

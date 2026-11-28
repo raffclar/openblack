@@ -2664,6 +2664,7 @@ TEST_F(FrontEndTest, TheRoomGetsALandThatThePlayerDoesNotHaveFromTheLobby)
 	EXPECT_EQ(frontEnd->GetMapDownload(), nullptr);
 	// The game server gives its land to the lobby after the room opened: the game list gets the hash
 	lobby.known[0].map = std::string(k_RoomMapHash);
+	lobby.known[0].land = "Online Maps/" + RoomMap().file + ".map";
 	Step();
 	ASSERT_TRUE(lobby.maps);
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
@@ -2902,6 +2903,7 @@ TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
 	mapStore = &store;
 	ToRoom();
 	lobby.known[0].map = std::string(k_RoomMapHash);
+	lobby.known[0].land = "Online Maps/" + RoomMap().file + ".map";
 	Step();
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
 	// The download asks one more time, as the game asks the map server again
@@ -2939,6 +2941,7 @@ TEST_F(FrontEndTest, ALandThatIsNotInTheLobbysListShowsTheBoxOfTheRoom)
 	mapStore = &store;
 	ToRoom();
 	lobby.known[0].map = std::string(k_RoomMapHash);
+	lobby.known[0].land = "Online Maps/" + RoomMap().file + ".map";
 	Step();
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {});
 	Step();
@@ -2954,6 +2957,7 @@ TEST_F(FrontEndTest, ALandInTheStoreDoesNotComeAgain)
 	store.files["obm_32p_1.map"] = {9};
 	ToRoom();
 	lobby.known[0].map = std::string(k_RoomMapHash);
+	lobby.known[0].land = "Online Maps/" + RoomMap().file + ".map";
 	Step();
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
 	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);

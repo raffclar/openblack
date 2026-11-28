@@ -1640,6 +1640,20 @@ void CreatureMindSystem::StopForUnbuiltPlan(entt::entity creature)
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 }
 
+void CreatureMindSystem::KeepForcedPlanWithNoSteps(entt::entity creature, const creature_planner::Plan& plan, bool forced)
+{
+	// A forced plan stops what the creature does as a failure before it makes the agenda. Thus the creature also stops
+	// when the action makes no steps.
+	StopForUnbuiltPlan(creature);
+	// The plan stays as the plan of the creature, with no agenda. The turn with no agenda then gives it a priority of 0.
+	// The order marks the plan as forced, also with no agenda. The mark stays until the creature next decides.
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
+	{
+		mind->planner.current = plan;
+		mind->planForced = forced;
+	}
+}
+
 void CreatureMindSystem::StopForNewAgenda(entt::entity creature, CreatureMindState& mind, CreatureAnimation& body,
                                           bool stopsWalk, bool endsBody)
 {
@@ -1720,25 +1734,8 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	auto built = PlanAgenda(creature, *action, actionObject, situation);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to {} on {}: {}", entt::to_integral(creature), forced.action,
 	                    actionObject.value_or(0), built.has_value() ? "planned" : "can't be planned");
-	if (!built.has_value())
-	{
-		// The plan couldn't be made: it is left doing nothing, to decide afresh, once a pose it was in has ended and an
-		// action it was playing has played out
-		if (Locator::creatureLocomotionSystem::has_value())
-		{
-			Locator::creatureLocomotionSystem::value().Stop(creature);
-		}
-		body->body = creature_layers::EndDance(creature_layers::EndLoop(body->body));
-		creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
-		return false;
-	}
-	auto& [executor, agenda] = *built;
-	if (!Replan(creature, executor->activity, std::move(agenda)))
-	{
-		return false;
-	}
 	const auto priority = forced.unforcedPriority.value_or(creature_planner::k_ForcedScore);
-	mind->planner.current = creature_planner::Plan {
+	const creature_planner::Plan plan {
 	    .desire = forced.desire,
 	    .action = *action,
 	    .object = actionObject,
@@ -1748,6 +1745,19 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	    .activityObject = toNumber(forced.activityObject),
 	    .instrument = situation.instrument,
 	};
+	if (!built.has_value() || built->second.empty())
+	{
+		// The action makes no steps. The creature stops, once a pose it was in has ended and an action it was playing has
+		// played out. It keeps the plan with no agenda, so the next choice must be more pressing than the plan.
+		KeepForcedPlanWithNoSteps(creature, plan, forced.forced && !forced.unforcedPriority.has_value());
+		return creature_plan_actions::For(forced.action) != nullptr;
+	}
+	auto& [executor, agenda] = *built;
+	if (!Replan(creature, executor->activity, std::move(agenda)))
+	{
+		return false;
+	}
+	mind->planner.current = plan;
 	mind->planActive = true;
 	mind->planForced = forced.forced && !forced.unforcedPriority.has_value();
 	mind->planSerial = mind->idle.serial;

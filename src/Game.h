@@ -621,8 +621,9 @@ private:
 	void SaveHelpRecord();
 	/// The log gets each place where turn code used the graphics, the renderer or the audio directly, when the check is on
 	void ReportTurnApiCheck() const;
-	/// The draw starts or stops: the watch of the draw's reads starts or stops on both registries
-	void WatchDrawReads(bool drawing);
+	/// The draw starts or stops: the watch of the draw's reads starts or stops on both registries. The reads of the debug
+	/// windows have names of their own.
+	void WatchDrawReads(bool drawing, bool debugWindows = false);
 	void ReportDrawReadCheck() const;
 	/// The turns of the next frame start on another thread, beside the end of the draw of this frame, when nothing that
 	/// the end of the frame does changes what they read. Gives true when they started.

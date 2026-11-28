@@ -10,6 +10,7 @@
 // The full-screen videos' rules: schedules, fade, draw strength, the letterbox, pacing and the falling spell's timeline
 
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -162,6 +163,46 @@ TEST(VideoRules, FramesDueByTheRealClock)
 	// The exact fraction, not the whole frames a second: 29.97
 	EXPECT_EQ(FramesDue(100s, 30000, 1001), 2998u);
 	EXPECT_EQ(FramesDue(-1ms, 24, 1), 1u);
+}
+
+TEST(VideoRules, TimeOfFramesDueIsTheReverseOfFramesDue)
+{
+	EXPECT_EQ(TimeOfFramesDue(0, 24, 1), 0us);
+	EXPECT_EQ(TimeOfFramesDue(1, 24, 1), 0us);
+	EXPECT_EQ(TimeOfFramesDue(2, 24, 1), 41'667us);
+	for (const uint32_t frames : {1u, 2u, 25u, 1441u, 2998u})
+	{
+		EXPECT_EQ(FramesDue(TimeOfFramesDue(frames, 24, 1), 24, 1), frames) << frames;
+		EXPECT_EQ(FramesDue(TimeOfFramesDue(frames, 30000, 1001), 30000, 1001), frames) << frames;
+		EXPECT_EQ(FramesDue(TimeOfFramesDue(frames, 24, 1) - 1us, 24, 1), frames > 1 ? frames - 1 : 1) << frames;
+	}
+	EXPECT_EQ(TimeOfFramesDue(5, 0, 1), 0us);
+}
+
+TEST(VideoRules, AStreamCoversPlayWhenEachPacketArrivesBeforeItIsDue)
+{
+	// Ten packets of 100 bytes after 100 bytes of tables, at 10 frames a second
+	std::vector<uint32_t> ends;
+	for (uint32_t i = 1; i <= 10; ++i)
+	{
+		ends.push_back(100 + 100 * i);
+	}
+	// All the bytes, or no frame left: always
+	EXPECT_TRUE(StreamCoversPlay(ends, 0, 1100, std::nullopt, 10, 1));
+	EXPECT_TRUE(StreamCoversPlay(ends, 10, 0, std::nullopt, 10, 1));
+	// No speed and not all the bytes: never
+	EXPECT_FALSE(StreamCoversPlay(ends, 0, 1000, std::nullopt, 10, 1));
+	EXPECT_FALSE(StreamCoversPlay(ends, 0, 1000, 0.0, 10, 1));
+	// 1000 bytes a second count as 750: 75 bytes a frame, less than the 100 of each packet. Thus the packets of the
+	// first frames must be there already: packet n + 9 at 200 + 900 = 1100 <= read + 75 * 9
+	EXPECT_FALSE(StreamCoversPlay(ends, 0, 400, 1000.0, 10, 1));
+	EXPECT_TRUE(StreamCoversPlay(ends, 0, 425, 1000.0, 10, 1));
+	// The first packet is not there: the frame is due now
+	EXPECT_FALSE(StreamCoversPlay(ends, 0, 150, 1'000'000.0, 10, 1));
+	EXPECT_TRUE(StreamCoversPlay(ends, 0, 200, 1'000'000.0, 10, 1));
+	// From frame 5 on, only the packets that remain count
+	EXPECT_TRUE(StreamCoversPlay(ends, 5, 800, 1000.0, 10, 1));
+	EXPECT_FALSE(StreamCoversPlay(ends, 5, 775, 1000.0, 10, 1));
 }
 
 TEST(VideoRules, FilmMilliseconds)

@@ -1069,8 +1069,22 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "dispenser holds no miracle and floats no globe.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[1]}, .distance = 0.6f},
-	    .objects = std::move(dispenserTown),
+	    .objects = dispenserTown,
 	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+	all.push_back({
+	    .id = "editor.delete_town_dispenser",
+	    .name = "The editor deletes the miracle dispenser of a town",
+	    .facet = Facet::Editor,
+	    .description = "The town of town.dispenser_planned_again. Open the editor (F10), pick the miracle dispenser and "
+	                   "push Delete. Best watched at game speed 4.",
+	    .expected = "The dispenser goes with its swirl, and the town plans it again where it stood: the inspector lists "
+	                "the Town with one entry in planned. Later the town builds a new dispenser there. Before, the town "
+	                "did not plan the dispenser again, and the things round it stayed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[1]}, .distance = 0.6f},
+	    .objects = std::move(dispenserTown),
 	    .townBeliefInPlayer = 1.0f,
 	});
 	// A town whose only building is a dispenser that a scaffold made, so that the town does not plan it again

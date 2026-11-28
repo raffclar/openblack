@@ -30,6 +30,9 @@
 #include "Camera/Camera.h"
 #include "Common/IntegerSteps.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/PauseTextSystemInterface.h"
 #include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -45,6 +48,7 @@
 #include "Renderer.h"
 #include "Resources/ResourcesInterface.h"
 #include "Visual/RenderModes.h"
+#include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -169,24 +173,64 @@ std::vector<AdvisorSystem::Draw> WarmUpDraws(const AdvisorSystem& advisors)
 }
 } // namespace
 
+void Renderer::CollectWordsAndAdvisors(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
+{
+	effects.pauseText.clear();
+	effects.pauseTextTexture = nullptr;
+	if (Locator::pauseTextSystem::has_value() && Locator::windowing::has_value() && drawDesc.camera != nullptr)
+	{
+		const auto& words = Locator::pauseTextSystem::value();
+		effects.pauseTextTexture = words.GetTextTexture();
+		effects.pauseText = words.GetText(*drawDesc.camera, glm::u16vec2(Locator::windowing::value().GetSize()));
+	}
+	effects.tribalPowerText.clear();
+	effects.tribalPowerTexture = nullptr;
+	if (Locator::miracleFxSystem::has_value())
+	{
+		const auto& fx = Locator::miracleFxSystem::value();
+		effects.tribalPowerTexture = fx.GetTextTexture();
+		effects.tribalPowerText = fx.GetTribalPowerText();
+	}
+	effects.introLight.reset();
+	if (Locator::introSystem::has_value())
+	{
+		if (const auto* light = Locator::introSystem::value().GetLightFrame(); light != nullptr)
+		{
+			effects.introLight = *light;
+			effects.introLightSortPoint = Locator::introSystem::value().GetLightSortPoint();
+		}
+	}
+	effects.advisorDraws.clear();
+	effects.advisorTrails.clear();
+	if (!Locator::advisorSystem::has_value())
+	{
+		return;
+	}
+	// A warm-up draws each advisor and a trail at no size, so that the first advisor in the game makes no new states of
+	// the graphics card
+	const auto& advisors = Locator::advisorSystem::value();
+	if (_warmingUp)
+	{
+		effects.advisorDraws = WarmUpDraws(advisors);
+		effects.advisorTrails.assign(3, {});
+		return;
+	}
+	const auto draws = advisors.GetDraws();
+	const auto trails = advisors.GetTrails();
+	effects.advisorDraws.assign(draws.begin(), draws.end());
+	effects.advisorTrails.assign(trails.begin(), trails.end());
+}
+
 void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 {
 	if (!Locator::advisorSystem::has_value())
 	{
 		return;
 	}
+	// The models of the advisors are made with the system and do not change
 	const auto& advisors = Locator::advisorSystem::value();
-	auto draws = advisors.GetDraws();
-	auto trails = advisors.GetTrails();
-	// A warm-up draws each advisor and a trail at no size, so that the first advisor in the game makes no new states of
-	// the graphics card
-	const auto warmUpDraws = _warmingUp ? WarmUpDraws(advisors) : std::vector<AdvisorSystem::Draw> {};
-	const std::array<AdvisorSystem::TrailVertex, 3> warmUpTrail {};
-	if (_warmingUp)
-	{
-		draws = warmUpDraws;
-		trails = warmUpTrail;
-	}
+	const auto& draws = desc.frame->effects.advisorDraws;
+	const auto& trails = desc.frame->effects.advisorTrails;
 	if (draws.empty() && trails.empty())
 	{
 		return;

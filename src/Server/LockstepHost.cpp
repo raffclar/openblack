@@ -1576,6 +1576,15 @@ void LockstepHost::ObserverLeft(std::string_view name)
 	Broadcast(game_socket::ObserverLeft {.name = std::string(name)});
 }
 
+void LockstepHost::AnnounceToPlayers(std::string_view text)
+{
+	if (!_started || text.empty())
+	{
+		return;
+	}
+	Broadcast(game_socket::RoomChat {.from = std::string(game_socket::k_ServerSpeaker), .text = std::string(text)});
+}
+
 std::optional<SessionHash> LockstepHost::HashOf(std::string_view secret) const
 {
 	if (secret.empty() || !_settings.sessionHasher)

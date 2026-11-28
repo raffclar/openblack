@@ -84,6 +84,7 @@ public:
 	void DropRope(PlayerNames player) override;
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
+	void HangPostsOf(entt::entity temple) override;
 	bool TapPost(PlayerNames player, entt::entity post) override;
 	bool PickType(PlayerNames player, LeashType type) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
@@ -114,17 +115,24 @@ private:
 	/// Carries out what a shortcut does to the player's creature
 	bool Carry(PlayerNames player, entt::entity creature, const creature_leash::KeyCommand& command);
 	void Refuse(PlayerNames player, entt::entity creature, creature_leash::Refusal why);
-	/// The player's leash on their temple that matches the worn leash becomes the picked one
+	/// The player's leash on their own temple that matches the worn leash becomes the picked one
 	void PickPost(PlayerNames owner, LeashType worn);
+	/// The player's own temple while it stands, else null
+	[[nodiscard]] entt::entity OwnTempleOf(PlayerNames owner) const;
 	/// Whether the player can change the leash of the creature now: not while a nice or nasty spell is on it
 	[[nodiscard]] bool PlayerCanChangeType(entt::entity creature) const;
 	/// Changes the worn and the picked leash. A change by the player needs a leash that the creature knows.
 	bool SetType(entt::entity creature, LeashType type, creature_leash::TypeChangeBy by);
 	/// The creatures as the one-each assignment sees them
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
-	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
+	/// Hangs the posts of each temple that has none, when its heart mesh has the three points to hang them at
 	void PlacePostsAtTemples();
-	/// Hangs a player's three leash posts at three points, on the temple when it is not null
+	/// The three points on the temple that its leashes hang at, when its mesh has them
+	[[nodiscard]] std::optional<std::array<glm::vec3, 3>> PostPointsOf(entt::entity temple) const;
+	/// The temple hangs its posts, or takes the unlinked posts of its player at its points
+	void HangPostsAtPoints(entt::entity temple, const std::array<glm::vec3, 3>& points);
+	/// Hangs a player's three leash posts at three points, on the temple when it is not null. They replace the old posts
+	/// of that temple, or the player's old posts at points of their own.
 	void HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple);
 	/// The state of the temple that the post hangs on
 	[[nodiscard]] temple_leashes::TempleState TempleOf(const ecs::components::LeashPost& post) const;
@@ -152,6 +160,9 @@ private:
 	void EndOrder(entt::entity creature);
 	/// Whether the order the creature took is still being carried out
 	[[nodiscard]] bool OrderInForce(entt::entity creature) const;
+	/// Whether the marker of the order stays: the order is in force, or the creature keeps the plan of the order with no
+	/// steps and did not stop what it does
+	[[nodiscard]] bool OrderMarked(entt::entity creature) const;
 	/// The ring of the player's own creature's order follows its target and throbs
 	void UpdateMarkers();
 	/// The player's worn leash while it is tied to something, or none (which drops any rope the hand held)
@@ -162,8 +173,6 @@ private:
 	components::CreatureLeashRope* DrawnRope(PlayerNames player);
 	/// The temple's leashes hang if the creature knows them, tumble and glow, the picked one carried in the hand
 	void UpdatePosts(float seconds);
-	/// Whether the posts have been looked for at the temples yet
-	bool _postsPlaced {false};
 	/// Whether the hand was out when the posts were last shown
 	bool _handShown {true};
 	/// The two leash-attach sounds play in turn for a tie

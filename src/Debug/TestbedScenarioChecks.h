@@ -113,6 +113,9 @@ enum class Quantity : uint8_t
 	ScriptLocal,
 	/// 1 when the scenario's creature at the index wears a leash, else 0
 	CreatureLeashed,
+	/// How far in metres the scenario's creature at the index is out of the area that its leash holds it in: the
+	/// distance on the ground from the centre of the area, less the radius. None when no area holds the creature.
+	CreatureOutOfLeashArea,
 	/// 1 when a help script or a special script of the temple has the dialogue, else 0
 	TempleScriptHasDialogue,
 	/// How many players of the two teams on the football pitch that is the scenario's object at the index wait for the
@@ -128,6 +131,13 @@ enum class Quantity : uint8_t
 	/// The distance in metres along the land from the point that the camera looks at to the temple of player one. None
 	/// when player one has no temple.
 	CameraFromTemple,
+	/// The worth of the artefact nearest the point within the radius. None when no artefact is there.
+	ArtefactWorth,
+	/// 1 when the dance of the artefact nearest the point within the radius is under way, else 0. None when no artefact
+	/// is there.
+	ArtefactDancing,
+	/// The belief of the town with the number (index), as a land's script gives it, in the first player
+	TownBeliefInPlayer,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -143,10 +153,10 @@ struct Check
 	std::string_view kind;
 	/// For ScriptLocal: the name of the local variable
 	std::string_view variable;
-	/// For CreatureDistance, ObjectDistance, FireNear, FootprintsNear and ShieldSphereAt: the point, from the middle of the
-	/// map, x east and y north in metres
+	/// For CreatureDistance, ObjectDistance, FireNear, FootprintsNear, ShieldSphereAt, ArtefactWorth and ArtefactDancing:
+	/// the point, from the middle of the map, x east and y north in metres
 	glm::vec2 point {0.0f};
-	/// For FireNear and FootprintsNear: the radius in metres
+	/// For FireNear, FootprintsNear, ArtefactWorth and ArtefactDancing: the radius in metres
 	float radius {0.0f};
 	/// The game turns after the scenario starts. A turn is a tenth of a second.
 	uint32_t afterTurns {0};

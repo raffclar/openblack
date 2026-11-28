@@ -57,7 +57,7 @@ flags from the Emscripten compiler (`em++ --cflags`). If that web database is no
 is treated like a missing compile database (the hook passes with one line, the car fails).
 
 If clang-tidy 17 or the compile database is not found, the hook prints one line and passes. If one file takes more than
-120 seconds, the hook prints the file name and passes. The merge-train car runs the same check with `--strict`: there,
+900 seconds, the hook prints the file name and passes. The merge-train car runs the same check with `--strict`: there,
 a missing tool, a missing compile database or a time-out fails the car.
 
 ### Run it by hand

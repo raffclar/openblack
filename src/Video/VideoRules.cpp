@@ -122,6 +122,43 @@ uint32_t openblack::video::FramesDue(std::chrono::microseconds elapsed, uint32_t
 	return static_cast<uint32_t>(us * fpsNumerator / (uint64_t {1'000'000} * fpsDenominator)) + 1;
 }
 
+std::chrono::microseconds openblack::video::TimeOfFramesDue(uint32_t frames, uint32_t fpsNumerator,
+                                                            uint32_t fpsDenominator) noexcept
+{
+	if (frames <= 1 || fpsNumerator == 0)
+	{
+		return std::chrono::microseconds {0};
+	}
+	// Rounded up, so that FramesDue of the time gives the frames again
+	const uint64_t scaled = static_cast<uint64_t>(frames - 1) * uint64_t {1'000'000} * fpsDenominator;
+	return std::chrono::microseconds {static_cast<int64_t>((scaled + fpsNumerator - 1) / fpsNumerator)};
+}
+
+bool openblack::video::StreamCoversPlay(std::span<const uint32_t> frameEnds, uint32_t frame, uint64_t bytesRead,
+                                        std::optional<double> bytesPerSecond, uint32_t fpsNumerator,
+                                        uint32_t fpsDenominator) noexcept
+{
+	if (frame >= frameEnds.size() || bytesRead >= frameEnds.back())
+	{
+		return true;
+	}
+	if (!bytesPerSecond || *bytesPerSecond <= 0.0 || fpsNumerator == 0)
+	{
+		return false;
+	}
+	const double bytesPerFrame =
+	    *bytesPerSecond * k_StreamSpeedMargin * static_cast<double>(fpsDenominator) / static_cast<double>(fpsNumerator);
+	const auto remaining = frameEnds.subspan(frame);
+	for (size_t n = 0; n < remaining.size(); ++n)
+	{
+		if (static_cast<double>(remaining[n]) > static_cast<double>(bytesRead) + bytesPerFrame * static_cast<double>(n))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 int32_t openblack::video::FilmMilliseconds(int32_t frame, int32_t fps) noexcept
 {
 	const auto scaled = static_cast<int32_t>(static_cast<uint32_t>(frame) * 1000u);

@@ -59,6 +59,7 @@
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Hand/HandStart.h"
@@ -366,6 +367,12 @@ public:
 		if (Locator::landSystem::has_value())
 		{
 			Locator::landSystem::value().MakeSymbolSheetAgain();
+		}
+		// The village centres made their symbols of belief before the humans joined. They make them again, so that each
+		// centre also shows the symbols of the humans and of the computer gods of the empty slots.
+		if (Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().MakeBeliefSymbolsAgain();
 		}
 	}
 

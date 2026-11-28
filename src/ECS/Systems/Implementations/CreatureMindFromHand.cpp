@@ -412,7 +412,8 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		_orderedPlanFor.reset();
 		_walkContinuesFor.reset();
 		mind->leash.actOn.clear();
-		if (mind->planActive && mind->planner.current.has_value() && mind->planner.current->desire == *desire)
+		// The plan is taken also when its action makes no steps: the creature keeps it with no agenda
+		if (mind->planner.current.has_value() && mind->planner.current->desire == *desire)
 		{
 			// This plan is a forced plan
 			mind->planner.current->priority = std::numeric_limits<float>::max();

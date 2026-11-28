@@ -485,6 +485,81 @@ TEST(CreatureMindFile, TheNamesOfWhoSavedItAreWrittenAsTheGameWritesThem)
 	EXPECT_EQ(read.ProfileText(), u"abab");
 }
 
+TEST(CreatureMindFile, ASavedAsNameTooLongForItsCountIsCut)
+{
+	// 254 characters and the zero fill the count of one byte
+	std::vector<uint8_t> fits(254, 'a');
+	fits.push_back(0);
+	EXPECT_EQ(FitSavedAs(fits), fits);
+	auto over = std::vector<uint8_t>(255, 'a');
+	over.push_back(0);
+	EXPECT_EQ(FitSavedAs(over), fits);
+	// The cut does not keep the start of a UTF-8 character that it divides
+	std::vector<uint8_t> divided(253, 'a');
+	divided.insert(divided.end(), {0xC3, 0xA9, 0});
+	auto dividedFit = std::vector<uint8_t>(253, 'a');
+	dividedFit.push_back(0);
+	EXPECT_EQ(FitSavedAs(divided), dividedFit);
+	std::vector<uint8_t> whole(252, 'a');
+	whole.insert(whole.end(), {0xC3, 0xA9, 'b', 0});
+	auto wholeFit = std::vector<uint8_t>(252, 'a');
+	wholeFit.insert(wholeFit.end(), {0xC3, 0xA9, 0});
+	EXPECT_EQ(FitSavedAs(whole), wholeFit);
+}
+
+TEST(CreatureMindFile, AProfileNameTooLongForItsCountIsCut)
+{
+	// 16-bit characters, low byte first: 126 characters and the zero fill the count of one byte (254 bytes)
+	const auto bytesOf = [](std::u16string_view text) {
+		std::vector<uint8_t> bytes;
+		for (const auto c : text)
+		{
+			bytes.push_back(static_cast<uint8_t>(c & 0xff));
+			bytes.push_back(static_cast<uint8_t>(c >> 8));
+		}
+		bytes.insert(bytes.end(), {0, 0});
+		return bytes;
+	};
+	const auto fits = bytesOf(std::u16string(126, u'a'));
+	ASSERT_EQ(fits.size(), 254u);
+	EXPECT_EQ(FitProfile(fits), fits);
+	EXPECT_EQ(FitProfile(bytesOf(std::u16string(127, u'a'))), fits);
+	EXPECT_EQ(FitProfile(bytesOf(std::u16string(300, u'a'))), fits);
+	// The cut does not keep the first half of a character pair
+	EXPECT_EQ(FitProfile(bytesOf(std::u16string(125, u'a') + u"😀")), bytesOf(std::u16string(125, u'a')));
+}
+
+TEST(CreatureMindFile, NamesTooLongForTheirCountsStillGiveAFileThatReads)
+{
+	const creature_desires::Desires desires;
+	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(328, 0.0f), {});
+	auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 0);
+	// The writer cuts names that are put straight into the data
+	file.savedAs.assign(400, 'f');
+	file.savedAs.push_back(0);
+	file.profile.assign(600, 'p');
+	file.profile.insert(file.profile.end(), {0, 0});
+	file.name = u"Tester";
+	MindFileData read;
+	ASSERT_EQ(Read(Write(file), read), MindResult::Success);
+	EXPECT_EQ(read.SavedAsText(), std::string(254, 'f'));
+	EXPECT_EQ(read.profile.size(), 254u);
+	EXPECT_EQ(read.name, u"Tester");
+
+	// The names of who saved it are cut as they go into the data
+	creature_mind_model::SetSavedBy(file, std::string(256, 'c'), std::u16string(128, u'q'));
+	EXPECT_EQ(file.savedAs.size(), k_LongestNameBytes);
+	EXPECT_EQ(file.profile.size(), 254u);
+	ASSERT_EQ(Read(Write(file), read), MindResult::Success);
+	EXPECT_EQ(read.SavedAsText(), std::string(254, 'c'));
+	EXPECT_EQ(read.ProfileText(), std::u16string(126, u'q'));
+	// A name that fits is written as it is
+	creature_mind_model::SetSavedBy(file, std::string(254, 'c'), std::u16string(126, u'q'));
+	ASSERT_EQ(Read(Write(file), read), MindResult::Success);
+	EXPECT_EQ(read.SavedAsText(), std::string(254, 'c'));
+	EXPECT_EQ(read.ProfileText(), std::u16string(126, u'q'));
+}
+
 /// Real creature saves are players' own files, not part of the project: this only runs on a folder of them given by
 /// OPENBLACK_CREATURE_SAVES
 TEST(CreatureMindFile, ReferenceSavesParseAndRoundTrip)

@@ -3427,6 +3427,34 @@ TEST_F(LockstepTest, ThePlayersSeeTheNameOfAnObserverThatLeavesTheGame)
 	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
 }
 
+// A line from the server reaches the chat of every player and observer in a game that runs
+TEST_F(LockstepTest, TheServerAnnouncesALineToEveryPlayerOfTheGame)
+{
+	MakeHost(1);
+	Computer alice(_network, _now, "god:alice");
+	Computer carol(_network, _now, "observer:carol");
+	Frames({&alice, &carol}, 30);
+	ASSERT_TRUE(_host->Started());
+	_host->AnnounceToPlayers("The game server ends in 10 minutes.");
+	Frames({&alice, &carol}, 10);
+	EXPECT_EQ(alice.session.TakeTimeNotices(), std::vector<std::string> {"The game server ends in 10 minutes."});
+	EXPECT_EQ(carol.session.TakeTimeNotices(), std::vector<std::string> {"The game server ends in 10 minutes."});
+	EXPECT_TRUE(alice.session.TakeTimeNotices().empty());
+}
+
+// The room has its own chat, so the server says nothing to it before the start
+TEST_F(LockstepTest, TheServerAnnouncesNothingBeforeTheStart)
+{
+	MakeHost(2);
+	Computer alice(_network, _now, "god:alice");
+	Frames({&alice}, 5);
+	ASSERT_FALSE(_host->Started());
+	_host->AnnounceToPlayers("The game server ends in 10 minutes.");
+	Frames({&alice}, 10);
+	EXPECT_TRUE(alice.session.TakeTimeNotices().empty());
+	EXPECT_TRUE(alice.session.TakeRoomChat().empty());
+}
+
 // An observer that loses its socket can come back, so the others see its leave only when its session ends
 TEST_F(LockstepTest, ThePlayersSeeTheLeaveOfAnObserverThatDoesNotComeBackWhenItsSessionEnds)
 {

@@ -19,6 +19,7 @@
 #include "Creature/CreatureFight.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -157,4 +158,45 @@ TEST_F(LeashFightOrder, ACreatureWithNoLifeTakesNoLeashOrderToFight)
 	ASSERT_TRUE(_leashes.HandTie(_creature, _other));
 	EXPECT_TRUE(Fights().plain.empty());
 	EXPECT_TRUE(Fights().forced.empty());
+}
+
+// The hand ties the leash to a creature, and the creature refuses the order. The leash still leads the creature by the
+// order, so the creature does not walk back into the area of the leash until the lead goes.
+TEST_F(LeashFightOrder, ARefusedOrderOfTheTieStillLeadsTheCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<components::CreatureNeeds>(_creature).needs.life = 0.0f;
+	auto& mind = registry.Assign<components::CreatureMindState>(_creature);
+	ASSERT_TRUE(_leashes.HandTie(_creature, _other));
+	EXPECT_TRUE(Fights().forced.empty());
+	EXPECT_EQ(mind.leashLead, creature_leash::Lead::Order);
+	EXPECT_FALSE(registry.Get<const components::CreatureLeash>(_creature).order.has_value());
+}
+
+// The creature is too tired for an order on the land or on a thing. The leash leads it by each refused order.
+TEST_F(LeashFightOrder, ARefusedOrderOnTheLandOrOnAThingStillLeadsTheCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<components::CreatureNeeds>(_creature).needs.exhaustion = 1.0f;
+	auto& mind = registry.Assign<components::CreatureMindState>(_creature);
+	ASSERT_TRUE(_leashes.PutOn(_creature, LeashType::Evil));
+	EXPECT_FALSE(_leashes.OrderAt(PlayerNames::PLAYER_ONE, {120.0f, 0.0f, 100.0f}));
+	EXPECT_EQ(mind.leashLead, creature_leash::Lead::Order);
+	mind.leashLead = creature_leash::Lead::Pull;
+	EXPECT_FALSE(_leashes.OrderOn(PlayerNames::PLAYER_ONE, _other));
+	EXPECT_EQ(mind.leashLead, creature_leash::Lead::Order);
+	EXPECT_TRUE(Fights().forced.empty());
+	EXPECT_FALSE(registry.Get<const components::CreatureLeash>(_creature).order.has_value());
+}
+
+// A leash that does not work sends no order, so the lead of the leash does not change
+TEST_F(LeashFightOrder, ALeashThatDoesNotWorkGivesNoLead)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& mind = registry.Assign<components::CreatureMindState>(_creature);
+	ASSERT_TRUE(_leashes.PutOn(_creature, LeashType::Evil));
+	_leashes.SetWorks(_creature, false);
+	EXPECT_FALSE(_leashes.OrderAt(PlayerNames::PLAYER_ONE, {120.0f, 0.0f, 100.0f}));
+	EXPECT_FALSE(_leashes.OrderOn(PlayerNames::PLAYER_ONE, _other));
+	EXPECT_EQ(mind.leashLead, creature_leash::Lead::None);
 }

@@ -269,10 +269,22 @@ enum class MindNames
 	FromVersion21,
 };
 
+/// The most bytes that the saved-as name or the profile's name has in a file, its terminating zero included. A file
+/// keeps each count in one byte.
+constexpr size_t k_LongestNameBytes = 255;
+/// The saved-as name (8-bit text with its terminating zero) cut so that it has k_LongestNameBytes or fewer. A longer
+/// name keeps its first 254 bytes, less the start of a UTF-8 character that the cut divides, and a zero.
+[[nodiscard]] std::vector<uint8_t> FitSavedAs(std::span<const uint8_t> savedAs);
+/// The profile's name (UTF-16, low byte first, with its terminating zero) cut so that it has k_LongestNameBytes or
+/// fewer. A longer name keeps its first 126 characters, less the first half of a character pair that the cut divides,
+/// and a zero.
+[[nodiscard]] std::vector<uint8_t> FitProfile(std::span<const uint8_t> profile);
+
 /// Reads a mind file into data
 [[nodiscard]] MindResult Read(std::span<const uint8_t> bytes, MindFileData& data, MindNames names = MindNames::Always);
 [[nodiscard]] MindResult ReadFile(const std::filesystem::path& path, MindFileData& data, MindNames names = MindNames::Always);
-/// Writes the data as its version lays it out
+/// Writes the data as its version lays it out. The saved-as name and the profile's name go out cut by FitSavedAs and
+/// FitProfile, so that each count holds the size of its name.
 [[nodiscard]] std::vector<uint8_t> Write(const MindFileData& data);
 [[nodiscard]] MindResult WriteFile(const std::filesystem::path& path, const MindFileData& data);
 

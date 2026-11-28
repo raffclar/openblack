@@ -155,18 +155,16 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 
 void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 {
-	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::FootprintPass);
 	if (!drawDesc.drawIsland)
 	{
 		return;
 	}
-	// The footprints of the buildings, the features and the rivers are painted into the blocks' textures when they
-	// change, as the game paints them
+	// The fill painted the footprints of the buildings, the features and the rivers into the blocks' textures when they
+	// changed, as the game paints them
 	if (!_landFootprints)
 	{
-		_landFootprints = std::make_unique<LandFootprints>();
+		return;
 	}
-	_landFootprints->Update();
 	// The game paints all of a block's texture again when its footprints change, so the block's snow is painted again too
 	const auto repainted = _landFootprints->TakeRepainted();
 	if (repainted.empty() || drawDesc.frame->land.island == nullptr)
@@ -183,14 +181,34 @@ void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 	}
 }
 
+void Renderer::CollectSnowCover() const
+{
+	_snowShown = Locator::snowSystem::has_value();
+	if (!_snowShown)
+	{
+		_snowDepthShown = nullptr;
+		return;
+	}
+	auto& snow = Locator::snowSystem::value();
+	// The depths go to their texture here, thus the draws only read it
+	_snowDepthShown = detail::SnowDepth(_snowDepth, _snowRevision);
+	if (_snowDepthsRevision != snow.GetRevision())
+	{
+		const auto depths = snow.GetDepths();
+		_snowDepthsShown.assign(depths.begin(), depths.end());
+		_snowDepthsRevision = snow.GetRevision();
+	}
+	_snowPaintRequests |= snow.TakePaintRequests();
+}
+
 const Texture2D* Renderer::PaintLandSnow(std::span<const glm::ivec2> drawn) const
 {
-	if (!Locator::snowSystem::has_value())
+	// The fill took the requests and copied the depths of the snow
+	if (!_snowShown)
 	{
 		return nullptr;
 	}
-	auto& snow = Locator::snowSystem::value();
-	const auto requests = snow.TakePaintRequests();
+	const auto requests = std::exchange(_snowPaintRequests, {});
 	if (requests.all())
 	{
 		// Each block paints its snow again. On a new land, this paint is also the first paint of the block.
@@ -222,7 +240,7 @@ const Texture2D* Renderer::PaintLandSnow(std::span<const glm::ivec2> drawn) cons
 			_snowPaintedBlocks.push_back(block);
 		}
 	}
-	const bool painted = _paintedSnow.PaintDrawn(drawn, snow.GetDepths());
+	const bool painted = _paintedSnow.PaintDrawn(drawn, _snowDepthsShown);
 	if (!_paintedSnowTexture)
 	{
 		_paintedSnowTexture = std::make_unique<Texture2D>("PaintedSnow");
@@ -837,7 +855,11 @@ TextureHandle Renderer::GetLandLightTexture() const
 
 void Renderer::DrawFilmReflections(const DrawSceneDesc& desc) const
 {
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	if (desc.frame == nullptr || desc.frame->models == nullptr)
+	{
+		return;
+	}
+	const auto& renderCtx = *desc.frame->models;
 	if (!IsMirrorScene(desc.viewId) || renderCtx.filmReflections.empty())
 	{
 		return;

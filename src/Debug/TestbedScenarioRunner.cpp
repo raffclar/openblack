@@ -90,6 +90,7 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -1632,6 +1633,19 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		return Locator::leashSystem::value().IsLeashed(*creature) ? 1.0 : 0.0;
 	}
+	case checks::Quantity::CreatureOutOfLeashArea:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* leashes = creature.has_value() ? registry.TryGet<const ecs::components::CreatureLeash>(*creature) : nullptr;
+		const auto* transform = creature.has_value() ? registry.TryGet<const ecs::components::Transform>(*creature) : nullptr;
+		if (leashes == nullptr || transform == nullptr || leashes->confinementRadius <= 0.0f)
+		{
+			return std::nullopt;
+		}
+		const glm::vec2 centre {leashes->confinementCentre.x, leashes->confinementCentre.z};
+		const glm::vec2 at {transform->position.x, transform->position.z};
+		return static_cast<double>(glm::distance(at, centre) - leashes->confinementRadius);
+	}
 	case checks::Quantity::TempleScriptHasDialogue:
 	{
 		const temple_help::GameDialogue dialogue;
@@ -1704,6 +1718,45 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			    }
 		    });
 		return distance;
+	}
+	case checks::Quantity::ArtefactWorth:
+	case checks::Quantity::ArtefactDancing:
+	{
+		// The artefact nearest the point within the radius
+		const auto point = MapPoint(_middle, check.point);
+		const ecs::components::TownArtefact* nearest = nullptr;
+		float nearestDistance = check.radius;
+		registry.Each<const ecs::components::TownArtefact, const ecs::components::Transform>(
+		    [&](const ecs::components::TownArtefact& artefact, const ecs::components::Transform& transform) {
+			    const float distance = glm::distance(glm::xz(transform.position), point);
+			    if (distance <= nearestDistance)
+			    {
+				    nearest = &artefact;
+				    nearestDistance = distance;
+			    }
+		    });
+		if (nearest == nullptr)
+		{
+			return std::nullopt;
+		}
+		if (check.quantity == checks::Quantity::ArtefactWorth)
+		{
+			return static_cast<double>(nearest->value);
+		}
+		return nearest->dancing ? 1.0 : 0.0;
+	}
+	case checks::Quantity::TownBeliefInPlayer:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto town = towns.find(static_cast<uint32_t>(check.index));
+		if (town == towns.end() || !registry.Valid(town->second))
+		{
+			return std::nullopt;
+		}
+		const auto* impression = registry.TryGet<const ecs::components::TownImpression>(town->second);
+		return impression != nullptr
+		           ? static_cast<double>(impression->belief.belief.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)))
+		           : 0.0;
 	}
 	}
 	return std::nullopt;

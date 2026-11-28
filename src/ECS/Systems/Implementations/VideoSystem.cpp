@@ -183,6 +183,14 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 	{
 		video.fps = static_cast<int32_t>(video.file->IntegerFps());
 		video.frameCount = static_cast<int32_t>(video.file->FrameCount());
+		if (!video.file->IsComplete())
+		{
+			video.frameEnds.resize(video.file->FrameCount());
+			for (uint32_t i = 0; i < video.file->FrameCount(); ++i)
+			{
+				video.frameEnds[i] = video.file->FrameOffset(i + 1);
+			}
+		}
 #if defined(OPENBLACK_BINK_DECODER)
 		std::string error;
 		if (auto reader = bink::FrameReader::Create(video.file, &error))
@@ -288,7 +296,8 @@ void VideoSystem::Update(std::chrono::steady_clock::time_point now)
 	}
 	// While the video covers the screen, the game waits for a frame before it draws. The alpha stays as it was before
 	// the wait
-	if (_video && video::WaitsForFrame(_alpha, _fallingSpell, _framesReady))
+	// While the clock of a file that streams waits for its packets, no frame can come: the game draws at once
+	if (_video && !_video->buffering && video::WaitsForFrame(_alpha, _fallingSpell, _framesReady))
 	{
 		WaitForFrame(now);
 	}
@@ -365,7 +374,7 @@ void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 	auto& video = *_video;
 	// A file that did not open has no frames to count: its counter stays where it is. The intro's schedule then holds
 	// it, black and paused, until Escape ends it
-	if (!video.file)
+	if (!video.file || HoldsForStream(now))
 	{
 		return;
 	}
@@ -373,17 +382,22 @@ void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 	{
 		video.start = now;
 	}
-	const auto& header = video.file ? video.file->GetHeader() : bink::Header {};
+	const auto& header = video.file->GetHeader();
 	const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - *video.start);
 	const auto due = static_cast<int32_t>(video::FramesDue(elapsed, header.fpsNumerator > 0 ? header.fpsNumerator : 1,
 	                                                       header.fpsDenominator > 0 ? header.fpsDenominator : 1));
-	// Every frame due is counted, however late; the picture is the newest of them decoded so far
+	// Every frame due is counted, however late; the picture is the newest of them decoded so far. A file that streams
+	// stops the count at the first frame whose packet did not arrive, and the next update holds the clock there
 	while (_video->frame < due)
 	{
 		if (_video->frame > _schedule.end)
 		{
 			Delete();
 			return;
+		}
+		if (!_video->frameEnds.empty() && !_video->file->HasFrame(static_cast<uint32_t>(_video->frame)))
+		{
+			break;
 		}
 		++_video->frame;
 		++_framesReady;
@@ -392,6 +406,49 @@ void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 	{
 		_video->shown = _video->frames->Latest(static_cast<uint32_t>(_video->frame - 1));
 	}
+}
+
+bool VideoSystem::HoldsForStream(std::chrono::steady_clock::time_point now)
+{
+	auto& video = *_video;
+	const auto& file = *video.file;
+	if (video.frameEnds.empty())
+	{
+		return false;
+	}
+	// The next frame to count shows the packet with the same number
+	const auto next = static_cast<uint32_t>(video.frame);
+	if (!video.buffering && video.start && file.HasFrame(next))
+	{
+		return false;
+	}
+	const auto& header = file.GetHeader();
+	if (!video.buffering)
+	{
+		video.buffering = true;
+		const auto logger = spdlog::get("game");
+		if (video.start && logger)
+		{
+			logger->warn("The video {} waits for its stream at frame {}", video.path.generic_string(), next);
+		}
+	}
+	// A stream that stopped gives no more packets: the video plays on, and each frame that is not there fails
+	if (!file.HasFailed() && !video::StreamCoversPlay(video.frameEnds, next, file.BytesRead(), file.ReadSpeed(),
+	                                                  header.fpsNumerator, header.fpsDenominator))
+	{
+		return true;
+	}
+	video.buffering = false;
+	// The clock continues from the frame where it stopped
+	if (video.start)
+	{
+		video.start = now - video::TimeOfFramesDue(next, header.fpsNumerator, header.fpsDenominator);
+	}
+	else if (const auto logger = spdlog::get("game"))
+	{
+		logger->info("The video {} starts with {} of its {} bytes", video.path.generic_string(), file.BytesRead(), file.Size());
+	}
+	return false;
 }
 
 void VideoSystem::Delete()

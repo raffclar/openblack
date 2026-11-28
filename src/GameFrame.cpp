@@ -902,7 +902,7 @@ void Game::ReportTurnApiCheck() const
 	}
 }
 
-void Game::WatchDrawReads(bool drawing)
+void Game::WatchDrawReads(bool drawing, bool debugWindows)
 {
 	if (_drawReadWatch.GetCheck() == ecs::DrawReadCheck::Off)
 	{
@@ -911,11 +911,11 @@ void Game::WatchDrawReads(bool drawing)
 	auto* watch = drawing ? &_drawReadWatch : nullptr;
 	if (Locator::entitiesRegistry::has_value())
 	{
-		Locator::entitiesRegistry::value().WatchReads(watch, "land registry");
+		Locator::entitiesRegistry::value().WatchReads(watch, debugWindows ? "land registry (debug windows)" : "land registry");
 	}
 	if (Locator::drawnRegistry::has_value())
 	{
-		Locator::drawnRegistry::value().WatchReads(watch, "drawn registry");
+		Locator::drawnRegistry::value().WatchReads(watch, debugWindows ? "drawn registry (debug windows)" : "drawn registry");
 	}
 	if (drawing)
 	{
@@ -939,6 +939,15 @@ void Game::ReportDrawReadCheck() const
 	for (const auto& read : reads)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Draw check: {} {} {} reads", read.registry, read.what, read.count);
+		// The calls of the first read of this kind, without the calls of the watch and of the registry
+		for (const auto& call : ecs::DrawReadWatch::DescribeStack(read.stack))
+		{
+			if (call.find("DrawReadWatch") == std::string::npos && call.find("Registry::Note") == std::string::npos &&
+			    call.find("CaptureStack") == std::string::npos)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Draw check:   at {}", call);
+			}
+		}
 	}
 }
 

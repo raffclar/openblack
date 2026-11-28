@@ -97,9 +97,9 @@ constexpr size_t k_LeastThingsToShare = 4096;
 } // namespace
 
 /// The registry keeps its component stores in a list that grows when the registry gets the first component of a kind.
-/// The draw can do that on the game's thread. Thus the search thread must not look in that list while the draw
+/// The fill can do that on the game's thread. Thus the search thread must not look in that list while the fill
 /// continues. A store stays at the same place while the registry exists, thus the search reads the stores that the
-/// game's thread found before the search started. A store that did not exist then holds no component during the draw.
+/// game's thread found before the search started. A store that did not exist then holds no component during the fill.
 struct LandFootprints::ThingStores
 {
 	explicit ThingStores(const ecs::Registry& source)
@@ -169,6 +169,7 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 
 void LandFootprints::Reset(size_t blockCount)
 {
+	_lookAtAll = true;
 	_known.clear();
 	_looks.clear();
 	_rivers.clear();
@@ -288,7 +289,107 @@ void LandFootprints::ForShares(size_t count, const std::function<void(size_t sha
 	});
 }
 
-void LandFootprints::FindChangedThings(const ThingStores& stores)
+void LandFootprints::LookAt(const ThingStores& stores, uint32_t search, entt::entity entity, const MapCellResident& resident,
+                            const MeshComponent& mesh, const Transform& transform)
+{
+	const auto* footprint = FootprintOf(mesh.id);
+	// The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
+	// so its blocks must get their footprints again.
+	const auto index = static_cast<size_t>(entt::to_entity(entity));
+	if (const auto held = index < _looks.size() ? _looks[index].entity : entt::entity {entt::null};
+	    held != entt::null && held != entity)
+	{
+		MarkThing(held, _known.get(held));
+		Forget(held);
+	}
+	if (_known.contains(entity))
+	{
+		auto& known = _looks[index];
+		if (footprint != nullptr && SameLook(known, mesh.id, resident.cells, transform))
+		{
+			known.seen = search;
+			return;
+		}
+		MarkThing(entity, _known.get(entity));
+		Forget(entity);
+	}
+	if (footprint == nullptr)
+	{
+		return;
+	}
+	const auto placement = PlacementFor(stores.turns, entity, transform);
+	const auto bounds = land_footprints::GroundBounds(footprint->triangles, placement);
+	const auto [lowBlock, highBlock] = BlocksOf(bounds);
+	Known known {
+	    .cells = resident.cells, .placement = placement, .bounds = bounds, .lowBlock = lowBlock, .highBlock = highBlock};
+	MarkThing(entity, known);
+	Learn(entity,
+	      KnownLook {.seen = search,
+	                 .mesh = mesh.id,
+	                 .cellCount = static_cast<uint32_t>(resident.cells.size()),
+	                 .firstCell = resident.cells.empty() ? 0u : resident.cells.front(),
+	                 .transform = transform},
+	      std::move(known));
+}
+
+void LandFootprints::FindChangedThings(const ThingStores& stores, const std::optional<std::vector<uint32_t>>& marked)
+{
+	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
+	// paints it no more once the thing comes out of them
+	if (marked.has_value())
+	{
+		FindMarkedThings(stores, *marked);
+	}
+	else
+	{
+		FindChangedThingsInAll(stores);
+	}
+}
+
+void LandFootprints::FindMarkedThings(const ThingStores& stores, std::span<const uint32_t> marked)
+{
+	const auto& registry = *stores.registry;
+	const auto search = ++_searches;
+	const auto* entities = registry.Underlying().storage<entt::entity>();
+	for (const auto number : marked)
+	{
+		// The thing that has this number now, if any
+		auto entity = entt::entity {entt::null};
+		if (entities != nullptr)
+		{
+			const auto version = entities->current(entt::entt_traits<entt::entity>::construct(number, 0));
+			const auto candidate = entt::entt_traits<entt::entity>::construct(number, version);
+			if (registry.Valid(candidate))
+			{
+				entity = candidate;
+			}
+		}
+		// A known thing that went, or that left its number to a new thing, takes its footprint off
+		if (const auto held = number < _looks.size() ? _looks[number].entity : entt::entity {entt::null};
+		    held != entt::null && held != entity)
+		{
+			MarkThing(held, _known.get(held));
+			Forget(held);
+		}
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		// A thing that does not show its footprint counts as a thing outside the cells
+		if (stores.filed.contains(entity) && land_footprints::ShowsFootprint(stores.things, entity))
+		{
+			const auto& [resident, mesh, transform] = stores.filed.get(entity);
+			LookAt(stores, search, entity, resident, mesh, transform);
+		}
+		else if (_known.contains(entity))
+		{
+			MarkThing(entity, _known.get(entity));
+			Forget(entity);
+		}
+	}
+}
+
+void LandFootprints::FindChangedThingsInAll(const ThingStores& stores)
 {
 	const auto& registry = *stores.registry;
 	// Each search marks the known things that it sees with a number of its own, so that no search clears the marks first
@@ -320,50 +421,7 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 		}
 	}
 
-	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
-	// paints it no more once the thing comes out of them. A known thing that is not in the cells now is not seen, and the
-	// last step removes it.
-	const auto look = [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh,
-	                      const Transform& transform) {
-		const auto* footprint = FootprintOf(mesh.id);
-		// The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
-		// so its blocks must get their footprints again.
-		const auto index = static_cast<size_t>(entt::to_entity(entity));
-		if (const auto held = index < _looks.size() ? _looks[index].entity : entt::entity {entt::null};
-		    held != entt::null && held != entity)
-		{
-			MarkThing(held, _known.get(held));
-			Forget(held);
-		}
-		if (_known.contains(entity))
-		{
-			auto& known = _looks[index];
-			if (footprint != nullptr && SameLook(known, mesh.id, resident.cells, transform))
-			{
-				known.seen = search;
-				return;
-			}
-			MarkThing(entity, _known.get(entity));
-			Forget(entity);
-		}
-		if (footprint == nullptr)
-		{
-			return;
-		}
-		const auto placement = PlacementFor(stores.turns, entity, transform);
-		const auto bounds = land_footprints::GroundBounds(footprint->triangles, placement);
-		const auto [lowBlock, highBlock] = BlocksOf(bounds);
-		Known known {
-		    .cells = resident.cells, .placement = placement, .bounds = bounds, .lowBlock = lowBlock, .highBlock = highBlock};
-		MarkThing(entity, known);
-		Learn(entity,
-		      KnownLook {.seen = search,
-		                 .mesh = mesh.id,
-		                 .cellCount = static_cast<uint32_t>(resident.cells.size()),
-		                 .firstCell = resident.cells.empty() ? 0u : resident.cells.front(),
-		                 .transform = transform},
-		      std::move(known));
-	};
+	// A known thing that is not in the cells now is not seen, and the last step removes it.
 	// Most things keep the footprint they had, or have none. The lanes of the pool find these things first, each lane in
 	// its own share of the things, and change nothing but the marks of the known things that they see. This thread then
 	// looks at the other things in the order of the walk, as a walk of all the things would.
@@ -425,7 +483,7 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 		for (const auto entity : left)
 		{
 			const auto& [resident, mesh, transform] = filed.get(entity);
-			look(entity, resident, mesh, transform);
+			LookAt(stores, search, entity, resident, mesh, transform);
 		}
 	}
 
@@ -718,7 +776,7 @@ void LandFootprints::Update()
 		{
 			return;
 		}
-		FindChangedThings(ThingStores(Locator::entitiesRegistry::value()));
+		FindChangedThings(ThingStores(Locator::entitiesRegistry::value()), TakeMarkedThings());
 		break;
 	}
 	// The lanes of the pool that paint the blocks read only the stores that this thread finds now
@@ -739,7 +797,21 @@ void LandFootprints::StartSearch()
 	}
 	_search = Search::Started;
 	// The side thread reads only the stores that this thread finds now
-	_searchThread->Start([this, stores = ThingStores(Locator::entitiesRegistry::value())] { FindChangedThings(stores); });
+	_searchThread->Start([this, stores = ThingStores(Locator::entitiesRegistry::value()), marked = TakeMarkedThings()] {
+		FindChangedThings(stores, marked);
+	});
+}
+
+std::optional<std::vector<uint32_t>> LandFootprints::TakeMarkedThings()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto marked = registry.ThingChanges().Take(ecs::ThingWrites::Reader::LandFootprints);
+	// The marks belong to one registry. After a new registry or a new land, the search looks at all the things one time.
+	if (std::exchange(_lookAtAll, false) || std::exchange(_markedRegistry, &registry) != &registry)
+	{
+		return std::nullopt;
+	}
+	return marked;
 }
 
 void LandFootprints::ForgetSearch()

@@ -75,5 +75,8 @@ constexpr char16_t k_HiddenBlank = 0xF8FE;
 std::string ToUtf8(std::u16string_view text);
 /// Converts text to show in the game
 std::u16string ToUtf16(std::string_view text);
+/// The first characters of the text, at most the count given. The cut does not keep half of a character pair: text
+/// that would end with the first half of a pair ends before it.
+[[nodiscard]] std::u16string CutText(std::u16string_view text, size_t most);
 
 } // namespace openblack::gui

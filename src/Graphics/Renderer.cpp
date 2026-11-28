@@ -70,10 +70,12 @@
 #include "ECS/Components/VillageLight.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -772,8 +774,8 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	frame.modelLight = GetModelLight();
 	CollectHands(frame);
 	CollectSunGlare(frame, drawDesc);
-	// The draw only reads the world. Thus side threads find the changed footprints and test the casters of the shadows
-	// while the draw continues, and the passes that paint them take the results.
+	// The fill only reads the world. Thus side threads find the changed footprints and test the casters of the shadows
+	// while the fill continues, and the end of the fill takes the results.
 	if (drawDesc.drawIsland)
 	{
 		if (!_landFootprints)
@@ -819,6 +821,7 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 		_snowTexture = textures.Find(snow_cover::k_TextureId.value());
 		_snowAlphaTexture = textures.Find(snow_cover::k_AlphaTextureId.value());
 	}
+	CollectSnowCover();
 	// The light maps and shadows of the frame that ended stamp the land in this frame
 	_landStamps.swap(effects.particles.lightStamps);
 	// The land's light of the frame that ended, before this frame makes its own
@@ -831,7 +834,13 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	}
 	// What the particle effects draw, once for the land's colours and every pass
 	CollectParticles(effects);
+	effects.highlightPulseShare = Locator::scriptHighlightSystem::has_value()
+	                                  ? std::optional(ecs::script_highlights::PulseShare(
+	                                        Locator::scriptHighlightSystem::value().GetPulse(), frame.clock.turnFraction))
+	                                  : std::nullopt;
+	CollectGestureHints(effects, drawDesc);
 	CollectShellMeshes(effects, drawDesc.entities);
+	CollectWordsAndAdvisors(effects, drawDesc);
 	// What the other effects draw, from the world as the frame shows it
 	CollectGroundBlobs(effects, drawDesc);
 	CollectCreatureFootprints(effects, drawDesc);
@@ -847,6 +856,20 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 	CollectSeeds(effects, drawDesc);
 	CollectLightColumns(effects, drawDesc);
 	CollectKnockReadout(effects, drawDesc);
+	// The detail of each land block in this frame, from the draw list's test of the blocks
+	UpdateLandDetail(drawDesc);
+	// The shadows of the things bake into the land, and the footprints paint the blocks' textures, from the world as the
+	// frame shows it. The side threads that started above have had the time of the rest of the fill. The graphics device
+	// changes the textures before it does the draws of the frame, thus each pass of the frame shows them.
+	if (drawDesc.drawIsland)
+	{
+		if (drawDesc.drawEntities)
+		{
+			BakeLandShadows(drawDesc.drawVegetation);
+		}
+		auto footprints = Locator::profiler::value().BeginScoped(Profiler::Stage::FootprintPass);
+		_landFootprints->Update();
+	}
 	_effectsFilled = true;
 }
 
@@ -889,23 +912,11 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
 	UpdateLandLight(*drawDesc.frame);
-	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
-	// The pass above took the result of the side thread that tests the casters
-	if (_landShadowBake)
-	{
-		_landShadowBake->ForgetWatchedTest();
-	}
 	DrawTempleMapPass();
 	DrawGroundShadowPass(drawDesc);
-	// The footprints paint the blocks' textures after the shadow passes, thus the search on the side thread has more
-	// time. The graphics device changes the textures before it does the draws of the frame, thus each pass of the
-	// frame shows the new footprints. The passes below paint the snow of the blocks that the footprints painted again.
+	// The passes below paint the snow of the blocks that the footprints of the fill painted again
 	PaintLandFootprints(drawDesc);
-	if (_landFootprints)
-	{
-		_landFootprints->ForgetSearch();
-	}
 	// Reflection Pass
 	{
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ReflectionPass);

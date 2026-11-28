@@ -741,10 +741,15 @@ void NetworkSession::Text(std::string_view text)
 	}
 	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
 	{
-		// The chat of the room ends when the game starts
+		// The chat of the room ends when the game starts. In the game, only the server speaks, and its line goes to the
+		// lines of the clock.
 		if (_state == State::Waiting)
 		{
 			_roomChat.push_back(*chat);
+		}
+		else if (_state == State::Playing && chat->from == game_socket::k_ServerSpeaker && !chat->text.empty())
+		{
+			_timeNotices.push_back(chat->text);
 		}
 	}
 	else if (_state == State::Waiting)

@@ -762,12 +762,16 @@ bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
 	// A turn that waits to continue ends in the land that it started in
 	FinishSplitTurn();
 	const InspectorLoading loading {std::string(gods_ring_map::k_File)};
+	// The log names the map at each step of the load, as for a land. The web page reads the log, because no file of the
+	// game folder tells it that this map loads.
+	LoadTimer timer(fmt::format("land {}", gods_ring_map::k_File));
 	auto parts = gods_ring_map_file::Read(file);
 	if (!parts.has_value())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the map for 32 gods does not read");
 		return false;
 	}
+	timer.Step("map file");
 
 	// No script of the story runs on the map, as on the testbed
 	if (Locator::vm::has_value())
@@ -803,6 +807,7 @@ bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the script of the map for 32 gods: {}", e.what());
 	}
+	timer.Step("map script");
 	std::vector<PlayerNames> gods;
 	for (const auto& slot : slots)
 	{
@@ -831,6 +836,7 @@ bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
 	}
 	View().EndLoadingScreen();
 	StartNewLand(land_change::Kind::Testbed);
+	timer.Step("start");
 	return true;
 }
 

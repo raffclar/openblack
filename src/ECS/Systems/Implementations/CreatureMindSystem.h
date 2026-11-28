@@ -16,6 +16,7 @@
 #include <optional>
 #include <random>
 #include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -276,6 +277,9 @@ private:
 	/// A script takes control of the creature. The creature stops a fight, gets up when it lies knocked out, and stops
 	/// what its hands do, such as a walk to a thing to pick up.
 	void StopForScript(entt::entity creature);
+	/// The creature does the action that a script orders: a fight, a faint or a forced plan. Whether openblack's
+	/// creatures can do the action (CreatureMindScriptActions.cpp).
+	bool DoForScript(entt::entity creature, std::string_view name, entt::entity target, std::optional<entt::entity> with);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
 	/// The creature has taken a thing the hand gave it: its desires choose what it does with it
@@ -353,6 +357,9 @@ private:
 	/// What the creature does stops as a failure because it takes up a new plan whose agenda cannot be made. It is left
 	/// with no plan and no agenda, and it decides again.
 	void StopForUnbuiltPlan(entt::entity creature);
+	/// The action of a forced plan makes no steps. The creature stops what it does as a failure, and it keeps the plan as
+	/// its plan with no agenda. A forced order also marks the kept plan as forced (CreatureMindAgenda.cpp).
+	void KeepForcedPlanWithNoSteps(entt::entity creature, const creature_planner::Plan& plan, bool forced);
 	/// The stop of what the creature does before a new agenda: the walk, the hands, a pose, a held miracle and the plan
 	void StopForNewAgenda(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& body,
 	                      bool stopsWalk, bool endsBody);

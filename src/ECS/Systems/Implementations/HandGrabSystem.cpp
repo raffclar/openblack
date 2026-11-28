@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
@@ -2296,17 +2297,22 @@ void HandGrabSystem::PlaceHeldForTurn()
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 {
 	auto& registry = _world->Entities();
-	// The frames move what the hand of a person holds from the place before the last report to the reported place. When
-	// a computer mind reports its hand after a step, the movement starts and ends at the place of the hand before the
-	// step. Thus the frames show what the hand of the mind holds at that place, with no movement.
-	const auto drawnPoint = [this, &registry, frameMs](entt::entity hand) {
-		if (const auto mind = _world->MindDrawnPlaceOf(hand); mind.has_value())
+	// The frames move what the hand of another player holds from the place before the last report to the place of the
+	// turn. For a person, that is the reported place. For a computer mind, it is the place of the hand in the world: in a
+	// turn with a step, the hand before the step, which is also the start of the movement.
+	// Each hand moves once in a frame, also when it holds more than one thing.
+	std::vector<std::pair<entt::entity, glm::vec3>> drawn;
+	const auto drawnPoint = [this, &registry, &drawn, frameMs](entt::entity hand) {
+		if (const auto found = std::ranges::find(drawn, hand, &std::pair<entt::entity, glm::vec3>::first); found != drawn.end())
 		{
-			return *mind;
+			return found->second;
 		}
-		const auto reported = _world->ReportedPlaceOf(hand);
+		const auto mind = _world->MindDrawnPlaceOf(hand);
+		const auto target = mind.has_value() ? *mind : _world->ReportedPlaceOf(hand);
 		auto* track = registry.TryGet<HeldDrawTrack>(hand);
-		return track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, target, frameMs) : target;
+		drawn.emplace_back(hand, point);
+		return point;
 	};
 	registry.Each<InHand>([this, &drawnPoint](InHand& inHand) {
 		if (!Exists(inHand.hand) || !_world->IsOtherPlayersHand(inHand.hand))
