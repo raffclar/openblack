@@ -104,6 +104,7 @@ std::vector<Scenario> Build()
 	AddFootballScenarios(all);
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
+	AddArtefactScenarios(all);
 	AddVillagerLabelScenarios(all);
 	AddTempleKeyScenarios(all);
 	AddHighlightScenarios(all);
