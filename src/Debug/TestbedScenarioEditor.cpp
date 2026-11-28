@@ -551,9 +551,9 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 7 as an island of the size of a land "
 	                   "of the story, and the game loads it. Fly round the island from the start area.",
 	    .expected = "The land is one island of 2 to 4 square kilometres, about 2 kilometres across, with open sea round "
-	                "it. Its mountains are lower than those of the big island, but steep, with terraces and cliffs. The "
-	                "start area, the temple, the town of the start, the neutral towns and the shore are as on the big "
-	                "island.",
+	                "it and bays in its coast. Its mountains are lower than those of the big island, but steep, with "
+	                "terraces and cliffs, and the hills away from the mountains have summits too. The start area, the "
+	                "temple, the town of the start, the neutral towns and the shore are as on the big island.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_StoryIsland}},
@@ -584,6 +584,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_Valleys}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_terrain_fit",
+	    .name = "The coast, the summits and the cold ground of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 as an island of the size of a land "
+	                   "of the story, and the game loads it. Fly round the coast, then over the hills. Then load the "
+	                   "land of seed 11 (a land of valleys with cold ground) and fly over its nordic ground.",
+	    .expected = "The coast is not round: it has bays and long points, as the lands of the story have, and a flat "
+	                "low strip goes round most of it. No small island of less than one hectare stands near the coast. "
+	                "Hills and terraces away from the big mountains also have summits. On the cold land of seed 11, "
+	                "the low ground has gravel, rock and ice, and the snow starts only high up.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42, .object = k_StoryIsland}},
 	});
 
 	all.push_back({

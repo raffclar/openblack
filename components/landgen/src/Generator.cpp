@@ -401,6 +401,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	}
 	const auto riverDistance = climate::DistanceToWater(riverCorners);
 	const auto shoreWidths = terrain::ShoreShelf(heights, &riverDistance, seed, settings.shelf);
+	terrain::SinkSmallIslands(heights, settings.shelf.smallestIsland, settings.shelf.seaFloor);
 	clock.Done("shore");
 
 	const auto sea = Mask(side, [&heights](size_t i) { return heights.values[i] <= terrain::k_SeaLevel; });

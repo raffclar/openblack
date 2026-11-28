@@ -945,3 +945,36 @@ TEST(LandgenCliffs, ASpireStaysAsASteepPeak)
 	cliffs::LimitFaces(fixedHeights, HeightCurve {}, 3.0f, 1, settings, fixed);
 	EXPECT_EQ(fixedHeights.At(22, 20), 20.0f);
 }
+
+TEST(LandgenShore, ASmallIslandGoesUnderTheSea)
+{
+	// A large island at the west, a small island of 9 corners at the east, and a sand bar at the shore step height that
+	// joins a piece of 4 corners to the large island
+	auto heights = MakeGrid(32, [](int x, int z) {
+		if (x >= 2 && x <= 14 && z >= 2 && z <= 14)
+		{
+			return 20.0f;
+		}
+		if (x >= 24 && x <= 26 && z >= 24 && z <= 26)
+		{
+			return 12.0f;
+		}
+		if (x >= 15 && x <= 16 && z == 8)
+		{
+			return 2.0f;
+		}
+		if (x >= 17 && x <= 18 && z >= 8 && z <= 9)
+		{
+			return 6.0f;
+		}
+		return 0.5f;
+	});
+	const auto sunk = terrain::SinkSmallIslands(heights, 10, 1.0f);
+	EXPECT_EQ(sunk, 9u);
+	EXPECT_EQ(heights.At(25, 25), 1.0f);
+	EXPECT_EQ(heights.At(8, 8), 20.0f);
+	// The low sand bar is land, so the piece behind it stays with the large island
+	EXPECT_EQ(heights.At(17, 8), 6.0f);
+	// The sea floor does not rise
+	EXPECT_EQ(heights.At(30, 30), 0.5f);
+}

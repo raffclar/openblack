@@ -199,7 +199,8 @@ struct Spot
 [[nodiscard]] bool Suits(Tree tree, const Spot& spot);
 
 /// For each biome, how many times more often a stand starts: the free ground of the biome divided by its free ground
-/// where the height and the slope let one of its main kinds grow. The value is 1 where no main kind can grow.
+/// where one of its main kinds can grow (Suits: the height, the slope, and the distances from the sea and the towns).
+/// The value is 1 where no main kind can grow.
 [[nodiscard]] std::array<float, biomes::k_BiomeCount> StandFill(const Ground& ground);
 
 /// The number of trees of a stand, from a random number from 0 to below 1. The sizes have the spread of the groups of

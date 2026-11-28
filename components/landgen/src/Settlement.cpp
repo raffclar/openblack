@@ -508,18 +508,24 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 			{
 				continue;
 			}
-			// The town gets the height that the generator gives to its flat ground: the mean height in the flat circle
+			// The town gets the height that the generator gives to its flat ground: the mean height in the flat circle. No
+			// lake is in the circle where the town ground blends into the land, because the shore steps of a lake do
+			// not change that ground. Thus each lake near a town keeps a flat shore for its sand.
 			float sum = 0.0f;
 			int count = 0;
 			bool wet = false;
-			for (int dx = -flat; dx <= flat; ++dx)
+			for (int dx = -reach; dx <= reach; ++dx)
 			{
-				for (int dz = -flat; dz <= flat; ++dz)
+				for (int dz = -reach; dz <= reach; ++dz)
 				{
-					if ((dx * dx) + (dz * dz) <= flat * flat)
+					const int square = (dx * dx) + (dz * dz);
+					if (square <= flat * flat)
 					{
 						sum += heights.At(x + dx, z + dz);
 						++count;
+					}
+					if (square <= reach * reach)
+					{
 						wet = wet || (lakes != nullptr && lakes->At(x + dx, z + dz) != 0);
 					}
 				}

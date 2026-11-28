@@ -31,6 +31,7 @@ enum class Stage : uint64_t
 	Outline = 4,
 	Hills = 5,
 	Crests = 6,
+	OutlineCoves = 7,
 
 	// Erosion and terraces
 	HydraulicErosion = 10,
@@ -138,6 +139,7 @@ inline constexpr std::array k_Stages {
     Stage::Outline,
     Stage::Hills,
     Stage::Crests,
+    Stage::OutlineCoves,
     Stage::HydraulicErosion,
     Stage::TerraceLevels,
     Stage::TerraceEdge,

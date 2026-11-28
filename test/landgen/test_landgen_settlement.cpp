@@ -432,7 +432,7 @@ TEST(LandgenTowns, NoTownMakesTheGroundOfTheStartFlat)
 	}
 }
 
-TEST(LandgenTowns, NoTownStandsInALake)
+TEST(LandgenTowns, NoTownStandsInALakeOrOnItsRim)
 {
 	const FakeLand land;
 	const settlement::SiteSettings settings;
@@ -460,16 +460,18 @@ TEST(LandgenTowns, NoTownStandsInALake)
 		const auto sites =
 		    settlement::FindSites(land.heights, HeightCurve {}, land.sea, land.rivers, firsts, {}, seed, settings, &lakes);
 		ASSERT_FALSE(sites.empty());
-		const auto flat = static_cast<int>(settings.flatRadius);
+		// No lake is in the circle where the town ground blends into the land, so that the shore of each lake can have
+		// its flat steps
+		const auto reach = static_cast<int>(settings.blendRadius);
 		for (size_t i = 0; i < sites.size(); ++i)
 		{
 			const auto cx = static_cast<int>(sites[i].x);
 			const auto cz = static_cast<int>(sites[i].z);
-			for (int dx = -flat; dx <= flat; ++dx)
+			for (int dx = -reach; dx <= reach; ++dx)
 			{
-				for (int dz = -flat; dz <= flat; ++dz)
+				for (int dz = -reach; dz <= reach; ++dz)
 				{
-					if ((dx * dx) + (dz * dz) <= flat * flat)
+					if ((dx * dx) + (dz * dz) <= reach * reach)
 					{
 						EXPECT_EQ(lakes.At(cx + dx, cz + dz), 0) << "seed " << seed << " town " << i;
 					}

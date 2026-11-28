@@ -223,6 +223,26 @@ TEST(LandgenCountries, TheMountainsHaveSnowAtTheTop)
 	}
 }
 
+TEST(LandgenCountries, TheNordicWastesHaveSnowOnlyOnTheHighGround)
+{
+	const auto materials = countries::UsedSurfaces();
+	const auto country = countries::MakeCountry(countries::RecipeOf(Biome::NordicWastes), materials);
+	// The material of the band at an altitude. In a blend it is the second material.
+	const auto surfaceAt = [&](size_t altitude) { return materials.at(country.materials.at(altitude).indices[1]); };
+	// The low terraces have gravel, rock and ice, but no snow
+	for (size_t altitude = 0; altitude < 130; ++altitude)
+	{
+		for (const auto index : country.materials.at(altitude).indices)
+		{
+			EXPECT_NE(materials.at(index), Surface::Snow) << altitude;
+		}
+	}
+	EXPECT_EQ(surfaceAt(5), Surface::Gravel);
+	EXPECT_EQ(surfaceAt(20), Surface::Rock);
+	EXPECT_EQ(surfaceAt(60), Surface::Ice);
+	EXPECT_EQ(surfaceAt(200), Surface::Snow);
+}
+
 TEST(LandgenLighting, TheSunLightsTheSlopesThatFaceIt)
 {
 	const lighting::Settings settings;

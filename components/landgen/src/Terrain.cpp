@@ -147,6 +147,8 @@ struct OutlineSeeds
 	uint64_t warpU;
 	uint64_t warpV;
 	uint64_t outline;
+	/// The noise of the outline: its largest change of the land value
+	float outlineNoise;
 };
 
 /// A point of the map on the outline of one island
@@ -184,8 +186,8 @@ IslandPoint OnIsland(const terrain::Outline* island, size_t index, float u, floa
 	const float du = wu - 0.5f;
 	const float dv = wv - 0.5f;
 	const float radius = std::sqrt((du * du) + (dv * dv)) * 2.0f;
-	const float land =
-	    0.62f + landAmount - (radius * 0.75f) + (0.35f * noise::Fractal(seeds.outline, (wu * 2.2f) + offset, wv * 2.2f, 5));
+	const float land = 0.62f + landAmount - (radius * 0.75f) +
+	                   (seeds.outlineNoise * noise::Fractal(seeds.outline, (wu * 2.2f) + offset, wv * 2.2f, 5));
 	if (island == nullptr)
 	{
 		return {.land = land, .wu = wu, .wv = wv, .hu = wu, .hv = wv};
@@ -212,9 +214,11 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 	}
 	const OutlineSeeds seeds {.warpU = StageSeed(seed, Stage::OutlineWarpU),
 	                          .warpV = StageSeed(seed, Stage::OutlineWarpV),
-	                          .outline = StageSeed(seed, Stage::Outline)};
+	                          .outline = StageSeed(seed, Stage::Outline),
+	                          .outlineNoise = settings.outlineNoise};
 	const auto hills = StageSeed(seed, Stage::Hills);
 	const auto crests = StageSeed(seed, Stage::Crests);
+	const auto coves = StageSeed(seed, Stage::OutlineCoves);
 
 	Grid<float> heights(side, 0.0f);
 	const auto last = static_cast<float>(side - 1);
@@ -239,6 +243,9 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 			const float wu = point.wu;
 			const float wv = point.wv;
 			float land = point.land;
+			// The bays cut into the coast. The noise only takes land away, so that no small island rises from the sea.
+			const float cove = noise::Fractal(coves, u * settings.coveFrequency, v * settings.coveFrequency, 3);
+			land += settings.coveDepth * 2.0f * std::min(cove, 0.0f);
 
 			// Near the edges of the map the land goes under the sea
 			const int toEdge = std::min({x, z, side - 1 - x, side - 1 - z});
@@ -1218,6 +1225,58 @@ Grid<float> terrain::ShoreShelf(Grid<float>& heights, const Grid<float>* riverDi
 		}
 	}
 	return widths;
+}
+
+size_t terrain::SinkSmallIslands(Grid<float>& heights, int smallest, float seaFloor)
+{
+	const int side = heights.side;
+	Grid<uint8_t> seen(side, 0);
+	std::vector<size_t> piece;
+	std::vector<size_t> open;
+	size_t sunk = 0;
+	for (size_t start = 0; start < heights.values.size(); ++start)
+	{
+		if (seen.values[start] != 0 || heights.values[start] <= seaFloor)
+		{
+			continue;
+		}
+		// Find all the land corners that join this corner
+		piece.clear();
+		open.assign(1, start);
+		seen.values[start] = 1;
+		while (!open.empty())
+		{
+			const size_t here = open.back();
+			open.pop_back();
+			piece.push_back(here);
+			const int x = heights.XOf(here);
+			const int z = heights.ZOf(here);
+			for (size_t i = 0; i < 4; ++i)
+			{
+				const int nx = x + k_Neighbours[i].dx;
+				const int nz = z + k_Neighbours[i].dz;
+				if (!heights.Contains(nx, nz))
+				{
+					continue;
+				}
+				const size_t next = heights.Index(nx, nz);
+				if (seen.values[next] == 0 && heights.values[next] > seaFloor)
+				{
+					seen.values[next] = 1;
+					open.push_back(next);
+				}
+			}
+		}
+		if (static_cast<int>(piece.size()) < smallest)
+		{
+			for (const auto corner : piece)
+			{
+				heights.values[corner] = std::min(heights.values[corner], seaFloor);
+			}
+			sunk += piece.size();
+		}
+	}
+	return sunk;
 }
 
 Grid<float> terrain::Slopes(const Grid<float>& heights)

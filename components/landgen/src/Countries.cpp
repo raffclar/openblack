@@ -34,9 +34,10 @@ constexpr std::array<Band, 4> k_Desert {
 constexpr std::array<Band, 4> k_Swamp {{{0, Surface::Mud}, {8, Surface::WetGrass}, {120, Surface::Rock}, {185, Surface::Snow}}};
 constexpr std::array<Band, 5> k_DeadWoods {
     {{0, Surface::WetSand}, {8, Surface::DryGrass}, {55, Surface::Scrub}, {125, Surface::DarkRock}, {195, Surface::Snow}}};
-// The nordic wastes are under snow down to near the sea, with bare rock and ice
-constexpr std::array<Band, 4> k_NordicWastes {
-    {{0, Surface::Gravel}, {10, Surface::Rock}, {24, Surface::Snow}, {160, Surface::Ice}}};
+// The nordic wastes: gravel at the shore, then bare rock with a band of ice. The snow is only on the high ground, as on
+// the lands of the story, and it starts lower than on the mountains of the other biomes.
+constexpr std::array<Band, 5> k_NordicWastes {
+    {{0, Surface::Gravel}, {10, Surface::Rock}, {50, Surface::Ice}, {80, Surface::Rock}, {160, Surface::Snow}}};
 // The mountains: grass on the lowest slopes, rock, then snow and the snowy tops
 constexpr std::array<Band, 4> k_Alpine {
     {{0, Surface::Grass}, {125, Surface::Rock}, {175, Surface::Snow}, {225, Surface::SnowyTops}}};

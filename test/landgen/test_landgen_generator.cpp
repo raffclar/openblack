@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0x13A3A91B5A920FC5ull;
+constexpr uint64_t k_SmallLandHash = 0x2277371FBB9D0F8Eull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -534,7 +534,7 @@ struct TreeLineLand
 };
 } // namespace
 
-TEST(LandgenFeatures, TheStandFillLeavesOutTheHighAndTheSteepGround)
+TEST(LandgenFeatures, TheStandFillLeavesOutTheHighTheSteepAndTheShoreGround)
 {
 	const TreeLineLand land;
 	const auto keepClear = Clear(TreeLineLand::k_Side);
@@ -545,8 +545,9 @@ TEST(LandgenFeatures, TheStandFillLeavesOutTheHighAndTheSteepGround)
 	                                       .clearings = {},
 	                                       .townX = k_FarTown,
 	                                       .townZ = k_FarTown});
-	// The land is the columns 8 to 95. The low grass is the columns 8 to 51, but the slope at 51 is too steep.
-	EXPECT_FLOAT_EQ(fill.at(static_cast<size_t>(Biome::Grassland)), 88.0f / 43.0f);
+	// The land is the columns 8 to 95. The low grass is the columns 8 to 51, but the slope at 51 is too steep. The
+	// columns 8 and 9 are less than 30 m from the sea, where no main kind of the grass grows.
+	EXPECT_FLOAT_EQ(fill.at(static_cast<size_t>(Biome::Grassland)), 88.0f / 41.0f);
 	// A biome that has no ground keeps its stands
 	EXPECT_FLOAT_EQ(fill.at(static_cast<size_t>(Biome::Desert)), 1.0f);
 }

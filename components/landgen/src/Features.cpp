@@ -1408,10 +1408,6 @@ std::array<float, biomes::k_BiomeCount> features::StandFill(const Ground& ground
 {
 	std::array<size_t, biomes::k_BiomeCount> corners {};
 	std::array<size_t, biomes::k_BiomeCount> growable {};
-	const auto grows = [](Tree tree, float height, float slope) {
-		const auto* rule = RuleOf(tree);
-		return rule != nullptr && height >= rule->lowest && height <= rule->highest && slope <= rule->steepest;
-	};
 	const Placement placement(ground);
 	for (int x = 0; x < ground.heights.side; ++x)
 	{
@@ -1424,10 +1420,9 @@ std::array<float, biomes::k_BiomeCount> features::StandFill(const Ground& ground
 			const auto biome = ground.biomes.At(x, z);
 			const auto index = static_cast<size_t>(biome);
 			++corners.at(index);
-			const float height = ground.curve.MetresOf(ground.heights.At(x, z));
-			const float slope = GradientAt(ground.heights, ground.curve, x, z);
-			if (std::ranges::any_of(PlantingOf(biome).mains,
-			                        [&](const Choice& choice) { return grows(choice.tree, height, slope); }))
+			// The same rule as the start of a stand: the height, the slope, and the distances from the sea and the towns
+			const auto spot = placement.SpotAt(static_cast<float>(x), static_cast<float>(z));
+			if (std::ranges::any_of(PlantingOf(biome).mains, [&](const Choice& choice) { return Suits(choice.tree, spot); }))
 			{
 				++growable.at(index);
 			}

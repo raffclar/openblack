@@ -53,6 +53,13 @@ struct BaseSettings
 	float hillHeight {100.0f};
 	/// How much of the map the island takes, from about -0.3 (small) to 0.3 (large)
 	float landAmount {0.0f};
+	/// The largest change of the noise of the outline. The coast of the lands of the story has 4.2 to 5.8 km of shore
+	/// for each square kilometre of land, so the outline has deep bays and long points.
+	float outlineNoise {0.55f};
+	/// The bays of the coast: how deep the noise cuts into the land, and its waves across the map. The waves have the
+	/// same size in metres on each island.
+	float coveDepth {0.15f};
+	float coveFrequency {22.0f};
 	/// How many hollows the low land has, each a radius in corners, to hold the lakes and lagoons
 	int hollows {6};
 	float hollowRadius {16.0f};
@@ -316,6 +323,9 @@ struct ShelfSettings
 	/// A cliff does not rise within the first distance of a river, and rises fully from the second distance, in corners
 	float riverStart {2.0f};
 	float riverFull {8.0f};
+	/// A piece of land with fewer corners than this, apart from the other land, goes under the sea. The lands of the story
+	/// have one to four islands.
+	int smallestIsland {100};
 };
 
 /// Makes the coast as on the lands of the story: the sea, the shore steps, then a beach, a bank or a cliff. The noise
@@ -325,6 +335,11 @@ struct ShelfSettings
 /// water. riverDistance can be null.
 [[nodiscard]] Grid<float> ShoreShelf(Grid<float>& heights, const Grid<float>* riverDistance, uint64_t seed,
                                      const ShelfSettings& settings);
+
+/// Puts each piece of land with fewer than smallest corners under the sea, at the sea floor. A piece is the corners above
+/// the sea floor that join along the sides of the corners, so the low shore steps are a part of the land. Returns the
+/// count of corners that went under the sea.
+size_t SinkSmallIslands(Grid<float>& heights, int smallest, float seaFloor);
 
 /// The largest difference of height to the next corner along an axis, at each corner
 [[nodiscard]] Grid<float> Slopes(const Grid<float>& heights);

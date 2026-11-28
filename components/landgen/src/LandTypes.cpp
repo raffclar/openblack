@@ -50,6 +50,10 @@ constexpr int k_PlaceTries = 400;
 constexpr float k_HighlandRise = 15.0f;
 /// The highlands rise to the plains in this part of the usual distance from the coast
 constexpr float k_HighlandCoast = 0.6f;
+/// On an island of the story size and on the valleys, the land away from the massifs can rise this many altitude units
+/// higher before it rises slower. Thus its hills and terraces reach the height of the summits of the lands of the story
+/// (6 to 44 summits of 60 m or more), and the massifs are not the only summits.
+constexpr float k_LowlandCeilingRise = 30.0f;
 /// The mountain ranges that the valleys add, from the fewest to the most
 constexpr int k_ValleyRangesLow = 2;
 constexpr int k_ValleyRangesHigh = 3;
@@ -201,6 +205,8 @@ void landtypes::Apply(Type type, uint64_t seed, terrain::BaseSettings& base, ter
 		return;
 	case Type::StoryIsland:
 		base.islands = {OneIsland(seed, k_StoryIslandSize)};
+		massifs.lowlandKnee += k_LowlandCeilingRise;
+		massifs.lowlandCeiling += k_LowlandCeilingRise;
 		break;
 	case Type::Highlands:
 		base.islands = {OneIsland(seed, k_HighlandsSize)};
@@ -213,6 +219,8 @@ void landtypes::Apply(Type type, uint64_t seed, terrain::BaseSettings& base, ter
 	{
 		base.islands = {OneIsland(seed, k_ValleysSize)};
 		Random random(StageSeed(seed, Stage::LandTypeApply));
+		massifs.lowlandKnee += k_LowlandCeilingRise;
+		massifs.lowlandCeiling += k_LowlandCeilingRise;
 		base.ranges += k_ValleyRangesLow +
 		               static_cast<int>(random.NextBelow(static_cast<uint32_t>(k_ValleyRangesHigh - k_ValleyRangesLow + 1)));
 		break;
