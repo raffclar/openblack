@@ -46,6 +46,8 @@ NOT_COMPONENTS = {
     "MeshComponent",
     # The rendering services that the locator holds
     "RenderingSystemTemple",
+    # The land store in memory that the game server holds in the locator
+    "MemoryMapStore",
 }
 # Files whose calls are not about entity components: the service locator (its game part and its part with the devices
 # that use no hardware too) and the template that the registry itself uses
