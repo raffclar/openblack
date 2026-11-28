@@ -22,6 +22,14 @@ function parameterIsOn(parameters, name) {
 }
 
 /**
+ * The words of the text of the args parameter. A space divides two words, but a part in double quotes is one word with
+ * its spaces, for example a path such as "Online Maps/mpm_2p_1.map".
+ */
+function argumentWords(text) {
+  return (text.match(/(?:"[^"]*"|[^\s"])+/g) ?? []).map((word) => word.replaceAll('"', ''));
+}
+
+/**
  * The arguments of the game that the address of the page asks for.
  * @param {URLSearchParams} parameters the page parameters
  * @param {boolean} developer true for a build with the developer tools
@@ -29,7 +37,7 @@ function parameterIsOn(parameters, name) {
  * @returns {string[]} the game arguments, each one one time
  */
 function playerArguments(parameters, developer, online) {
-  const result = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
+  const result = developer ? argumentWords(parameters.get('args') || '') : [];
   const has = (argument) => result.some((entry) => entry.toUpperCase() === argument.toUpperCase());
   for (const { parameter, argument } of k_PlayerParameters) {
     const wanted = parameter === 'multiplayer' ? online || parameterIsOn(parameters, parameter)
@@ -42,5 +50,5 @@ function playerArguments(parameters, developer, online) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { playerArguments, parameterIsOn, k_PlayerParameters };
+  module.exports = { playerArguments, parameterIsOn, argumentWords, k_PlayerParameters };
 }
