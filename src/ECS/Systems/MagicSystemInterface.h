@@ -85,6 +85,13 @@ struct ImportedCast
 	float duration {-1.0f};
 	float age {0.0f};
 	float magnitude {k_DefaultSpellMagnitude};
+	/// The value that multiplies the strength of the spell, which a script can set
+	float strengthMultiplier {1.0f};
+	/// The prayer power that a spell of a worship site spent each turn and at each event since its last mote of light
+	float upkeepMotes {0.0f};
+	float eventMotes {0.0f};
+	/// The movement of the spell
+	glm::vec3 movement {1.0f, 0.0f, 0.0f};
 	/// What the spell gives its particles each turn
 	particles::ProcessInfo processInfo;
 	/// The hand of a player cast the spell

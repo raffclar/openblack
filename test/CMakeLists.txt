@@ -2444,6 +2444,26 @@ openblack_setup_and_add_test(
 target_link_libraries(test_script_prayer_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_audio_library_log audio/test_audio_library_log.cpp)
 target_link_libraries(test_vanilla_world_import PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_2 test_vanilla_world_import_2.cpp
+)
+target_link_libraries(test_vanilla_world_import_2 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_3 test_vanilla_world_import_3.cpp
+)
+target_link_libraries(test_vanilla_world_import_3 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_4 test_vanilla_world_import_4.cpp
+)
+target_link_libraries(test_vanilla_world_import_4 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_5 test_vanilla_world_import_5.cpp
+)
+target_link_libraries(test_vanilla_world_import_5 PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_vanilla_world_import_6 test_vanilla_world_import_6.cpp
+)
+target_link_libraries(test_vanilla_world_import_6 PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_vanilla_script_import test_vanilla_script_import.cpp)
 target_link_libraries(test_vanilla_script_import PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_creature_stop_plays_rest test_creature_stop_plays_rest.cpp)
