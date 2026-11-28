@@ -45,10 +45,6 @@ constexpr std::string_view k_WorkingFolder = "/work";
 /// returns the exit code that end gives.
 [[nodiscard]] int RunFrames(const std::function<bool()>& frame, const std::function<int()>& end);
 
-/// Wait for the next display frame of the browser. A loop of the game that draws no frame, for example a start-up screen
-/// that shows the same picture, calls it in place of a frame.
-void WaitForDisplayFrame();
-
 /// Call before the renderer draws a frame. When the renderer draws more than one frame in a frame of RunFrames, as a
 /// loading screen does, the frame that the canvas has goes to the page as an image before the next frame replaces it.
 /// With a render thread (see StartRenderThread), this function does nothing.
