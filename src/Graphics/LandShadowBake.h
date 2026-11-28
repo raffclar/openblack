@@ -15,6 +15,7 @@
 #include <future>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <unordered_map>
 #include <utility>
@@ -25,6 +26,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Transform.h"
+#include "ECS/LandRepaintRules.h"
 #include "ECS/LandShadowCasters.h"
 #include "Graphics/CasterBlocks.h"
 #include "Visual/TreeShadows.h"
@@ -53,8 +55,10 @@ class Texture2D;
 /// The shadows Black & White bakes into the land as it paints each land block: the trees' and big forests' through their
 /// leaves (see tree_shadows), and the buildings', rocks' and other solid things' by their shapes (see shape_shadows),
 /// joined in each texel. They are kept in one texture over the island at the land blocks' texels: each texel holds what
-/// the land's colour is scaled by, over 256. A block is baked again only when a thing whose shadow it takes changes:
-/// made, built, grown, turned, moved or taken away.
+/// the land's colour is scaled by, over 256. A block is baked again when the game paints it again (see
+/// ecs::land_repaint): when a caster over it goes into the map's cells or comes out of them, if the caster asks for a
+/// paint then, and when the land paints the block again for another cause. A caster that only grows, or a thing that
+/// moves, keeps its old shadow in the land until then.
 class LandShadowBake
 {
 public:
@@ -96,6 +100,13 @@ public:
 	[[nodiscard]] std::vector<glm::ivec2> TakeNewlyBaked() { return std::exchange(_newlyBaked, {}); }
 	/// Whether the bake on the other threads bakes the block now, by its index along x and z
 	[[nodiscard]] bool Bakes(glm::ivec2 block) const;
+	/// The land painted the blocks again for another cause, by their index along x and z: the footprints or the snow. The
+	/// game paints the shadows in the same paint, thus a later update bakes each of these blocks that keeps an old
+	/// shadow.
+	void PaintedElsewhere(std::span<const glm::ivec2> blocks);
+	/// The blocks that the updates baked since the last call, by their index along x and z. The game paints the
+	/// footprints of these blocks in the same paint.
+	[[nodiscard]] std::vector<glm::ivec2> TakePaintedBlocks() { return std::exchange(_painted, {}); }
 
 	/// A triangle of a tree's model, in its own space, with its texture's alpha. The triangle keeps a copy of the alpha.
 	/// The bake on the other threads can then continue when the resource caches release the model and its textures, as
@@ -137,6 +148,11 @@ private:
 		bool filed;
 		/// Its shadow can change while its components stay the same, which the test of the watched things checks
 		bool shadowChangesInPlace;
+		/// How many times it went into the map's cells, how it is kept in them, and whether its model asks for a paint each
+		/// time it goes in or comes out
+		uint32_t filings {0};
+		ecs::land_repaint::Filing filing {ecs::land_repaint::Filing::Outline};
+		bool flagged {false};
 		/// A solid thing's triangles flattened where they fall in the world, kept until it changes, and the corners of
 		/// the land they fall within, along x and z
 		std::shared_ptr<const std::vector<glm::vec2>> cast;
@@ -244,9 +260,15 @@ private:
 	[[nodiscard]] static Baked BakedOf(const land_shadow_bake::Caster& caster, const ecs::Registry& registry);
 	/// A thing that can start to cast, as it is now
 	[[nodiscard]] static Watched WatchedOf(const land_shadow_bake::MayCast& thing);
-	/// Keeps a caster as it is now, and marks the blocks of its old and its new place when its shadow changed
+	/// Keeps a caster as it is now. When its shadow changed, it marks the blocks of its old and its new place: to bake
+	/// when the game paints them again, else as blocks that keep an old shadow.
 	void Rebake(Baked& kept, Baked&& now);
-	void MarkBlocksOf(std::span<const uint32_t> cells);
+	/// Marks the blocks that take the shadow of a thing in the cells: to bake, or as blocks that keep an old shadow
+	void MarkBlocksOf(std::span<const uint32_t> cells, bool paint);
+	/// Marks the blocks of a new caster or of a caster that goes, as the game paints them
+	void MarkCameOrWent(const Baked& caster, bool came);
+	/// Marks to bake the blocks that the land painted again for another cause and that keep an old shadow
+	void TakePaintedElsewhere();
 	/// The triangles of a model that cast its shadow, found once
 	std::span<const LeafTriangle> LeavesOf(entt::id_type meshId);
 	std::span<const ShapeTriangle> ShapeOf(entt::id_type meshId);
@@ -278,6 +300,12 @@ private:
 	std::vector<glm::ivec2> _bakingBlocks;
 	/// The land blocks to bake again, by their index along x and z
 	std::vector<glm::ivec2> _dirty;
+	/// The land blocks that keep an old shadow, because the game did not paint them for a change of a caster
+	std::set<std::pair<int, int>> _stale;
+	/// The blocks that the land painted again for another cause since the last update
+	std::set<std::pair<int, int>> _paintedElsewhere;
+	/// The blocks that the updates baked since the last TakePaintedBlocks
+	std::vector<glm::ivec2> _painted;
 	bool _bakeAll {true};
 	/// The bake that runs on other threads
 	std::future<std::vector<BlockShades>> _bake;

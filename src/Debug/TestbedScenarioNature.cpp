@@ -393,22 +393,53 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "nature.young_trees_keep_their_footprints",
-	    .name = "Young trees that grow keep the footprints of the size that they had",
+	    .name = "Young trees that grow keep the footprints and shadows of the size that they had",
 	    .facet = Facet::Nature,
-	    .description = "Three young oaks of one forest stand close by, at a fifth of their full size. A full grown oak "
-	                   "stands beside them. The game runs at eight times its speed. After 30 seconds the full grown oak "
-	                   "goes from the world.",
-	    .expected = "The young oaks grow, but the land under them keeps their small footprints. The full grown oak "
-	                "comes out of the cells of the land, and the game paints again the blocks under it. Then the land "
-	                "shows the footprints of the young oaks in these blocks at their new size.",
+	    .description = "Three young oaks of one forest stand close by, at a fifth of their full size. A rock stands "
+	                   "beside them. The game runs at eight times its speed. After 30 seconds the rock goes from the "
+	                   "world.",
+	    .expected = "The young oaks grow, but the land under them keeps their small footprints and their small baked "
+	                "shadows. The rock comes out of the cells of the land, and the game paints again the blocks under "
+	                "it. Then the land shows the footprints and the shadows of the young oaks in these blocks at their "
+	                "new size.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 12.0f}, .look = {k_Tree.x, 0.0f, k_Tree.y}},
 	    .objects =
 	        {{.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(-5.0f, 0.0f), .scale = 0.2f, .forest = 1, .fullSize = 1.0f},
 	         {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(0.0f, 4.0f), .scale = 0.2f, .forest = 1, .fullSize = 1.0f},
 	         {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(5.0f, 0.0f), .scale = 0.2f, .forest = 1, .fullSize = 1.0f},
-	         {.type = TreeInfo::Oak, .offset = k_Tree + glm::vec2(0.0f, 14.0f)}},
+	         {.type = MobileStaticInfo::Rock, .offset = k_Tree + glm::vec2(0.0f, 14.0f)}},
 	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 0.5f, .amount = 8.0f},
 	                 {.kind = Kind::RemoveObject, .delaySeconds = 30.0f, .object = 3}},
+	});
+
+	// Away from the edges of a land block, so that one block takes all of the shadows
+	constexpr glm::vec2 k_Moved {40.0f, 50.0f};
+	all.push_back({
+	    .id = "nature.moved_things_keep_their_baked_shadows",
+	    .name = "Things that move or go keep their baked shadows until the game paints the land again",
+	    .facet = Facet::Nature,
+	    .description =
+	        "A cart, a rock and an oak stand in a row, 8 m apart, at noon with the clock stopped. After 2 seconds the hand "
+	        "throws the cart about 10 m to the north. After 6 seconds it throws the rock about 10 m to the north. After 10 "
+	        "seconds the oak goes from the world.",
+	    .expected = "The cart lands, but its baked shadow stays where it stood, and the land under it shows no shadow. "
+	                "The rock comes out of the cells of the land and goes into them again, and the game paints the blocks "
+	                "under it again. Then the shadow of the rock follows it, and the shadow of the cart moves to where the "
+	                "cart lies. The oak goes, but its baked shadow and its footprint stay on the land.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Moved.x, 22.0f, k_Moved.y - 14.0f},
+	                .look = {k_Moved.x, 0.0f, k_Moved.y + 6.0f}},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = k_Moved + glm::vec2(-8.0f, 0.0f)},
+	                {.type = MobileStaticInfo::Rock, .offset = k_Moved},
+	                {.type = TreeInfo::Oak, .offset = k_Moved + glm::vec2(8.0f, 0.0f)}},
+	    .commands = {{.kind = Kind::RemoveObject, .delaySeconds = 10.0f, .object = 2}},
+	    .throws = {{.object = 0,
+	                .from = k_Moved + glm::vec2(-8.0f, 0.0f),
+	                .height = 3.0f,
+	                .velocity = {0.0f, 3.0f, 9.0f},
+	                .delaySeconds = 2.0f},
+	               {.object = 1, .from = k_Moved, .height = 3.0f, .velocity = {0.0f, 3.0f, 9.0f}, .delaySeconds = 6.0f}},
 	});
 }

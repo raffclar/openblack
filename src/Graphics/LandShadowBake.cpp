@@ -40,6 +40,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/RepaintsLandWhenFiled.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -334,6 +335,8 @@ void LandShadowBake::Reset()
 	_leaves.clear();
 	_shapes.clear();
 	_dirty.clear();
+	_stale.clear();
+	_paintedElsewhere.clear();
 	_bakeAll = true;
 }
 
@@ -469,7 +472,7 @@ std::span<const LandShadowBake::ShapeTriangle> LandShadowBake::ShapeOf(entt::id_
 	return shape;
 }
 
-void LandShadowBake::MarkBlocksOf(std::span<const uint32_t> cells)
+void LandShadowBake::MarkBlocksOf(std::span<const uint32_t> cells, bool paint)
 {
 	for (const auto index : cells)
 	{
@@ -480,8 +483,40 @@ void LandShadowBake::MarkBlocksOf(std::span<const uint32_t> cells)
 		{
 			for (int z = alongZ.x; z <= alongZ.y; ++z)
 			{
-				_dirty.emplace_back(x, z);
+				if (paint)
+				{
+					_dirty.emplace_back(x, z);
+				}
+				else
+				{
+					_stale.emplace(x, z);
+				}
 			}
+		}
+	}
+}
+
+void LandShadowBake::MarkCameOrWent(const Baked& caster, bool came)
+{
+	const auto repaints = ecs::land_repaint::RepaintsOf(caster.filing, caster.flagged);
+	MarkBlocksOf(caster.cells, came ? repaints.goingIn : repaints.comingOut);
+}
+
+void LandShadowBake::PaintedElsewhere(std::span<const glm::ivec2> blocks)
+{
+	for (const auto block : blocks)
+	{
+		_paintedElsewhere.emplace(block.x, block.y);
+	}
+}
+
+void LandShadowBake::TakePaintedElsewhere()
+{
+	for (const auto& [x, z] : std::exchange(_paintedElsewhere, {}))
+	{
+		if (_stale.contains(std::pair(x, z)))
+		{
+			_dirty.emplace_back(x, z);
 		}
 	}
 }
@@ -575,6 +610,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		const auto [repeatsFirst, repeatsLast] = std::ranges::unique(changed);
 		changed.erase(repeatsFirst, repeatsLast);
 		_testAllCasters = false;
+		TakePaintedElsewhere();
 		if (changed.empty() && _dirty.empty())
 		{
 			return;
@@ -588,6 +624,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		_castersVersion = castersVersion;
 		_meshCount = meshCount;
 		_testAllCasters = false;
+		TakePaintedElsewhere();
 	}
 
 	// A bake on the other threads that is still running holds back the next one: the blocks changed since then wait
@@ -602,6 +639,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		toBake.resize(blocks.size());
 		std::ranges::generate(toBake, [i = size_t {0}]() mutable { return i++; });
 		_bakeAll = false;
+		_stale.clear();
 	}
 	else if (!_dirty.empty())
 	{
@@ -610,10 +648,13 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		_dirty.erase(first, last);
 		for (size_t i = 0; i < blocks.size(); ++i)
 		{
-			if (std::ranges::binary_search(_dirty, blocks[i].GetBlockPosition(),
+			const auto position = blocks[i].GetBlockPosition();
+			if (std::ranges::binary_search(_dirty, position,
 			                               [](glm::ivec2 a, glm::ivec2 b) { return a.x != b.x ? a.x < b.x : a.y < b.y; }))
 			{
 				toBake.push_back(i);
+				// The bake gives the block the shadows of its casters as they are now
+				_stale.erase(std::pair(position.x, position.y));
 			}
 		}
 	}
@@ -622,6 +663,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	{
 		return;
 	}
+	std::ranges::transform(toBake, std::back_inserter(_painted), [&blocks](size_t i) { return blocks[i].GetBlockPosition(); });
 
 	// The triangles of every caster's model, read on this thread where the models and textures are found. A solid thing's
 	// are flattened once, where they fall in the world, for every block it casts into. The bake gets its own copy of all
@@ -715,16 +757,35 @@ LandShadowBake::Baked LandShadowBake::BakedOf(const land_shadow_bake::Caster& ca
 	    .transform = *caster.transform,
 	    .filed = caster.resident != nullptr,
 	    .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, caster.entity),
+	    .filings = caster.resident != nullptr ? caster.resident->filings : 0,
+	    // A worship site and its altar stand at the temple without being filed, as things that stay put
+	    .filing =
+	        caster.resident != nullptr ? ecs::land_repaint::FilingOf(*caster.resident) : ecs::land_repaint::Filing::Outline,
+	    .flagged = registry.AllOf<ecs::components::RepaintsLandWhenFiled>(caster.entity),
 	};
 }
 
 void LandShadowBake::Rebake(Baked& kept, Baked&& now)
 {
-	// A change of any bit, or of a cell, bakes again the blocks of the old and the new place
-	if (!same_bits::SameBits(kept.from, now.from) || !same_bits::SameWords(kept.cells, now.cells))
+	// A change of any bit, of a cell or of the filing changes the shadow. The game paints the blocks of the old and the
+	// new place only for some of these changes. The other blocks keep the old shadow until a paint for another cause.
+	const bool otherCells = !same_bits::SameWords(kept.cells, now.cells);
+	if (!same_bits::SameBits(kept.from, now.from) || otherCells || kept.filings != now.filings)
 	{
-		MarkBlocksOf(kept.cells);
-		MarkBlocksOf(now.cells);
+		const auto& before = kept.from;
+		const auto& after = now.from;
+		const ecs::land_repaint::Change change {
+		    .filedAgain = otherCells || kept.filings != now.filings,
+		    .moved =
+		        !same_bits::SameBits(before.position, after.position) || !same_bits::SameBits(before.rotation, after.rotation),
+		    .resized = !same_bits::SameBits(before.scale, after.scale),
+		    .otherLook = before.shadow != after.shadow || before.mesh != after.mesh,
+		    .modelReady = before.meshReady != after.meshReady,
+		};
+		const auto paints =
+		    ecs::land_repaint::PaintsOf(now.filing, ecs::land_repaint::RepaintsOf(now.filing, now.flagged), change);
+		MarkBlocksOf(kept.cells, paints.oldPlace);
+		MarkBlocksOf(now.cells, paints.newPlace);
 		_casterBlocks.Remove(kept.entity, kept.cells);
 		_casterBlocks.Add(kept.entity, now.cells);
 		kept.from = now.from;
@@ -734,6 +795,9 @@ void LandShadowBake::Rebake(Baked& kept, Baked&& now)
 	kept.transform = now.transform;
 	kept.filed = now.filed;
 	kept.shadowChangesInPlace = now.shadowChangesInPlace;
+	kept.filings = now.filings;
+	kept.filing = now.filing;
+	kept.flagged = now.flagged;
 }
 
 LandShadowBake::Watched LandShadowBake::WatchedOf(const land_shadow_bake::MayCast& thing)
@@ -780,7 +844,7 @@ void LandShadowBake::LookAtAllCasters(Casters casters)
 			kept->entity = entt::null;
 			continue;
 		}
-		MarkBlocksOf(now.cells);
+		MarkCameOrWent(now, true);
 		_casterBlocks.Add(now.entity, now.cells);
 		next.push_back(std::move(now));
 	}
@@ -788,7 +852,7 @@ void LandShadowBake::LookAtAllCasters(Casters casters)
 	{
 		if (kept.entity != entt::null)
 		{
-			MarkBlocksOf(kept.cells);
+			MarkCameOrWent(kept, false);
 			_casterBlocks.Remove(kept.entity, kept.cells);
 		}
 	}
@@ -821,7 +885,7 @@ void LandShadowBake::UpdateChanged(std::span<const entt::entity> changed, Caster
 		}
 		if (const auto* kept = FindBaked(changed[i]); kept != nullptr)
 		{
-			MarkBlocksOf(kept->cells);
+			MarkCameOrWent(*kept, false);
 			_casterBlocks.Remove(kept->entity, kept->cells);
 			RemoveBaked(changed[i]);
 		}
@@ -843,7 +907,7 @@ void LandShadowBake::UpdateChanged(std::span<const entt::entity> changed, Caster
 			Rebake(*kept, std::move(now));
 			continue;
 		}
-		MarkBlocksOf(now.cells);
+		MarkCameOrWent(now, true);
 		_casterBlocks.Add(now.entity, now.cells);
 		AddBaked(std::move(now));
 	}
@@ -926,7 +990,8 @@ LandShadowBake::FindWatchedChanges(const WatchedStores& stores, const std::optio
 		return (caster.shadowChangesInPlace && static_cast<uint32_t>(shadows.Of(caster.entity)) != caster.from.shadow) ||
 		       !same_bits::SameBits(transforms->get(caster.entity), caster.transform) ||
 		       meshes->get(caster.entity).id != caster.from.mesh ||
-		       (caster.filed && !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells));
+		       (caster.filed && (residents->get(caster.entity).filings != caster.filings ||
+		                         !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells)));
 	};
 	if (marked.has_value())
 	{

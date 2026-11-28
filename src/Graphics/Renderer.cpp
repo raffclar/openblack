@@ -868,7 +868,29 @@ void Renderer::FillDrawnEffects(DrawnFrame& frame, const DrawSceneDesc& drawDesc
 			BakeLandShadows(drawDesc.drawVegetation);
 		}
 		auto footprints = Locator::profiler::value().BeginScoped(Profiler::Stage::FootprintPass);
+		// The game paints the footprints, the snow and the baked shadows of a block in one paint. Thus a paint of a block
+		// for one of them also shows the others as they are now: each one paints again the blocks that keep an old picture.
+		std::vector<glm::ivec2> snowPainted;
+		for (uint16_t block = 0; _snowPaintRequests.any() && block < snow_cover::k_Blocks; ++block)
+		{
+			if (_snowPaintRequests.test(block))
+			{
+				snowPainted.emplace_back(block % snow_cover::k_BlocksPerSide, block / snow_cover::k_BlocksPerSide);
+			}
+		}
+		const bool bakes = drawDesc.drawEntities && _landShadowBake;
+		_landFootprints->PaintedElsewhere(snowPainted);
+		if (bakes)
+		{
+			_landFootprints->PaintedElsewhere(_landShadowBake->TakePaintedBlocks());
+		}
 		_landFootprints->Update();
+		const auto footprintsPainted = _landFootprints->TakePaintedBlocks();
+		if (bakes)
+		{
+			_landShadowBake->PaintedElsewhere(snowPainted);
+			_landShadowBake->PaintedElsewhere(footprintsPainted);
+		}
 	}
 	_effectsFilled = true;
 }

@@ -76,23 +76,6 @@ template <typename Things>
 [[nodiscard]] std::pair<glm::vec2, glm::vec2> GroundBounds(std::span<const footprint_paint::Triangle> triangles,
                                                            const footprint_paint::Placement& placement);
 
-/// How a change of a thing with a footprint changes the land
-enum class FootprintChange : uint8_t
-{
-	/// The thing did not change
-	None,
-	/// Only the size of the thing changed, and it stayed in its cells. The land keeps the old footprint until a block
-	/// under it is painted again for another cause. A block that the game paints again then shows the new size.
-	SizeOnly,
-	/// The blocks under the footprint are painted again now
-	Repaint,
-};
-
-/// How the land shows a change of a thing with a footprint. The game paints a footprint again only when its thing goes
-/// into the map's cells or comes out of them. A tree that grows changes its size, but it stays in its cells. `sameFiling`
-/// tells whether the thing has the same model and stayed in the same cells since the last time, with no new filing.
-[[nodiscard]] FootprintChange ChangeOf(const components::Transform& before, const components::Transform& now, bool sameFiling);
-
 /// Whether two lists of the things that paint a block hold the other things in the same order, when the changed things
 /// are not counted. `changed` is in order of the entities' values.
 [[nodiscard]] bool SameOrderBesides(std::span<const entt::entity> before, std::span<const entt::entity> now,

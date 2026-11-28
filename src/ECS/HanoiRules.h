@@ -85,6 +85,14 @@ struct Steps
 	return ring == 0;
 }
 
+/// Whether a ring that the puzzle makes at the start asks the land to paint the blocks under it again each time it goes
+/// into the map's cells or comes out of them. Only the largest ring does. Thus its baked shadow follows it when the hand
+/// moves it. A piece that the puzzle makes again later does not ask.
+[[nodiscard]] constexpr bool StartRingRepaintsLand(size_t ring)
+{
+	return ring == 0;
+}
+
 /// The links of the pieces, by any key that names a piece (an entity in the game, a number in a test). None is no piece.
 template <typename Key>
 struct Stacks

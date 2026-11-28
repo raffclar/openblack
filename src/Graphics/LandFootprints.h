@@ -33,6 +33,7 @@
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/LandFootprintRules.h"
+#include "ECS/LandRepaintRules.h"
 
 namespace openblack
 {
@@ -59,9 +60,10 @@ namespace openblack::graphics
 /// footprint_paint and ecs::land_footprints). The game paints a block's footprints again each time a thing with a
 /// footprint over it comes onto the map, goes from it or is built, and each time the land under the block changes
 /// height. This paints a block again when a thing with a footprint over it goes into the map's cells or comes out of
-/// them, moves or turns, when a print of a thing changes, and when the land paints the block again. A thing that only
-/// changes its size in its cells, as a tree that grows, does not paint a block again. A block that is painted again for
-/// another cause then shows the new size.
+/// them, if the thing asks for a paint then (see ecs::land_repaint), when a print of a thing changes, and when the land
+/// paints the block again for another cause. A thing that only changes its size in its cells, as a tree that grows, or a
+/// thing that moves, does not paint a block again. A block that is painted again for another cause then shows the thing
+/// as it is at that time.
 class LandFootprints
 {
 public:
@@ -83,6 +85,13 @@ public:
 	/// The blocks, by their places in the land's list, whose footprints the updates asked to paint again since the last
 	/// call. The game paints all of a block's texture again for each of them, its snow too.
 	[[nodiscard]] std::vector<size_t> TakeRepainted() { return std::exchange(_repainted, {}); }
+	/// The land painted the blocks again for another cause, by their index along x and z: the baked shadows or the snow.
+	/// The game paints the footprints in the same paint, thus a later update paints each of these blocks that keeps an
+	/// old footprint.
+	void PaintedElsewhere(std::span<const glm::ivec2> blocks);
+	/// The blocks that the updates painted since the last call, by their index along x and z. The game paints the baked
+	/// shadows of these blocks in the same paint.
+	[[nodiscard]] std::vector<glm::ivec2> TakePaintedBlocks() { return std::exchange(_paintedBlocks, {}); }
 
 private:
 	/// A thing with a footprint, as it was the last time
@@ -111,6 +120,9 @@ private:
 		/// How many times it went into the map's cells
 		uint32_t filings {0};
 		ecs::components::Transform transform {};
+		/// How it is kept in the map's cells, and whether its model asks for a paint each time it goes in or comes out
+		ecs::land_repaint::Filing filing {ecs::land_repaint::Filing::Outline};
+		bool flagged {false};
 	};
 	/// A print that no thing in the map's cells gives: the print of a thing that shows only as a print, or a stretch of
 	/// a river. A channel lowers the land's alpha; every other print mixes its colour into the land.
@@ -179,6 +191,9 @@ private:
 	void Forget(entt::entity entity);
 	/// The compared part of a known thing, none for a thing that is not known
 	[[nodiscard]] const KnownLook* LookOf(entt::entity entity) const;
+	/// Whether a known thing has the same cells as when it was seen last, and did not go into the cells again. It changes
+	/// nothing.
+	[[nodiscard]] bool SameCells(const KnownLook& look, const ecs::components::MapCellResident& resident) const;
 	/// Whether a known thing has the same model and cells as when it was seen last, and did not go into the cells again.
 	/// It changes nothing.
 	[[nodiscard]] bool SameFiling(const KnownLook& look, entt::id_type mesh,
@@ -186,10 +201,14 @@ private:
 	/// Whether a known thing has the same filing and transform as when it was seen last. It changes nothing.
 	[[nodiscard]] bool SameLook(const KnownLook& look, entt::id_type mesh, const ecs::components::MapCellResident& resident,
 	                            const ecs::components::Transform& transform) const;
-	/// Keeps the new size of a known thing that changed only its size. Its blocks keep their texels, but the next paint of
-	/// each of them paints all of it.
-	void Resize(const ThingStores& stores, KnownLook& look, const L3DMesh::Footprint& footprint,
-	            const ecs::components::Transform& transform);
+	/// Marks the blocks under a known thing's footprint as blocks that keep an old footprint: their next paint paints all
+	/// of them
+	void MarkStale(const Known& known);
+	/// Removes a known thing that came out of the map's cells. Its blocks are painted again if it asks for a paint as it
+	/// comes out, else they keep its footprint.
+	void TakeOff(entt::entity entity);
+	/// Marks to paint again the blocks that the land painted again for another cause and that keep an old footprint
+	void TakePaintedElsewhere();
 	/// The things and loose prints that paint a block. It changes nothing.
 	[[nodiscard]] BlockPaint FindBlockPaint(size_t block, const ThingStores& stores) const;
 	/// Paints the block's own texture with its footprints into texels. It changes only the block's own texture that is
@@ -234,9 +253,13 @@ private:
 	std::map<std::pair<int, int>, size_t> _blockAt;
 	/// Whether each block holds footprints now
 	std::vector<bool> _painted;
-	/// Whether each block holds the footprint of a thing at a size that it does not have now. Such a block is painted in
-	/// full the next time.
-	std::vector<bool> _oldSizes;
+	/// Whether each block keeps an old footprint: of a thing at a size or a place that it does not have now, or of a thing
+	/// that is gone. Such a block is painted in full the next time.
+	std::vector<bool> _stale;
+	/// The blocks that the land painted again for another cause since the last update
+	std::set<std::pair<int, int>> _paintedElsewhere;
+	/// The blocks that the updates painted since the last TakePaintedBlocks
+	std::vector<glm::ivec2> _paintedBlocks;
 	std::set<size_t> _dirty;
 	/// The blocks of _dirty that must be painted again in full
 	std::set<size_t> _wholeDirty;

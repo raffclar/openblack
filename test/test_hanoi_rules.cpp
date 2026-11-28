@@ -185,6 +185,15 @@ TEST(HanoiRules, OnlyTheLargestStartRingCastsALandShadow)
 	EXPECT_FALSE(hanoi::StartRingCastsLandShadow(3));
 }
 
+// Of the rings that the puzzle makes at the start, only the largest asks the land to paint its blocks again as it moves
+TEST(HanoiRules, OnlyTheLargestStartRingRepaintsTheLand)
+{
+	EXPECT_TRUE(hanoi::StartRingRepaintsLand(0));
+	EXPECT_FALSE(hanoi::StartRingRepaintsLand(1));
+	EXPECT_FALSE(hanoi::StartRingRepaintsLand(2));
+	EXPECT_FALSE(hanoi::StartRingRepaintsLand(3));
+}
+
 // A save keeps the puzzle, its links to its pieces and the links between the pieces
 TEST(HanoiRules, ASaveKeepsThePuzzleAndItsPieces)
 {

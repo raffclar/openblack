@@ -46,6 +46,7 @@
 #include "ECS/Components/NoLandShadow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/PuzzleGame.h"
+#include "ECS/Components/RepaintsLandWhenFiled.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -313,6 +314,10 @@ void StartHanoi(entt::entity puzzle, PuzzleGame& game)
 		if (!hanoi::StartRingCastsLandShadow(ring))
 		{
 			registry.Assign<NoLandShadow>(piece);
+		}
+		if (hanoi::StartRingRepaintsLand(ring))
+		{
+			registry.Assign<RepaintsLandWhenFiled>(piece);
 		}
 		registry.Get<HanoiBlock>(piece).below = below;
 		registry.Get<HanoiBlock>(below).above = piece;

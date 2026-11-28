@@ -1917,6 +1917,7 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_land_footprint_rules test_land_footprint_rules.cpp)
+openblack_setup_and_add_test(test_land_repaint_rules test_land_repaint_rules.cpp)
 openblack_setup_and_add_test(test_script_real_time test_script_real_time.cpp)
 target_link_libraries(test_land_vertex PRIVATE lnd)
 openblack_setup_and_add_test(test_list_order test_list_order.cpp)
