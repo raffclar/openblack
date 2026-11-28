@@ -114,7 +114,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::turnsWithoutOwnPlan>("turnsWithoutOwnPlan")
 	    .Field<&components::CreatureMindState::planForced>("planForced")
 	    .Field<&components::CreatureMindState::forcedPlanCounts>("forcedPlanCounts")
-	    .Field<&components::CreatureMindState::ledByLeash>("ledByLeash")
+	    .Field<&components::CreatureMindState::leashLead>("leashLead")
 	    .Field<&components::CreatureMindState::emergencyRunning>("emergencyRunning")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")

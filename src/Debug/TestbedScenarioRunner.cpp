@@ -1632,6 +1632,19 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		return Locator::leashSystem::value().IsLeashed(*creature) ? 1.0 : 0.0;
 	}
+	case checks::Quantity::CreatureOutOfLeashArea:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* leashes = creature.has_value() ? registry.TryGet<const ecs::components::CreatureLeash>(*creature) : nullptr;
+		const auto* transform = creature.has_value() ? registry.TryGet<const ecs::components::Transform>(*creature) : nullptr;
+		if (leashes == nullptr || transform == nullptr || leashes->confinementRadius <= 0.0f)
+		{
+			return std::nullopt;
+		}
+		const glm::vec2 centre {leashes->confinementCentre.x, leashes->confinementCentre.z};
+		const glm::vec2 at {transform->position.x, transform->position.z};
+		return static_cast<double>(glm::distance(at, centre) - leashes->confinementRadius);
+	}
 	case checks::Quantity::TempleScriptHasDialogue:
 	{
 		const temple_help::GameDialogue dialogue;

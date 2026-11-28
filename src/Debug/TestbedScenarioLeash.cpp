@@ -197,6 +197,30 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.refused_order_leads",
+	    .name = "A refused order with the leash still leads the creature",
+	    .facet = Facet::Leash,
+	    .description = "A young, wholly exhausted tiger is on the learning leash. After one second the hand ties the "
+	                   "leash to a rock next to the tiger, and three seconds later the tiger is told to go to a point "
+	                   "to the east. It refuses the tie and the order. Then the testbed walks it far to the west, past "
+	                   "the length of the rope, while its mind sleeps.",
+	    .expected = "It takes no order: no nod, no marker. It sleeps on the spot. The refused orders still lead it while "
+	                "it sleeps, so it does not walk back to the rock. It walks far past the length of the rope. Before, "
+	                "it turned back to the rock at the length of the rope.",
+	    .framing = {.shot = Shot::Overview, .include = {{20.0f, 20.0f}, {-260.0f, 20.0f}}},
+	    .creatures = {exhausted},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {5.0f, 20.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 0.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 3.0f, false),
+	                 Go(Kind::WalkTo, 0, {-260.0f, 20.0f}, 1.0f, false)},
+	    .checks = {{.label = "it walks far out of the area of the tied leash",
+	                .quantity = checks::Quantity::CreatureOutOfLeashArea,
+	                .afterTurns = 100,
+	                .byTurn = 2000,
+	                .atLeast = 40.0}},
+	});
+
+	all.push_back({
 	    .id = "leash.order_hurries",
 	    .name = "An order with the leash hurries what the body does",
 	    .facet = Facet::Leash,

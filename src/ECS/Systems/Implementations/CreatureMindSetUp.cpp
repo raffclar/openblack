@@ -508,7 +508,7 @@ void CreatureMindSystem::Abandon(entt::entity creature, CreatureMindState& mind)
 	mind.ownPlanSinceStop = false;
 	mind.planForced = false;
 	mind.forcedPlanCounts = false;
-	mind.ledByLeash = false;
+	mind.leashLead = creature_leash::Lead::None;
 	mind.emergencyRunning = false;
 }
 

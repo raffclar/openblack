@@ -113,6 +113,9 @@ enum class Quantity : uint8_t
 	ScriptLocal,
 	/// 1 when the scenario's creature at the index wears a leash, else 0
 	CreatureLeashed,
+	/// How far in metres the scenario's creature at the index is out of the area that its leash holds it in: the
+	/// distance on the ground from the centre of the area, less the radius. None when no area holds the creature.
+	CreatureOutOfLeashArea,
 	/// 1 when a help script or a special script of the temple has the dialogue, else 0
 	TempleScriptHasDialogue,
 	/// How many players of the two teams on the football pitch that is the scenario's object at the index wait for the

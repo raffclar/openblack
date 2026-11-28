@@ -127,12 +127,12 @@ TEST_F(CreatureKeptPlans, AForcedPlanWithNoStepsIsForcedUntilTheNextTurnWithNoPl
 	EXPECT_FALSE(mind.planActive);
 	EXPECT_TRUE(mind.planForced);
 	// The order of the leash marks the creature as led by the leash after the forced plan
-	mind.ledByLeash = true;
+	mind.leashLead = creature_leash::Lead::Order;
 
 	NextTurn();
 
 	EXPECT_FALSE(mind.planForced);
-	EXPECT_FALSE(mind.ledByLeash);
+	EXPECT_EQ(mind.leashLead, creature_leash::Lead::None);
 	ASSERT_TRUE(mind.planner.current.has_value());
 	EXPECT_FLOAT_EQ(mind.planner.current->priority, 0.0f);
 }
