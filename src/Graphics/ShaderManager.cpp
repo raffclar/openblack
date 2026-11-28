@@ -124,6 +124,8 @@
 
 #define SHADER_NAME vs_particle_instanced
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_particle_symbol
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_particle_chain
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_particle
@@ -228,7 +230,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 82> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 83> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -266,6 +268,7 @@ const std::array<bgfx::EmbeddedShader, 82> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
     BGFX_EMBEDDED_SHADER(vs_particle_instanced),
+    BGFX_EMBEDDED_SHADER(vs_particle_symbol),
     BGFX_EMBEDDED_SHADER(vs_particle_chain),
     BGFX_EMBEDDED_SHADER(fs_particle), //
     BGFX_EMBEDDED_SHADER(vs_particle_surface),
@@ -341,6 +344,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"Lake", "vs_lake", "fs_lake"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},
+    ShaderDefinition {"ParticleSymbol", "vs_particle_symbol", "fs_particle"},
     ShaderDefinition {"ParticleChain", "vs_particle_chain", "fs_particle"},
     ShaderDefinition {"ParticleSurface", "vs_particle_surface", "fs_particle_surface"},
     ShaderDefinition {"VolumeGlow", "vs_volume_glow", "fs_particle_surface"},
