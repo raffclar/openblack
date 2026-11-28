@@ -1688,6 +1688,23 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		return Locator::livingActionSystem::value().VillagerGetFinalState(*action) == VillagerStates::SleepingAtHome ? 1.0
 		                                                                                                             : 0.0;
 	}
+	case checks::Quantity::CameraFromTemple:
+	{
+		if (!Locator::camera::has_value())
+		{
+			return std::nullopt;
+		}
+		std::optional<double> distance;
+		const auto focus = glm::xz(Locator::camera::value().GetFocus());
+		registry.Each<const ecs::components::Temple, const ecs::components::Transform>(
+		    [&distance, focus](const ecs::components::Temple& temple, const ecs::components::Transform& transform) {
+			    if (temple.owner == PlayerNames::PLAYER_ONE)
+			    {
+				    distance = glm::distance(focus, glm::xz(transform.position));
+			    }
+		    });
+		return distance;
+	}
 	}
 	return std::nullopt;
 }

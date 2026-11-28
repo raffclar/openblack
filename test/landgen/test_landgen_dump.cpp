@@ -144,6 +144,13 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		       std::to_string(land.cells.XOf(first)) + "," + std::to_string(land.cells.ZOf(first)) + "]";
 	});
 	out << ",\"start\":[" << land.start.x << ',' << land.start.z << ',' << land.start.radius << ']';
+	// The start area of each other player, in corners, player two first
+	out << ",\"otherStarts\":";
+	WriteList(out, land.otherStarts, [](const landgen::StartArea& start) {
+		std::ostringstream text;
+		text << '[' << start.x << ',' << start.z << ',' << start.radius << ']';
+		return text.str();
+	});
 	// Each start of a player: the temple and the town centre, x and z in metres, player one first
 	out << ",\"starts\":[[" << land.settlement.citadelX << ',' << land.settlement.citadelZ << ',' << land.settlement.town.x
 	    << ',' << land.settlement.town.z << ']';

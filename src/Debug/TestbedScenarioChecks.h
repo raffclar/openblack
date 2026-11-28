@@ -125,6 +125,9 @@ enum class Quantity : uint8_t
 	VillagerPregnant,
 	/// 1 when the scenario's villager at the index is asleep in its home, else 0
 	VillagerAsleepAtHome,
+	/// The distance in metres along the land from the point that the camera looks at to the temple of player one. None
+	/// when player one has no temple.
+	CameraFromTemple,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

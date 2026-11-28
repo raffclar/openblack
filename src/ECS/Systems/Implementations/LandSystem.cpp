@@ -731,6 +731,14 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 		                                       glm::vec3(1.0f));
 		registry.Assign<components::InfluenceSource>(influence, PlayerNames::PLAYER_ONE, k_TestbedInfluenceRadius);
 	}
+	// A skirmish starts with the camera at the temple of the player, as on a skirmish land. The camera then flies to the
+	// temple. A generated land gives no start place for the camera. A land for one player keeps the camera over its
+	// start area.
+	if (start_camera::StartsAtTemple(
+	        {.change = playerStart.change, .networkGame = Locator::time::value().IsNetworkGame(), .scriptPlace = std::nullopt}))
+	{
+		View().StartCameraAtTemple();
+	}
 	View().EndLoadingScreen();
 
 	// A skirmish starts: in the first turn the god of the player brings the creature that the profile keeps. The computer
@@ -1521,8 +1529,9 @@ void LandSystem::SetPlayerAlignmentFromProfile()
 
 void LandSystem::KeepAlignmentInProfile()
 {
-	// The player's alignment is kept with their profile every so often as they play, never the testbed's. A land of a
-	// network game never changes the profile, also after the player left the network game.
+	// The player's alignment is kept with their profile every so often as they play, never the testbed's. A generated
+	// land for one player loads as the testbed, so it does not change the profile. A land of a network game never
+	// changes the profile, also after the player left the network game.
 	_networkLand.See(Locator::time::value().IsNetworkGame());
 	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
 	    !Locator::playerSystem::has_value() || !profile_alignment::KeptInOwnProfile(_networkLand.Is()))
@@ -1530,7 +1539,8 @@ void LandSystem::KeepAlignmentInProfile()
 		return;
 	}
 	auto& players = Locator::playerSystem::value();
-	if (players.KeepAlignmentAt(Locator::time::value().GetTurn()))
+	if (players.KeepAlignmentAt(Locator::time::value().GetTurn()) &&
+	    generated_land::KeepsProfileAlignment(_landPath.generic_string()))
 	{
 		Locator::playerProfileSystem::value().SetCurrentAlignment(
 		    Locator::alignmentSystem::value().GetPlayerAlignment(players.GetLocalPlayer()));

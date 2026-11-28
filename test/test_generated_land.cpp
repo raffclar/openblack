@@ -16,6 +16,7 @@
 
 #include "3D/GeneratedLand.h"
 #include "Audio/SoundMap.h"
+#include "Camera/StartCamera.h"
 #include "LHScriptX/Script.h"
 
 using namespace openblack;
@@ -518,6 +519,34 @@ TEST(GeneratedLand, ALandForOnePlayerStaysAsTheTestbed)
 	EXPECT_FALSE(start.skirmish);
 	EXPECT_FALSE(land_change::RulesFor(start.change).profileCreatureBrought);
 	EXPECT_FALSE(start.slotsFilled);
+}
+
+TEST(GeneratedLand, OnlyALandForMoreThanOnePlayerKeepsTheAlignmentInTheProfile)
+{
+	// A land for one player loads as the testbed, which keeps nothing in the profile
+	EXPECT_FALSE(generated_land::KeepsProfileAlignment("landgen:7"));
+	EXPECT_FALSE(generated_land::KeepsProfileAlignment("landgen:7;ranges=5"));
+	EXPECT_TRUE(generated_land::KeepsProfileAlignment("landgen:7;players=2"));
+	EXPECT_TRUE(generated_land::KeepsProfileAlignment("landgen:7;players=4"));
+	// A land that the generator did not make keeps the alignment
+	EXPECT_TRUE(generated_land::KeepsProfileAlignment("Scripts/Land1.txt"));
+}
+
+TEST(GeneratedLand, ASkirmishStartsTheCameraAtTheTempleOfThePlayer)
+{
+	// A generated land gives no start place for the camera. A skirmish and a network game start the camera at the
+	// temple. A land for one player keeps the camera over its start area.
+	for (const int32_t players : {1, 2, 3, 4})
+	{
+		for (const bool network : {false, true})
+		{
+			const auto start = generated_land::PlayerStartOf(players, network, false);
+			EXPECT_EQ(
+			    start_camera::StartsAtTemple({.change = start.change, .networkGame = network, .scriptPlace = std::nullopt}),
+			    players > 1)
+			    << players << ' ' << network;
+		}
+	}
 }
 
 TEST(GeneratedLand, ANetworkGameFillsTheSlotsWithNoHumanAndBringsNoProfileCreature)

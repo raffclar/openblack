@@ -122,6 +122,8 @@ std::string_view Name(Quantity quantity)
 		return "the distance from the football to the middle of the pitch";
 	case Quantity::VillagerPregnant:
 		return "the villager is a pregnant woman";
+	case Quantity::CameraFromTemple:
+		return "the distance from the point that the camera looks at to the temple of player one";
 	case Quantity::VillagerAsleepAtHome:
 		return "the villager sleeps in its home";
 	}

@@ -544,3 +544,9 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 	}
 	return script;
 }
+
+bool generated_land::KeepsProfileAlignment(std::string_view landPath)
+{
+	const auto choices = ChoicesOf(landPath);
+	return !choices.has_value() || PlayerStartOf(choices->players, false, false).change != land_change::Kind::Testbed;
+}

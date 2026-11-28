@@ -290,7 +290,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "the trees near the two starts are almost the same. The neutral towns are between the starts and "
 	                "round them. Player two is a computer god with a leopard at its temple, as on Two Gods. In the first "
 	                "turn, player one brings the ape Matey to its temple. The leopard takes a size like the size of "
-	                "the ape.",
+	                "the ape. The camera starts over the temple of player one and flies to the temple, as at the start of "
+	                "a skirmish.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
@@ -299,6 +300,11 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                  .value = 7,
 	                  .object = k_BigIsland,
 	                  .mindFile = "LethysCreature"}},
+	    .checks = {{.label = "the camera looks at the temple of player one",
+	                .quantity = checks::Quantity::CameraFromTemple,
+	                .afterTurns = 20,
+	                .byTurn = 600,
+	                .atMost = 25.0}},
 	});
 
 	all.push_back({

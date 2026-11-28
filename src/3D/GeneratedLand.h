@@ -118,4 +118,9 @@ struct PlayerStart
 	                                  : land_change::Kind::Skirmish;
 	return {.change = change, .skirmish = skirmish, .slotsFilled = networkGame || allComputerGods};
 }
+
+/// Whether the land at a path keeps the alignment of the player in the profile as the player plays. A generated land for
+/// one player loads as the testbed, so it keeps nothing in the profile: not the creature and not the alignment. A saved
+/// game of that land keeps nothing too. Every other land keeps the alignment.
+[[nodiscard]] bool KeepsProfileAlignment(std::string_view landPath);
 } // namespace openblack::generated_land
