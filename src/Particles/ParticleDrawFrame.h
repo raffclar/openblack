@@ -357,6 +357,8 @@ struct SymbolAtom
 /// The same sprites as SymbolOf gives for the drawn atom
 [[nodiscard]] SymbolSprites SymbolOf(const SymbolAtom& atom, uint32_t playerRgb, int player,
                                      int symbolsInARow = k_LandSymbolsInARow);
+/// The way that the sprites of a symbol blend: added to what is behind, with no depth written
+inline constexpr graphics::render_modes::Mode k_SymbolMode = graphics::render_modes::Mode::AlphaTexturedAlphaAdditiveNz;
 /// Half the width of each glow and half the width of the symbol, for an atom of this size
 [[nodiscard]] std::pair<float, float> SymbolHalfWidths(float atomScale);
 /// The material of a symbol's glows and the material of the symbol, in the sheets that the sources give. Each is none

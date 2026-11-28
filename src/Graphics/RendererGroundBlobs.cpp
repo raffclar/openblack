@@ -63,6 +63,7 @@
 #include "Graphics/HandReflection.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/MeshDetail.h"
+#include "Graphics/QuadIndices.h"
 #include "Graphics/RendererDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ViewFrustum.h"
@@ -88,6 +89,9 @@ constexpr auto k_GroundBlobTextureId = entt::hashed_string("raw/human_shadow");
 /// The sheet of the creatures' footprints and its alpha
 constexpr auto k_FootprintTextureId = entt::hashed_string("raw/misc0");
 constexpr auto k_FootprintAlphaTextureId = entt::hashed_string("raw/misc0a");
+
+/// The corners of a quad of the flat effects on the land
+constexpr size_t k_QuadCorners = 4;
 
 /// The layout of the corners of the flat effects on the land: a position, a place on the texture and a colour
 const bgfx::VertexLayout& FlatEffectLayout()
@@ -124,19 +128,20 @@ void Renderer::CollectCreatureFootprints(DrawnEffects& effects, const DrawSceneD
 		return;
 	}
 	using Vertex = DrawnEffects::Vertex;
-	vertices.reserve(footprints.GetPrints().size() * prints::k_Indices.size());
+	// Each print gives its four corners. The draw joins them into its two triangles with shared indices.
+	vertices.reserve(footprints.GetPrints().size() * k_QuadCorners);
 	for (const auto& print : footprints.GetPrints())
 	{
 		// Black, as opaque as the print still is
 		const auto colour = static_cast<uint32_t>(print.alpha) << 24u;
-		for (const auto corner : prints::k_Indices)
+		for (size_t corner = 0; corner < k_QuadCorners; ++corner)
 		{
 			vertices.push_back({print.corners.at(corner), print.uvs.at(corner), colour});
 		}
 	}
 	if (warmUp)
 	{
-		vertices.resize(prints::k_Indices.size(), Vertex {.position = glm::vec3(0.0f), .uv = glm::vec2(0.0f), .colour = 0});
+		vertices.resize(k_QuadCorners, Vertex {.position = glm::vec3(0.0f), .uv = glm::vec2(0.0f), .colour = 0});
 	}
 }
 
@@ -156,6 +161,14 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 	const auto count = static_cast<uint32_t>(vertices.size());
 	const auto& layout = FlatEffectLayout();
 	if (bgfx::getAvailTransientVertexBuffer(count, layout) < count)
+	{
+		return;
+	}
+	if (!_footprintQuads)
+	{
+		_footprintQuads = std::make_unique<QuadIndices>(creature_footprints::k_Indices);
+	}
+	if (!_footprintQuads->Bind(count / k_QuadCorners))
 	{
 		return;
 	}
@@ -200,8 +213,9 @@ void Renderer::CollectGroundBlobs(DrawnEffects& effects, const DrawSceneDesc& de
 	const auto& island = Locator::terrainSystem::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	using Vertex = DrawnEffects::Vertex;
+	// Each quad gives its four corners. The draw joins them into its two triangles with shared indices.
 	const auto addQuadTo = [](std::vector<Vertex>& to, const ground_blobs::Quad& quad) {
-		for (const auto corner : ground_blobs::k_Indices)
+		for (size_t corner = 0; corner < k_QuadCorners; ++corner)
 		{
 			const auto opacity = static_cast<uint32_t>(ground_blobs::k_Opacity.at(corner) * 255.0f);
 			to.push_back({quad.corners.at(corner), ground_blobs::k_Uvs.at(corner), (opacity << 24u) | 0xFFFFFFu});
@@ -211,9 +225,8 @@ void Renderer::CollectGroundBlobs(DrawnEffects& effects, const DrawSceneDesc& de
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
 	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
 	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
-	vertices.reserve(ground_blobs::k_Indices.size() *
-	                 ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
-	                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
+	vertices.reserve(k_QuadCorners * ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
+	                                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
 	const auto isFar = [&farVillagers](entt::entity entity) {
 		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
 		return found != farVillagers.end() && found->entity == entity;
@@ -300,7 +313,7 @@ void Renderer::CollectGroundBlobs(DrawnEffects& effects, const DrawSceneDesc& de
 		const auto first = casters.size() * run / runs;
 		const auto last = casters.size() * (run + 1) / runs;
 		auto& to = runVertices.at(run);
-		to.reserve(ground_blobs::k_Indices.size() * 2 * (last - first));
+		to.reserve(k_QuadCorners * 2 * (last - first));
 		for (size_t index = first; index < last; ++index)
 		{
 			castBlobs(casters[index], to);
@@ -381,6 +394,14 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	const auto count = static_cast<uint32_t>(vertices.size());
 	const auto& layout = FlatEffectLayout();
 	if (bgfx::getAvailTransientVertexBuffer(count, layout) < count)
+	{
+		return;
+	}
+	if (!_groundBlobQuads)
+	{
+		_groundBlobQuads = std::make_unique<QuadIndices>(ground_blobs::k_Indices);
+	}
+	if (!_groundBlobQuads->Bind(count / k_QuadCorners))
 	{
 		return;
 	}
