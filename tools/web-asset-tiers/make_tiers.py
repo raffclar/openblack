@@ -24,6 +24,11 @@ trace reads get the phase "later", and the tiers file lists them under the name 
 gets them when the game goes to that land or map. A file that no trace reads has the phase "background": it is not in
 the tiers file.
 
+Only a music bank gets the phase of each block, because the music reads one part of a bank while it plays. The page
+gets each other file whole in its first phase, so that no sample of the dialogue or of the sound effects waits for the
+site when it first plays. A music bank that the game starts with a film comes before the film in its phase, because the
+film plays while its blocks arrive, but the music must be there at the first frame.
+
 --check makes the tiers again from the traces that the tiers file names, and fails when the file is not the same.
 """
 
@@ -31,6 +36,7 @@ import argparse
 import json
 import math
 import pathlib
+import re
 import sys
 
 PHASES = ["boot", "pre-intro", "startup", "land-load", "land-soon", "later", "background"]
@@ -40,6 +46,16 @@ START_PHASES = PHASES.index("land-soon")
 LATER_PHASE = PHASES.index("later")
 TRACE_FORMAT = 1
 TIERS_FORMAT = 1
+# The music banks: the only files that get the phase of each block (the rule of the page, k_AssetHeaderRules)
+MUSIC_BANK = re.compile(r"^audio/music/.*\.sad$")
+# The films (the rule of the page, k_AssetFilmRules)
+FILM = re.compile(r"\.bik$")
+# The time in milliseconds after the first read of a film in which the first read of a music bank shows that the game
+# starts the music with the film. The game reads the bank after it opens the film, before the first frame.
+FILM_MUSIC_MS = 1000
+# The rank of a key: a music bank of a film comes before the film at the same time
+FILM_MUSIC_RANK = 0
+READ_RANK = 1
 
 
 class TraceError(Exception):
@@ -88,13 +104,35 @@ def block_runs(blocks):
     return runs
 
 
+def film_music_times(reads):
+    """For each music bank that the game starts with a film, the phase and the time of the first read of the film. The
+    music bank and the film have their first reads in the same phase, and the bank comes at most FILM_MUSIC_MS after the
+    film."""
+    first = {}
+    for read in sorted(reads, key=lambda read: read["t"]):
+        first.setdefault(read["path"].lower(), read)
+    films = [read for lower, read in first.items() if FILM.search(lower)]
+    times = {}
+    for lower, read in first.items():
+        if not MUSIC_BANK.match(lower):
+            continue
+        for film in films:
+            if film["phase"] == read["phase"] and 0 <= read["t"] - film["t"] <= FILM_MUSIC_MS:
+                times[lower] = min(times.get(lower, (film["phase"], film["t"])), (film["phase"], film["t"]))
+    return times
+
+
 def make_tiers(start, later, block_size, made_from):
     """The tiers as an object for the JSON file. start and later are lists of traces, in the order of the arguments."""
     files = {}
     for number, trace in enumerate(start):
+        film_music = film_music_times(trace["reads"])
         for read in trace["reads"]:
             lower = read["path"].lower()
-            key = (read["phase"], number, read["t"])
+            key = (read["phase"], number, read["t"], READ_RANK)
+            # The music bank of a film comes just before the film
+            if lower in film_music and film_music[lower][0] == read["phase"]:
+                key = (read["phase"], number, film_music[lower][1], FILM_MUSIC_RANK)
             entry = files.setdefault(lower, {"key": key, "size": read["size"], "blocks": {}})
             entry["key"] = min(entry["key"], key)
             blocks = entry["blocks"]
@@ -108,7 +146,7 @@ def make_tiers(start, later, block_size, made_from):
                 continue
             if lower not in paths:
                 paths.append(lower)
-            key = (LATER_PHASE, len(start) + number, read["t"])
+            key = (LATER_PHASE, len(start) + number, read["t"], READ_RANK)
             entry = files.setdefault(lower, {"key": key, "size": read["size"], "blocks": {}})
             entry["key"] = min(entry["key"], key)
     tiers = {}
@@ -119,8 +157,9 @@ def make_tiers(start, later, block_size, made_from):
         orders[phase] += 1
         blocks = entry["blocks"]
         count = max(1, math.ceil(entry["size"] / block_size))
-        # A file that the start traces read in parts, or in more than one phase, keeps the phase of each block
-        if blocks and (len(blocks) < count or any(value != phase for value in blocks.values())):
+        # A music bank that the start traces read in parts, or in more than one phase, keeps the phase of each block
+        partial = blocks and (len(blocks) < count or any(value != phase for value in blocks.values()))
+        if partial and MUSIC_BANK.match(lower):
             tier["blocks"] = block_runs(blocks)
         tiers[lower] = tier
     return {
