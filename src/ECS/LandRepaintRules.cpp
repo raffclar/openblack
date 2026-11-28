@@ -14,9 +14,10 @@ namespace openblack::ecs::land_repaint
 
 Filing FilingOf(const components::MapCellResident& resident)
 {
-	if (resident.placement == map_cells::Placement::MobileFront)
+	// The game keeps a thing that moves, and the plain things that stay put, in one cell, with no paint
+	if (resident.placement == map_cells::Placement::MobileFront || resident.placement == map_cells::Placement::FixedBack)
 	{
-		return Filing::Mobile;
+		return Filing::Plain;
 	}
 	return resident.coversOutline ? Filing::Outline : Filing::OneCell;
 }

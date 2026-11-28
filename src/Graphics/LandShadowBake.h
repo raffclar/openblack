@@ -152,7 +152,7 @@ private:
 		/// time it goes in or comes out
 		uint32_t filings {0};
 		ecs::land_repaint::Filing filing {ecs::land_repaint::Filing::Outline};
-		bool flagged {false};
+		std::optional<ecs::land_repaint::Flag> flag;
 		/// A solid thing's triangles flattened where they fall in the world, kept until it changes, and the corners of
 		/// the land they fall within, along x and z
 		std::shared_ptr<const std::vector<glm::vec2>> cast;

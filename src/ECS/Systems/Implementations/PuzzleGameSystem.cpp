@@ -42,6 +42,7 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
+#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/NoLandShadow.h"
 #include "ECS/Components/Physics.h"
@@ -311,13 +312,15 @@ void StartHanoi(entt::entity puzzle, PuzzleGame& game)
 	{
 		const auto piece = MakePiece(puzzle, hanoi::k_RingKinds.at(ring), places.at(ring));
 		game.rings.at(ring) = piece;
+		// The game puts these on the ring's model after it made the ring and put it in the map's cells
 		if (!hanoi::StartRingCastsLandShadow(ring))
 		{
-			registry.Assign<NoLandShadow>(piece);
+			registry.Assign<ModelCastsNoLandShadow>(piece);
 		}
 		if (hanoi::StartRingRepaintsLand(ring))
 		{
-			registry.Assign<RepaintsLandWhenFiled>(piece);
+			const auto* resident = registry.TryGet<const MapCellResident>(piece);
+			registry.Assign<RepaintsLandWhenFiled>(piece, resident != nullptr ? resident->filings : 0u);
 		}
 		registry.Get<HanoiBlock>(piece).below = below;
 		registry.Get<HanoiBlock>(below).above = piece;
@@ -1736,4 +1739,13 @@ void PuzzleGameSystem::AfterLoad()
 	_fishScare.reset();
 	auto& registry = Entities();
 	registry.Each<PuzzleGame>([](PuzzleGame& game) { ecs::puzzle_game::ForgetUnsavedState(game); });
+	// After a load each ring casts its shadow into the land, as the game makes the models of the pieces again. A save
+	// from an earlier version kept the old tag on the smaller rings.
+	std::vector<entt::entity> rings;
+	registry.Each<const HanoiBlock, const NoLandShadow>(
+	    [&rings](entt::entity piece, const HanoiBlock& /*block*/) { rings.push_back(piece); });
+	for (const auto ring : rings)
+	{
+		registry.Remove<NoLandShadow>(ring);
+	}
 }

@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "ECS/Components/MapCellResident.h"
@@ -24,6 +27,8 @@ namespace
 {
 constexpr Paints k_None {.oldPlace = false, .newPlace = false};
 constexpr Paints k_Both {.oldPlace = true, .newPlace = true};
+constexpr std::optional<land_repaint::Flag> k_NoFlag = std::nullopt;
+constexpr std::array k_Filings {Filing::Outline, Filing::OneCell, Filing::Plain};
 } // namespace
 
 TEST(LandRepaintRules, TheFilingComesFromHowTheThingIsInTheCells)
@@ -32,70 +37,66 @@ TEST(LandRepaintRules, TheFilingComesFromHowTheThingIsInTheCells)
 	          Filing::Outline);
 	EXPECT_EQ(land_repaint::FilingOf(MapCellResident {.placement = Placement::FixedFront, .coversOutline = false}),
 	          Filing::OneCell);
+	// A street lantern, a town's flag, a pot or a seed goes into its cell as a plain thing
 	EXPECT_EQ(land_repaint::FilingOf(MapCellResident {.placement = Placement::FixedBack, .coversOutline = false}),
-	          Filing::OneCell);
+	          Filing::Plain);
 	EXPECT_EQ(land_repaint::FilingOf(MapCellResident {.placement = Placement::MobileFront, .coversOutline = false}),
-	          Filing::Mobile);
+	          Filing::Plain);
 }
 
 TEST(LandRepaintRules, OnlyAThingOverItsOutlineAsksForAPaintAsItComesOut)
 {
-	EXPECT_EQ(land_repaint::RepaintsOf(Filing::Outline, false), (Repaints {.goingIn = true, .comingOut = true}));
-	EXPECT_EQ(land_repaint::RepaintsOf(Filing::OneCell, false), (Repaints {.goingIn = true, .comingOut = false}));
-	EXPECT_EQ(land_repaint::RepaintsOf(Filing::Mobile, false), (Repaints {.goingIn = false, .comingOut = false}));
-	// The flag of the model asks for a paint each time
-	for (const auto filing : {Filing::Outline, Filing::OneCell, Filing::Mobile})
+	EXPECT_EQ(land_repaint::RepaintsOf(Filing::Outline, k_NoFlag, 1), (Repaints {.goingIn = true, .comingOut = true}));
+	EXPECT_EQ(land_repaint::RepaintsOf(Filing::OneCell, k_NoFlag, 1), (Repaints {.goingIn = true, .comingOut = false}));
+	EXPECT_EQ(land_repaint::RepaintsOf(Filing::Plain, k_NoFlag, 1), (Repaints {.goingIn = false, .comingOut = false}));
+}
+
+TEST(LandRepaintRules, TheFlagOfTheModelCountsAfterTheFilingThatItCameIn)
+{
+	constexpr land_repaint::Flag k_Flag {.afterFiling = 2};
+	// The filing in which the thing got the flag went in with no paint, but it asks as it comes out
+	EXPECT_EQ(land_repaint::RepaintsOf(Filing::Plain, k_Flag, 2), (Repaints {.goingIn = false, .comingOut = true}));
+	for (const auto filing : k_Filings)
 	{
-		EXPECT_EQ(land_repaint::RepaintsOf(filing, true), (Repaints {.goingIn = true, .comingOut = true}));
+		EXPECT_EQ(land_repaint::RepaintsOf(filing, k_Flag, 3), (Repaints {.goingIn = true, .comingOut = true}));
 	}
 }
 
-TEST(LandRepaintRules, AThingThatOnlyGrowsInItsCellsPaintsNothing)
+TEST(LandRepaintRules, AThingThatChangesInTheSameFilingPaintsNothing)
 {
-	for (const auto filing : {Filing::Outline, Filing::OneCell, Filing::Mobile})
+	for (const auto filing : k_Filings)
 	{
-		EXPECT_EQ(land_repaint::PaintsOf(filing, land_repaint::RepaintsOf(filing, false), Change {.resized = true}), k_None);
-		EXPECT_EQ(land_repaint::PaintsOf(filing, land_repaint::RepaintsOf(filing, false), Change {}), k_None);
+		const auto repaints = land_repaint::RepaintsOf(filing, k_NoFlag, 1);
+		EXPECT_EQ(land_repaint::PaintsOf(repaints, Change {}), k_None);
+		EXPECT_EQ(land_repaint::PaintsOf(repaints, Change {.resized = true}), k_None);
+		EXPECT_EQ(land_repaint::PaintsOf(repaints, Change {.moved = true}), k_None);
+		EXPECT_EQ(land_repaint::PaintsOf(repaints, Change {.otherLook = true}), k_None);
+		EXPECT_EQ(land_repaint::PaintsOf(repaints, Change {.moved = true, .resized = true, .otherLook = true}), k_None);
 	}
+	// Also with the flag of the model
+	const auto flagged = land_repaint::RepaintsOf(Filing::Plain, land_repaint::Flag {.afterFiling = 0}, 1);
+	EXPECT_EQ(land_repaint::PaintsOf(flagged, Change {.moved = true, .otherLook = true}), k_None);
 }
 
 TEST(LandRepaintRules, AFilingAgainPaintsThePlacesThatTheThingAsksFor)
 {
 	const Change filedAgain {.filedAgain = true, .moved = true};
-	EXPECT_EQ(land_repaint::PaintsOf(Filing::Outline, land_repaint::RepaintsOf(Filing::Outline, false), filedAgain), k_Both);
+	EXPECT_EQ(land_repaint::PaintsOf(land_repaint::RepaintsOf(Filing::Outline, k_NoFlag, 2), filedAgain), k_Both);
 	// A tree that the hand puts down in other cells paints only its new place
-	EXPECT_EQ(land_repaint::PaintsOf(Filing::OneCell, land_repaint::RepaintsOf(Filing::OneCell, false), filedAgain),
+	EXPECT_EQ(land_repaint::PaintsOf(land_repaint::RepaintsOf(Filing::OneCell, k_NoFlag, 2), filedAgain),
 	          (Paints {.oldPlace = false, .newPlace = true}));
 	// A ball that rolls into other cells paints nothing
-	EXPECT_EQ(land_repaint::PaintsOf(Filing::Mobile, land_repaint::RepaintsOf(Filing::Mobile, false), filedAgain), k_None);
+	EXPECT_EQ(land_repaint::PaintsOf(land_repaint::RepaintsOf(Filing::Plain, k_NoFlag, 2), filedAgain), k_None);
 	// The largest ring of the beach temple puzzle paints its two places
-	EXPECT_EQ(land_repaint::PaintsOf(Filing::Mobile, land_repaint::RepaintsOf(Filing::Mobile, true), filedAgain), k_Both);
-}
-
-TEST(LandRepaintRules, AThingThatMovesInItsCellsPaintsNothing)
-{
-	for (const bool flagged : {false, true})
-	{
-		const auto repaints = land_repaint::RepaintsOf(Filing::Mobile, flagged);
-		EXPECT_EQ(land_repaint::PaintsOf(Filing::Mobile, repaints, Change {.moved = true}), k_None);
-		EXPECT_EQ(land_repaint::PaintsOf(Filing::Mobile, repaints, Change {.otherLook = true}), k_None);
-	}
-}
-
-TEST(LandRepaintRules, AThingThatStaysPutAndMovesOrChangesItsLookPaintsTheTwoPlaces)
-{
-	for (const auto filing : {Filing::Outline, Filing::OneCell})
-	{
-		const auto repaints = land_repaint::RepaintsOf(filing, false);
-		EXPECT_EQ(land_repaint::PaintsOf(filing, repaints, Change {.moved = true}), k_Both);
-		EXPECT_EQ(land_repaint::PaintsOf(filing, repaints, Change {.resized = true, .otherLook = true}), k_Both);
-	}
+	EXPECT_EQ(
+	    land_repaint::PaintsOf(land_repaint::RepaintsOf(Filing::Plain, land_repaint::Flag {.afterFiling = 1}, 2), filedAgain),
+	    k_Both);
 }
 
 TEST(LandRepaintRules, AModelThatBecomesReadyPaintsTheTwoPlaces)
 {
-	for (const auto filing : {Filing::Outline, Filing::OneCell, Filing::Mobile})
+	for (const auto filing : k_Filings)
 	{
-		EXPECT_EQ(land_repaint::PaintsOf(filing, land_repaint::RepaintsOf(filing, false), Change {.modelReady = true}), k_Both);
+		EXPECT_EQ(land_repaint::PaintsOf(land_repaint::RepaintsOf(filing, k_NoFlag, 1), Change {.modelReady = true}), k_Both);
 	}
 }

@@ -302,6 +302,17 @@ void CastShape(tree_shadows::Coverage& coverage, std::span<const glm::vec2> cast
 	}
 }
 
+/// The flag of the thing's model that asks for a paint each time it goes into the map's cells or comes out of them
+std::optional<ecs::land_repaint::Flag> FlagOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* flag = registry.TryGet<const ecs::components::RepaintsLandWhenFiled>(entity);
+	if (flag == nullptr)
+	{
+		return std::nullopt;
+	}
+	return ecs::land_repaint::Flag {.afterFiling = flag->afterFiling};
+}
+
 } // namespace
 
 LandShadowBake::LandShadowBake() = default;
@@ -498,7 +509,7 @@ void LandShadowBake::MarkBlocksOf(std::span<const uint32_t> cells, bool paint)
 
 void LandShadowBake::MarkCameOrWent(const Baked& caster, bool came)
 {
-	const auto repaints = ecs::land_repaint::RepaintsOf(caster.filing, caster.flagged);
+	const auto repaints = ecs::land_repaint::RepaintsOf(caster.filing, caster.flag, caster.filings);
 	MarkBlocksOf(caster.cells, came ? repaints.goingIn : repaints.comingOut);
 }
 
@@ -761,7 +772,7 @@ LandShadowBake::Baked LandShadowBake::BakedOf(const land_shadow_bake::Caster& ca
 	    // A worship site and its altar stand at the temple without being filed, as things that stay put
 	    .filing =
 	        caster.resident != nullptr ? ecs::land_repaint::FilingOf(*caster.resident) : ecs::land_repaint::Filing::Outline,
-	    .flagged = registry.AllOf<ecs::components::RepaintsLandWhenFiled>(caster.entity),
+	    .flag = FlagOf(registry, caster.entity),
 	};
 }
 
@@ -783,7 +794,7 @@ void LandShadowBake::Rebake(Baked& kept, Baked&& now)
 		    .modelReady = before.meshReady != after.meshReady,
 		};
 		const auto paints =
-		    ecs::land_repaint::PaintsOf(now.filing, ecs::land_repaint::RepaintsOf(now.filing, now.flagged), change);
+		    ecs::land_repaint::PaintsOf(ecs::land_repaint::RepaintsOf(now.filing, now.flag, now.filings), change);
 		MarkBlocksOf(kept.cells, paints.oldPlace);
 		MarkBlocksOf(now.cells, paints.newPlace);
 		_casterBlocks.Remove(kept.entity, kept.cells);
@@ -797,7 +808,7 @@ void LandShadowBake::Rebake(Baked& kept, Baked&& now)
 	kept.shadowChangesInPlace = now.shadowChangesInPlace;
 	kept.filings = now.filings;
 	kept.filing = now.filing;
-	kept.flagged = now.flagged;
+	kept.flag = now.flag;
 }
 
 LandShadowBake::Watched LandShadowBake::WatchedOf(const land_shadow_bake::MayCast& thing)

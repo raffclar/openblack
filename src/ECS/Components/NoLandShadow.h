@@ -12,9 +12,15 @@
 namespace openblack::ecs::components
 {
 
-/// The thing casts no shadow into the land, also when its kind casts one. The beach temple puzzle puts this on its
-/// three smaller rings when it starts.
+/// The thing casts no shadow into the land, also when its kind casts one
 struct NoLandShadow
+{
+};
+
+/// The model of the thing casts no shadow into the land. The game keeps this on the model, which it makes again after a
+/// load. Thus a save does not keep it, and the thing casts again after a load. The beach temple puzzle puts this on its
+/// three smaller rings when it starts.
+struct ModelCastsNoLandShadow
 {
 };
 

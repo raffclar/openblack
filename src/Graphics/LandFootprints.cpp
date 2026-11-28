@@ -305,7 +305,7 @@ void LandFootprints::TakeOff(entt::entity entity)
 {
 	const auto& look = _looks[static_cast<size_t>(entt::to_entity(entity))];
 	const auto& known = _known.get(entity);
-	if (ecs::land_repaint::RepaintsOf(look.filing, look.flagged).comingOut)
+	if (ecs::land_repaint::RepaintsOf(look.filing, look.flag, look.filings).comingOut)
 	{
 		MarkThing(entity, known);
 	}
@@ -367,8 +367,10 @@ void LandFootprints::LookAt(const ThingStores& stores, uint32_t search, entt::en
 		TakeOff(held);
 	}
 	const auto filing = ecs::land_repaint::FilingOf(resident);
-	const bool flagged = stores.things.AllOf<ecs::components::RepaintsLandWhenFiled>(entity);
-	const auto repaints = ecs::land_repaint::RepaintsOf(filing, flagged);
+	const auto* flagged = stores.things.TryGet<ecs::components::RepaintsLandWhenFiled>(entity);
+	const auto flag =
+	    flagged != nullptr ? std::optional(ecs::land_repaint::Flag {.afterFiling = flagged->afterFiling}) : std::nullopt;
+	const auto repaints = ecs::land_repaint::RepaintsOf(filing, flag, resident.filings);
 	// A new thing paints its blocks if it asks for a paint as it goes into the cells
 	bool paintNow = repaints.goingIn;
 	if (_known.contains(entity))
@@ -386,7 +388,7 @@ void LandFootprints::LookAt(const ThingStores& stores, uint32_t search, entt::en
 			return;
 		}
 		// The blocks that the game does not paint keep the old footprint until a paint for another cause
-		const auto paints = ecs::land_repaint::PaintsOf(filing, repaints, change);
+		const auto paints = ecs::land_repaint::PaintsOf(repaints, change);
 		if (paints.oldPlace)
 		{
 			MarkThing(entity, _known.get(entity));
@@ -423,7 +425,7 @@ void LandFootprints::LookAt(const ThingStores& stores, uint32_t search, entt::en
 	                 .filings = resident.filings,
 	                 .transform = transform,
 	                 .filing = filing,
-	                 .flagged = flagged},
+	                 .flag = flag},
 	      std::move(known));
 }
 

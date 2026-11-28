@@ -122,7 +122,7 @@ private:
 		ecs::components::Transform transform {};
 		/// How it is kept in the map's cells, and whether its model asks for a paint each time it goes in or comes out
 		ecs::land_repaint::Filing filing {ecs::land_repaint::Filing::Outline};
-		bool flagged {false};
+		std::optional<ecs::land_repaint::Flag> flag;
 	};
 	/// A print that no thing in the map's cells gives: the print of a thing that shows only as a print, or a stretch of
 	/// a river. A channel lowers the land's alpha; every other print mixes its colour into the land.

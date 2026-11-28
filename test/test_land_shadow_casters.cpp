@@ -268,6 +268,23 @@ TEST(LandShadowCasters, AThingWithNoLandShadowCastsNothing)
 	EXPECT_GT(LandShadowCastersVersion(registry), version);
 }
 
+TEST(LandShadowCasters, AThingWhoseModelCastsNoLandShadowCastsNothing)
+{
+	Registry registry;
+	const auto ring = registry.Create();
+	registry.Assign<components::MobileObject>(ring);
+	registry.Assign<components::Mesh>(ring);
+	registry.Assign<components::Transform>(ring);
+	const auto version = LandShadowCastersVersion(registry);
+	registry.Assign<components::ModelCastsNoLandShadow>(ring);
+	EXPECT_EQ(LandShadowOf(registry, ring), LandShadow::None);
+	EXPECT_EQ(openblack::ecs::LandShadowLookup(registry).Of(ring), LandShadow::None);
+	EXPECT_GT(LandShadowCastersVersion(registry), version);
+	// A load makes the model again, and the ring casts again
+	registry.Remove<components::ModelCastsNoLandShadow>(ring);
+	EXPECT_EQ(LandShadowOf(registry, ring), LandShadow::Shape);
+}
+
 TEST(LandShadowCasters, ATakeGivesEachThingThatCameOrWentOneTime)
 {
 	Registry registry;

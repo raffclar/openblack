@@ -108,7 +108,7 @@ void ForEachCasterComponent(Func func)
 	  std::type_identity<Feature> {}, std::type_identity<MobileStatic> {}, std::type_identity<TeleportStone> {},
 	  std::type_identity<MobileObject> {}, std::type_identity<Ball> {}, std::type_identity<RewardOnLand> {},
 	  std::type_identity<Mesh> {}, std::type_identity<Transform> {}, std::type_identity<MapCellResident> {},
-	  std::type_identity<NoLandShadow> {});
+	  std::type_identity<NoLandShadow> {}, std::type_identity<ModelCastsNoLandShadow> {});
 }
 
 } // namespace
@@ -147,7 +147,7 @@ struct ShadowComponents
 using ShadowStores = ShadowComponents<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield,
                                       ShieldDome, SpellSeed, OneOffSpellSeed, Vortex, Tree, BigForest, Temple, BuildProgress,
                                       Abode, WorshipAltar, WorshipSite, WorshipIcon, SpellDispenser, Feature, MobileStatic,
-                                      TeleportStone, MobileObject, Ball, RewardOnLand, NoLandShadow>;
+                                      TeleportStone, MobileObject, Ball, RewardOnLand, NoLandShadow, ModelCastsNoLandShadow>;
 
 } // namespace
 
@@ -183,7 +183,7 @@ bool LandShadowLookup::IsBuilt(entt::entity entity) const
 
 LandShadow LandShadowLookup::Of(entt::entity entity) const
 {
-	if (AnyOf<NoLandShadow>(entity))
+	if (AnyOf<NoLandShadow, ModelCastsNoLandShadow>(entity))
 	{
 		return LandShadow::None;
 	}
