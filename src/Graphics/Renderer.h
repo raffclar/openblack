@@ -131,10 +131,18 @@ public:
 	void CollectMistsAndSmoke(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
 	/// Copies the mesh of the object of each glow shell of the particles' frames
 	static void CollectShellMeshes(DrawnEffects& effects, const ecs::Registry& registry);
+	/// Copies the mesh of the object of each glow shell of a particles' frame
+	static void NameShellMeshes(particles::draw::Frame& frame, const ecs::Registry& registry);
 	/// Copies the shoals of the fish farms and of the fish puzzles, and the floats of the puzzles' nets
 	void CollectFish(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
 	/// Copies the globes of the miracles, the new miracles over the chests and the seeds of the icons
 	void CollectSeeds(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// The words over the land, the light of the game's start and the advisors, as the steps of the frame made them
+	void CollectWordsAndAdvisors(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
+	/// The depths of the snow and the requests of the snow for paints of the blocks, for the draw
+	void CollectSnowCover() const;
+	/// The row of the hints of the gestures and the effects of the holders of its seeds
+	void CollectGestureHints(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
 	/// Copies the columns of light over the village centres and the temples, the beams of the scrolls and the pulses of
 	/// the icons
 	void CollectLightColumns(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const;
@@ -150,6 +158,7 @@ public:
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
 	void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept final;
+	void FillFilmCreature(DrawnFrame& frame, const interface_creatures::FilmCreature& shown) const final;
 	void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
@@ -387,7 +396,8 @@ private:
 	void SubmitGlowShell(uint16_t viewId, entt::id_type meshId, const glm::mat4& model, const particles::draw::ShellDraw& shell,
 	                     const glm::mat4& projection, bool reflection, uint32_t depth) const;
 	/// The copy of the creature in the falling spell's film, in the film's view
-	void DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const;
+	void DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown,
+	                  const DrawnCreatures::Film& copy) const;
 	/// The motes, the stars and the burst of light of the falling spell's film, in the film's view
 	void DrawFilmEffects(const interface_creatures::FilmCreature& film) const;
 	/// The glows on a creature's body where its pose put them, in a view (a bgfx view id)
@@ -884,6 +894,8 @@ private:
 	mutable std::vector<GroundShadowCaster> _groundShadowCasters;
 	mutable std::vector<entt::entity> _groundShadowUnderSea;
 	mutable std::vector<L3DMeshSubmitDesc::MorphTargets> _groundShadowMorphs;
+	/// The copies of the poses that the casters of the moving shadows point to (see StartGroundShadows)
+	mutable std::vector<std::vector<glm::mat4>> _groundShadowPoses;
 	/// The land blocks of this frame as the moving shadows see them (see GroundShadow::NearBlockShows)
 	mutable GroundShadow::BlockSights _groundShadowSights {};
 	/// The workers make the shadows of this frame, and DrawGroundShadowPass did not take them yet
@@ -987,6 +999,15 @@ private:
 	/// How deep the snow lies over the island, refreshed when it changes
 	mutable std::unique_ptr<Texture2D> _snowDepth;
 	mutable std::optional<uint32_t> _snowRevision;
+	/// The texture of the depths of the snow that the fill refreshed for the draw, none without snow
+	mutable const Texture2D* _snowDepthShown {nullptr};
+	/// The copy of the depths of the snow that the fill made for the draw, at the revision of the snow
+	mutable std::vector<float> _snowDepthsShown;
+	mutable std::optional<uint32_t> _snowDepthsRevision;
+	/// The blocks (by snow_cover::BlockIndex) whose snow the snow asked to paint again, which the fill took for the draw
+	mutable std::bitset<snow_cover::k_Blocks> _snowPaintRequests;
+	/// The game had snow when the fill took the requests and the depths of the snow
+	mutable bool _snowShown {false};
 	/// The snow that each land block's texture shows, as it lay when the texture was last painted, and its texture
 	mutable snow_cover::PaintedBlocks _paintedSnow;
 	mutable std::unique_ptr<Texture2D> _paintedSnowTexture;
@@ -1202,10 +1223,9 @@ private:
 	/// The order of the particles of the pass being drawn, kept for their room
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
-	/// What the effect over a seed of the gestures' hints draws, and its order
-	mutable particles::draw::Frame _hintParticleFrame;
 	/// The camera the gestures' hints picture their seeds through, made the first time a hint pictures one
 	mutable std::unique_ptr<Camera> _hintCamera;
+	/// The order of what the effect over a seed of the gestures' hints draws
 	mutable std::vector<particles::draw::Command> _hintParticleCommands;
 	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
 	/// The order of the symbols of belief of one village centre in the pass being drawn

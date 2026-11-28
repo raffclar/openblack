@@ -651,7 +651,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::Snow))
 			{
 				// Snow shows where the primitive writes its depth, as the game draws it over the object at the same depth
-				const auto* depth = desc.snow ? SnowDepth(_snowDepth, _snowRevision) : nullptr;
+				const auto* depth = desc.snow ? _snowDepthShown : nullptr;
 				const bool snowed =
 				    depth != nullptr && prim.depthWrite && _snowTexture != nullptr && _snowAlphaTexture != nullptr;
 				bindings.snowed = snowed;
@@ -1140,8 +1140,7 @@ void Renderer::EncodeInOrder(size_t count, const EncodeDraw& draw) const
 
 	// Run r has the things from count * r / runs on, and the submit order after run r - 1. Run 0 goes on in the game
 	// thread's encoder, so that what the game's thread set before is set for its first draw, as when that thread draws
-	// all. The snow's depth changes a texture: that is done here first, so that the draws only read it.
-	static_cast<void>(SnowDepth(_snowDepth, _snowRevision));
+	// all. The fill changed the texture of the snow's depth, thus the draws only read it.
 	const size_t runs = std::min(count, lanes * k_RunsPerLane);
 	const uint32_t firstOrder = ++_submitOrder;
 	_submitOrder = firstOrder + static_cast<uint32_t>(runs);
@@ -1381,15 +1380,16 @@ void Renderer::UploadHandSkins() const
 
 std::optional<RendererInterface::L3DMeshSubmitDesc::MorphTargets> Renderer::HandMorphTargets() const
 {
-	const auto* morph = PlayerHandMorph(_drawnFrame);
-	if (morph == nullptr || morph->state.drawn == 0.0f)
+	// The fill copies the alignment at which the hand's shape shows
+	const auto drawn = _drawnFrame != nullptr ? _drawnFrame->hands.morphDrawn : std::nullopt;
+	if (!drawn.has_value() || *drawn == 0.0f)
 	{
 		return std::nullopt;
 	}
 	// The evil or good mesh, or the base where it isn't loaded
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto lookId =
-	    ecs::components::HandMorph::k_LookMeshIds.at(hand_morph::LookOf(morph->state.drawn) == hand_morph::Look::Evil ? 0 : 1);
+	    ecs::components::HandMorph::k_LookMeshIds.at(hand_morph::LookOf(*drawn) == hand_morph::Look::Evil ? 0 : 1);
 	const auto id = meshes.Contains(lookId) ? lookId : ecs::components::Hand::k_MeshId;
 	if (!meshes.Contains(id))
 	{
@@ -1397,7 +1397,7 @@ std::optional<RendererInterface::L3DMeshSubmitDesc::MorphTargets> Renderer::Hand
 	}
 	return L3DMeshSubmitDesc::MorphTargets {
 	    .meshes = {&*meshes.Handle(id), nullptr, nullptr},
-	    .weights = {hand_morph::Weight(morph->state.drawn), 0.0f, 0.0f},
+	    .weights = {hand_morph::Weight(*drawn), 0.0f, 0.0f},
 	    .skins = _handSkins,
 	    // The hand has no seams to blend
 	    .blendSeams = false,

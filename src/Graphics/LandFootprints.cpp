@@ -97,9 +97,9 @@ constexpr size_t k_LeastThingsToShare = 4096;
 } // namespace
 
 /// The registry keeps its component stores in a list that grows when the registry gets the first component of a kind.
-/// The draw can do that on the game's thread. Thus the search thread must not look in that list while the draw
+/// The fill can do that on the game's thread. Thus the search thread must not look in that list while the fill
 /// continues. A store stays at the same place while the registry exists, thus the search reads the stores that the
-/// game's thread found before the search started. A store that did not exist then holds no component during the draw.
+/// game's thread found before the search started. A store that did not exist then holds no component during the fill.
 struct LandFootprints::ThingStores
 {
 	explicit ThingStores(const ecs::Registry& source)

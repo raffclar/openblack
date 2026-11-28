@@ -398,7 +398,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 void Renderer::DrawFarVillagerSmudges(const DrawSceneDesc& desc) const
 {
 	using ecs::components::Mist;
-	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
+	if (desc.frame == nullptr || desc.frame->models == nullptr)
+	{
+		return;
+	}
+	const auto& renderCtx = *desc.frame->models;
 	const auto& textures = Locator::resources::value().GetTextures();
 	if (desc.viewId != RenderPass::Main || renderCtx.farVillagers.empty() || !textures.Contains(Mist::k_TextureId) ||
 	    !textures.Contains(Mist::k_AlphaTextureId))
