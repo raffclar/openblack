@@ -594,7 +594,10 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 			bank = settings.fillSlope;
 		}
 		const float slope = SlopeAt(ground.metres, rate.XOf(i), rate.ZOf(i));
-		rate.values[i] = std::max(taperOf(slope, settings.taper), bank - slope) * k_MetresPerCorner;
+		// On a cliff, the change becomes less as fast as the steepest cliff face lets it. Thus a cut or a fill on a cliff
+		// does not go far along the cliff.
+		const float cliffFace = slope >= settings.cliffSlope ? settings.steepestFace - slope : 0.0f;
+		rate.values[i] = std::max({taperOf(slope, settings.taper), bank - slope, cliffFace}) * k_MetresPerCorner;
 		fixedRate.values[i] = taperOf(slope, settings.fixedTaper) * k_MetresPerCorner;
 		ringRate.values[i] = taperOf(slope, settings.ringTaper) * k_MetresPerCorner;
 	}
@@ -615,6 +618,7 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		});
 	}
 
+	const float farthest = settings.farthestChange / k_MetresPerCorner;
 	Grid<float> graded = ground.metres;
 	for (size_t i = 0; i < graded.values.size(); ++i)
 	{
@@ -636,8 +640,10 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 			return std::clamp(land, lowest.values[i], highest.values[i]);
 		}();
 		// The bed itself is level up to the shores and the rivers. Only the banks become less near them.
-		const float most = bed.covered.values[i] != 0 ? std::min(change.values[i], fromRing.values[i])
-		                                              : std::min({change.values[i], fromFixed.values[i], fromRing.values[i]});
+		float most = bed.covered.values[i] != 0 ? std::min(change.values[i], fromRing.values[i])
+		                                        : std::min({change.values[i], fromFixed.values[i], fromRing.values[i]});
+		// The change stops at the farthest change from the bed, with the slope of a cut bank before it
+		most = std::min(most, std::max(0.0f, farthest - toBed.values[i]) * cutRise);
 		float height = std::clamp(target, land - most, land + most);
 		height = std::max(height, std::min(land, ground.lowest.values[i]));
 		graded.values[i] = height;

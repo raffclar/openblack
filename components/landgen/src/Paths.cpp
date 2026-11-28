@@ -30,17 +30,23 @@ constexpr float k_MetresPerCorner = 10.0f;
 /// The step along a segment of a path when the corners under it are found, in corners
 constexpr float k_DrawStep = 0.25f;
 
-/// The metres of each corner, and the wander noise of each corner from 0 to 1
+/// The metres of each corner, the wander noise of each corner from 0 to 1, and the slope of the land at each corner on
+/// each axis (the rise over the run)
 struct Costs
 {
 	Grid<float> metres;
 	Grid<float> wander;
+	Grid<float> slopeX;
+	Grid<float> slopeZ;
 };
 
 Costs CostsOf(const Ground& ground, uint64_t seed, const Settings& settings)
 {
 	const int side = ground.heights.side;
-	Costs costs {.metres = Grid<float>(side, 0.0f), .wander = Grid<float>(side, 0.0f)};
+	Costs costs {.metres = Grid<float>(side, 0.0f),
+	             .wander = Grid<float>(side, 0.0f),
+	             .slopeX = Grid<float>(side, 0.0f),
+	             .slopeZ = Grid<float>(side, 0.0f)};
 	const auto wanderSeed = StageSeed(seed, Stage::PathWander);
 	for (int x = 0; x < side; ++x)
 	{
@@ -50,6 +56,19 @@ Costs CostsOf(const Ground& ground, uint64_t seed, const Settings& settings)
 			const float noise = noise::Fractal(wanderSeed, static_cast<float>(x) / settings.wanderScale,
 			                                   static_cast<float>(z) / settings.wanderScale, 3);
 			costs.wander.At(x, z) = std::clamp(0.5f + (0.5f * noise), 0.0f, 1.0f);
+		}
+	}
+	// The slope of each corner, from the corners next to it on each axis
+	const auto along = [&](int x0, int z0, int x1, int z1) {
+		const auto run = static_cast<float>((x1 - x0) + (z1 - z0)) * k_MetresPerCorner;
+		return run > 0.0f ? (costs.metres.At(x1, z1) - costs.metres.At(x0, z0)) / run : 0.0f;
+	};
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			costs.slopeX.At(x, z) = along(std::max(x - 1, 0), z, std::min(x + 1, side - 1), z);
+			costs.slopeZ.At(x, z) = along(x, std::max(z - 1, 0), x, std::min(z + 1, side - 1));
 		}
 	}
 	return costs;
@@ -132,7 +151,13 @@ std::optional<std::vector<Point>> Search(const Ground& ground, const Costs& cost
 			{
 				continue;
 			}
+			// The slope of the land across the step: a way along a steep side costs more than a way on level ground
+			const float across = std::min(std::fabs((costs.slopeZ.values[next] * static_cast<float>(k_Neighbours[n].dx)) -
+			                                        (costs.slopeX.values[next] * static_cast<float>(k_Neighbours[n].dz))) /
+			                                  length,
+			                              settings.steepestSide);
 			float step = length * (1.0f + (settings.slopeWeight * slope * slope)) *
+			             (1.0f + (settings.sideWeight * across * across)) *
 			             (1.0f + (settings.wander * costs.wander.values[next]));
 			if (ground.rivers.values[next] != 0)
 			{
@@ -299,6 +324,11 @@ std::vector<Link> paths::ChainLinks(std::span<const Place> places)
 		links.push_back({.from = static_cast<uint32_t>(nearest), .to = static_cast<uint32_t>(i)});
 	}
 	return links;
+}
+
+Grid<uint32_t> paths::Parts(const Ground& ground, const Settings& settings)
+{
+	return PartsOf(ground, CostsOf(ground, 0, settings), settings);
 }
 
 std::optional<std::vector<Point>> paths::FindWay(const Ground& ground, const Grid<uint8_t>& laid, Point from, Point to,

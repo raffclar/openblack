@@ -43,6 +43,9 @@ struct Ground
 	float riverDistance;
 	/// The radius of the flat ground of the start area
 	float flatRadius;
+	/// The part of the land of each corner, as `paths::Parts` gives it. A start is on the part of the start of player
+	/// one, so that a path can join the two starts. Without the parts, a start can be on any part.
+	const Grid<uint32_t>* parts {nullptr};
 };
 
 /// The rules for the start areas of the other players, from the five skirmish lands (TwoGods, ThreeGods, FourGods,

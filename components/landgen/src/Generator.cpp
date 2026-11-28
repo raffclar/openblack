@@ -421,6 +421,14 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		const auto town = settlement::TownOfStart(0.0f, 0.0f, playerSeeds.back(), settings.settlement);
 		townOffsets.push_back({.x = town.x, .z = town.z});
 	}
+	// The start of each other player is on the part of the land of player one, so that a path joins the starts
+	std::optional<Grid<uint32_t>> startParts;
+	if (playerCount > 1)
+	{
+		const Grid<uint8_t> noRivers(side, 0);
+		startParts =
+		    paths::Parts({.heights = heights, .curve = land.heightCurve, .water = sea, .rivers = noRivers}, settings.paths);
+	}
 	for (const auto& other :
 	     players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
 	                         {.lowest = startSettings.lowest,
@@ -428,7 +436,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	                         .nearestSea = startSettings.nearestSea,
 	                         .farthestSea = startSettings.farthestSea,
 	                         .riverDistance = startSettings.riverDistance,
-	                         .flatRadius = startSettings.flatRadius},
+	                         .flatRadius = startSettings.flatRadius,
+	                         .parts = startParts.has_value() ? &*startParts : nullptr},
 	                         settings.players))
 	{
 		land.otherStarts.push_back({.x = other.x, .z = other.z, .radius = startSettings.flatRadius});
