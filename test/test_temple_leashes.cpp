@@ -283,3 +283,11 @@ TEST(TempleLeashes, TheLeashesHangAtTheFirstThreePointsOfTheTemple)
 	// A mesh with fewer than three points hangs no leashes
 	EXPECT_FALSE(PointsOn(temple, std::span(points).first(2)).has_value());
 }
+
+TEST(TempleLeashes, OnlyTheOwnTempleTakesThePick)
+{
+	EXPECT_TRUE(TakesPick(true, true));
+	EXPECT_FALSE(TakesPick(true, false));
+	// A leash at points of its own
+	EXPECT_TRUE(TakesPick(false, false));
+}

@@ -78,6 +78,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
@@ -868,9 +869,12 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 
 void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
 {
-	// A player with no temple has no posts, and nothing changes
-	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn](LeashPost& post) {
-		if (post.owner != owner)
+	// A player with no own temple has no posts that take the pick, and nothing changes. The other temples of the player
+	// keep their picks.
+	const auto own = OwnTempleOf(owner);
+	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn, own](LeashPost& post) {
+		if (post.owner != owner ||
+		    !temple_leashes::TakesPick(post.temple != entt::null, own != entt::null && post.temple == own))
 		{
 			return;
 		}
@@ -879,6 +883,25 @@ void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
 			post.selected = *picked;
 		}
 	});
+}
+
+entt::entity LeashSystem::OwnTempleOf(PlayerNames owner) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	entt::entity own = entt::null;
+	registry.Each<const Player>([&registry, owner, &own](const Player& player) {
+		if (player.name != owner || !registry.Valid(player.temple))
+		{
+			return;
+		}
+		// The link goes with the temple
+		const auto* temple = registry.TryGet<const Temple>(player.temple);
+		if (temple != nullptr && temple->owner == owner)
+		{
+			own = player.temple;
+		}
+	});
+	return own;
 }
 
 bool LeashSystem::PlayerCanChangeType(entt::entity creature) const
@@ -1719,7 +1742,7 @@ void LeashSystem::PlacePostsAtTemples()
 			withPosts.insert(post.temple);
 		}
 	});
-	// The temple made its posts as it came into being
+	// The temple made its posts as it came into being. A temple that has none here got no posts then.
 	std::vector<entt::entity> without;
 	registry.Each<const Temple, const Transform, const Mesh>(
 	    [&without, &withPosts](entt::entity entity, const Temple& /*temple*/, const Transform& /*transform*/,
@@ -1729,55 +1752,83 @@ void LeashSystem::PlacePostsAtTemples()
 			    without.push_back(entity);
 		    }
 	    });
-	if (without.empty() || !Locator::resources::has_value())
-	{
-		return;
-	}
-	const auto& meshes = Locator::resources::value().GetMeshes();
 	struct Found
 	{
-		PlayerNames owner;
-		std::array<glm::vec3, 3> points;
 		entt::entity temple;
+		std::array<glm::vec3, 3> points;
 	};
 	std::vector<Found> found;
 	for (const auto entity : without)
 	{
-		const auto& temple = registry.Get<const Temple>(entity);
-		const auto& transform = registry.Get<const Transform>(entity);
-		const auto& mesh = registry.Get<const Mesh>(entity);
-		if (!meshes.Contains(mesh.id))
+		if (const auto points = PostPointsOf(entity); points.has_value())
 		{
-			continue;
+			found.push_back({.temple = entity, .points = *points});
 		}
-		// The leashes hang at the first three points of the temple's heart
-		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
-		const auto at = temple_leashes::PointsOn(model, meshes.Handle(mesh.id)->GetExtraMetrics());
-		if (!at.has_value())
-		{
-			SPDLOG_LOGGER_TRACE(spdlog::get("game"), "The temple has too few points to hang its leashes at");
-			continue;
-		}
-		found.push_back({.owner = temple.owner, .points = *at, .temple = entity});
 	}
 	for (const auto& entry : found)
 	{
-		// A game saved before the posts kept their temple has the posts of the temple at its points, with no link
-		bool unlinkedAtPoints = false;
-		registry.Each<LeashPost>([&unlinkedAtPoints, &entry](LeashPost& post) {
-			if (post.temple != entt::null || post.owner != entry.owner ||
-			    std::ranges::none_of(entry.points,
-			                         [&post](const glm::vec3& point) { return temple_leashes::HangsAt(post.point, point); }))
-			{
-				return;
-			}
-			post.temple = entry.temple;
-			unlinkedAtPoints = true;
-		});
-		if (temple_leashes::SetFor(false, unlinkedAtPoints) == temple_leashes::TempleSet::Makes)
+		HangPostsAtPoints(entry.temple, entry.points);
+	}
+}
+
+void LeashSystem::HangPostsOf(entt::entity temple)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	bool hasOwn = false;
+	registry.Each<const LeashPost>([&hasOwn, temple](const LeashPost& post) { hasOwn = hasOwn || post.temple == temple; });
+	if (hasOwn)
+	{
+		return;
+	}
+	if (const auto points = PostPointsOf(temple); points.has_value())
+	{
+		HangPostsAtPoints(temple, *points);
+	}
+}
+
+std::optional<std::array<glm::vec3, 3>> LeashSystem::PostPointsOf(entt::entity temple) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::resources::has_value() || !registry.Valid(temple) || !registry.AllOf<Temple, Transform, Mesh>(temple))
+	{
+		return std::nullopt;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto& transform = registry.Get<const Transform>(temple);
+	const auto& mesh = registry.Get<const Mesh>(temple);
+	if (!meshes.Contains(mesh.id))
+	{
+		return std::nullopt;
+	}
+	// The leashes hang at the first three points of the temple's heart
+	const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+	const auto at = temple_leashes::PointsOn(model, meshes.Handle(mesh.id)->GetExtraMetrics());
+	if (!at.has_value())
+	{
+		SPDLOG_LOGGER_TRACE(spdlog::get("game"), "The temple has too few points to hang its leashes at");
+	}
+	return at;
+}
+
+void LeashSystem::HangPostsAtPoints(entt::entity temple, const std::array<glm::vec3, 3>& points)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto owner = registry.Get<const Temple>(temple).owner;
+	// A game saved before the posts kept their temple has the posts of the temple at its points, with no link
+	bool unlinkedAtPoints = false;
+	registry.Each<LeashPost>([&unlinkedAtPoints, &points, temple, owner](LeashPost& post) {
+		if (post.temple != entt::null || post.owner != owner || std::ranges::none_of(points, [&post](const glm::vec3& point) {
+			    return temple_leashes::HangsAt(post.point, point);
+		    }))
 		{
-			HangPosts(entry.owner, entry.points, entry.temple);
+			return;
 		}
+		post.temple = temple;
+		unlinkedAtPoints = true;
+	});
+	if (temple_leashes::SetFor(false, unlinkedAtPoints) == temple_leashes::TempleSet::Makes)
+	{
+		HangPosts(owner, points, temple);
 	}
 }
 
@@ -1976,8 +2027,8 @@ void LeashSystem::BeginTurn()
 {
 	// The leashes on a temple go with it, by any path: its destruction, the editor, or the load of a game
 	RemovePostsOfGoneTemples();
-	// Each temple hangs its own leashes as it comes into being: at the start of the land, from the editor, from an
-	// undo of a removal, or from a script. A loaded world keeps the posts that its temples got.
+	// Each temple hangs its own leashes as it comes into being. A temple that got no leashes then hangs them here. A
+	// loaded world keeps the posts that its temples got.
 	PlacePostsAtTemples();
 }
 

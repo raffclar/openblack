@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -73,6 +74,9 @@ struct Player
 	/// A script made the things the player's hand throws fly without the air's drag
 	uint32_t windResistance {0};
 	Miracles miracles;
+	/// The player's own temple: the temple that the player got last. When this temple goes, the player has no own temple
+	/// until the player gets a new temple, also when an older temple stands. Only this temple picks the leash that goes on.
+	entt::entity temple {entt::null};
 
 	/// Each player's colour, 0xAARRGGBB, by player number; the neutral player's is black
 	static constexpr std::array<uint32_t, 8> k_Colours = {
