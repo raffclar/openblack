@@ -9,6 +9,8 @@
 
 #include "CreatureNames.h"
 
+#include "Gui/TextDatabase.h"
+
 using namespace openblack;
 
 std::u16string creature_names::NewName(Owner owner, size_t creatures, std::optional<std::u16string_view> profileCreatureName,
@@ -19,4 +21,9 @@ std::u16string creature_names::NewName(Owner owner, size_t creatures, std::optio
 		return std::u16string(profileCreatureName.value_or(std::u16string_view {}));
 	}
 	return helpWords(StrayNameText(creatures));
+}
+
+std::u16string creature_names::FitName(std::u16string_view name)
+{
+	return gui::CutText(name, k_LongestName);
 }

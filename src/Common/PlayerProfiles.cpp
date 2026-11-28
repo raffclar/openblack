@@ -276,12 +276,17 @@ const Profile* Find(const Profiles& profiles, std::u16string_view name)
 	return found != profiles.profiles.end() ? &*found : nullptr;
 }
 
+std::u16string FitName(std::u16string_view name)
+{
+	return gui::CutText(name, k_LongestName);
+}
+
 const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_view accountName, std::string_view creatureFile,
                    int symbol)
 {
-	const auto given = !name.empty()          ? std::u16string(name)
-	                   : !accountName.empty() ? std::u16string(accountName)
-	                                          : gui::ToUtf16(k_UnnamedPlayer);
+	const auto given = FitName(!name.empty()          ? std::u16string(name)
+	                           : !accountName.empty() ? std::u16string(accountName)
+	                                                  : gui::ToUtf16(k_UnnamedPlayer));
 	const auto* found = Find(profiles, given);
 	if (found == nullptr)
 	{
@@ -376,6 +381,21 @@ std::string Write(const Profiles& profiles)
 	return text;
 }
 
+namespace
+{
+/// A name of the profiles file cut by FitName. A name that is short enough stays as the file has it.
+std::string FitNameText(std::string_view text)
+{
+	// A UTF-8 text never has more 16-bit characters than bytes
+	if (text.size() <= k_LongestName)
+	{
+		return std::string(text);
+	}
+	const auto name = gui::ToUtf16(text);
+	return name.size() <= k_LongestName ? std::string(text) : gui::ToUtf8(FitName(name));
+}
+} // namespace
+
 Profiles Read(std::string_view text)
 {
 	Profiles profiles;
@@ -391,12 +411,12 @@ Profiles Read(std::string_view text)
 		const auto key = NextField(line);
 		if (key == k_CurrentKey)
 		{
-			profiles.current = std::string(line);
+			profiles.current = FitNameText(line);
 			continue;
 		}
 		if (key == k_SettingKey)
 		{
-			const auto owner = NextField(line);
+			const auto owner = FitNameText(NextField(line));
 			const auto name = NextField(line);
 			const auto field = std::ranges::find(k_SettingFields, name, &SettingField::name);
 			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
@@ -413,7 +433,7 @@ Profiles Read(std::string_view text)
 		}
 		if (key == k_AlignmentKey)
 		{
-			const auto owner = NextField(line);
+			const auto owner = FitNameText(NextField(line));
 			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
 			// A value that can't be read leaves the profile neither good nor evil
 			if (profile != profiles.profiles.end())
@@ -424,7 +444,7 @@ Profiles Read(std::string_view text)
 		}
 		if (key == k_StatisticsKey)
 		{
-			const auto owner = NextField(line);
+			const auto owner = FitNameText(NextField(line));
 			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
 			// The counts are taken only when all three can be read
 			Statistics statistics;
@@ -439,7 +459,7 @@ Profiles Read(std::string_view text)
 		}
 		if (key == k_AutosavesKey)
 		{
-			const auto owner = NextField(line);
+			const auto owner = FitNameText(NextField(line));
 			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
 			// The count is taken only when the land and the count can both be read
 			uint32_t land = 0;
@@ -453,7 +473,7 @@ Profiles Read(std::string_view text)
 		}
 		if (key == k_KeysKey)
 		{
-			const auto owner = NextField(line);
+			const auto owner = FitNameText(NextField(line));
 			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
 			// A binding is taken only when its row and its three values can all be read
 			uint32_t row = 0;
@@ -481,7 +501,7 @@ Profiles Read(std::string_view text)
 		{
 			continue;
 		}
-		profiles.profiles.push_back({.name = std::string(name),
+		profiles.profiles.push_back({.name = FitNameText(name),
 		                             .creatureFile = std::string(file),
 		                             .creatureName = std::string(line),
 		                             .symbol = symbol,

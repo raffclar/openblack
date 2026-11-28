@@ -121,6 +121,9 @@ constexpr int k_SymbolCount = 16;
 constexpr size_t k_NameBoxLength = 29;
 /// A name longer than this is turned down
 constexpr size_t k_LongestName = 64;
+/// The name cut to k_LongestName characters, less the first half of a character pair that the cut divides. The name
+/// of the computer's account and a name in a profiles file that someone changed can be longer than a typed name.
+[[nodiscard]] std::u16string FitName(std::u16string_view name);
 /// The name a profile made without one takes when the computer's account has no name either
 constexpr std::string_view k_UnnamedPlayer = "Player";
 
@@ -161,9 +164,9 @@ constexpr size_t k_LongestKey = 252;
 [[nodiscard]] const Profile* Current(const Profiles& profiles);
 /// The profile of a name, if one is kept
 [[nodiscard]] const Profile* Find(const Profiles& profiles, std::u16string_view name);
-/// Makes a profile: an empty name is the account's (or k_UnnamedPlayer); a name already kept is used as it is, else a
-/// new profile is made with the creature file, the player's name for its creature and the symbol. The first profile
-/// becomes the one played. The profile of that name
+/// Makes a profile: an empty name is the account's (or k_UnnamedPlayer), and FitName cuts the name; a name already kept
+/// is used as it is, else a new profile is made with the creature file, the player's name for its creature and the
+/// symbol. The first profile becomes the one played. The profile of that name
 const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_view accountName, std::string_view creatureFile,
                    int symbol);
 
@@ -184,7 +187,7 @@ void Edit(Profile& profile, std::u16string_view creatureName, int symbol);
 /// profile's name, the seconds played, the saves and the loads; all separated by tabs (no name can hold a tab)
 [[nodiscard]] std::string Write(const Profiles& profiles);
 /// The profiles read back, in the list's order; lines that aren't understood are passed over, and settings not kept
-/// are the game's own
+/// are the game's own. FitName cuts each name of a profile.
 [[nodiscard]] Profiles Read(std::string_view text);
 
 /// Where the profiles and their creatures are kept for a run
