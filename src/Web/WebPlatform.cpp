@@ -90,7 +90,13 @@ EM_ASYNC_JS(void, openblack_wait_for_display_frame, (), {
 // The render thread gives control back to the browser for one task. The browser then shows the frame that the canvas
 // has. A message on a channel does not wait for a display frame or for the minimum time of a timer. The thread keeps
 // the count of display frames of the page at this time (see openblack_wait_for_next_display_frame).
+// Each call adds one to the count of render frames in a shared array. The page compares this count with its display
+// frames at the start of the game (web/page/launcher.js).
 EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
+	const renderFrames = globalThis.openblackWeb && globalThis.openblackWeb.renderFrames;
+	if (renderFrames) {
+		Atomics.add(renderFrames, 0, 1);
+	}
 	if (!globalThis.openblackYieldChannel) {
 		globalThis.openblackYieldChannel = new MessageChannel();
 	}
@@ -375,6 +381,11 @@ int openblack::web::RunFrames(const std::function<bool()>& frame, const std::fun
 		openblack_wait_for_display_frame();
 	}
 	return end();
+}
+
+void openblack::web::WaitForDisplayFrame()
+{
+	openblack_wait_for_display_frame();
 }
 
 bool openblack::web::StartRenderThread()

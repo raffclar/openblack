@@ -582,6 +582,41 @@ function watchGameFrames(gameFrames, displayFrames) {
   }, k_GameStallCheckMs);
 }
 
+// The seconds of the start of the game that the page compares the render frames with the display frames
+const k_StartupFrameSeconds = 20;
+
+/**
+ * Writes one line to the game log after the first k_StartupFrameSeconds seconds of render frames: the render frames and
+ * the display frames of the page in each second, and when the page first showed the game canvas. A browser keeps the
+ * canvas texture of each render frame until its compositor shows it, thus more render frames than shown frames fill
+ * the graphics memory. The line helps to find such a start in a browser that the tests cannot run.
+ */
+function watchStartupFrames(renderFrames, displayFrames) {
+  const gameStartedAt = performance.now();
+  const seconds = [];
+  let renderStartedAt = null;
+  let lastRender = 0;
+  let lastDisplay = 0;
+  const timer = setInterval(() => {
+    const render = Atomics.load(renderFrames, 0);
+    const display = Atomics.load(displayFrames, 0);
+    if (renderStartedAt === null && render > 0) {
+      renderStartedAt = performance.now();
+    } else if (renderStartedAt !== null) {
+      seconds.push(`${render - lastRender}/${display - lastDisplay}`);
+    }
+    lastRender = render;
+    lastDisplay = display;
+    if (seconds.length < k_StartupFrameSeconds) {
+      return;
+    }
+    clearInterval(timer);
+    const since = (time) => (time === null ? 'never' : `at ${Math.round(time - gameStartedAt)} ms`);
+    pageLog(`Start-up frames (render/display frames in each second): ${seconds.join(' ')}. The page saw the first ` +
+      `render frames ${since(renderStartedAt)}, and it showed the game canvas ${since(canvasShownAt)}.`);
+  }, 1000);
+}
+
 // The game stopped on an error of the browser: the page keeps one report, then shows the reports
 let pageCrashKept = false;
 async function gameFailed(reason, error) {
@@ -861,8 +896,13 @@ let cloudSaves = null;
 // screen, it does not give control back, so it sends each frame as an image, and the screen canvas shows it. The game
 // canvas stays on top of the screen canvas, and takes the mouse and the keys. Without a picture it is not visible.
 let screenContext = null;
+// The time when the page first showed the game canvas
+let canvasShownAt = null;
 function setPresent(present) {
   element('game').classList.toggle('canvas-present', present === 'canvas');
+  if (present === 'canvas') {
+    canvasShownAt ??= performance.now();
+  }
 }
 
 function showFrame(frame) {
@@ -1272,6 +1312,9 @@ async function start(online = false) {
   // shows its display frames does not answer. The page then tells the player, so that the page does not only stop.
   const gameFrames = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
   watchGameFrames(gameFrames, displayFrames);
+  // The render thread counts the frames that it gives to the canvas in a shared array
+  const renderFrames = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  watchStartupFrames(renderFrames, displayFrames);
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
@@ -1280,7 +1323,7 @@ async function start(online = false) {
     onRuntimeInitialized: () => beginAssetPhases(),
     openblackWeb: {
       folder: gameFolder(list), storage, version: version.file, showFrame, setPresent, requests, displayFrames, gameFrames,
-      obtainGameFile: siteFiles ? obtainGameFile : undefined, noteGameRead,
+      renderFrames, obtainGameFile: siteFiles ? obtainGameFile : undefined, noteGameRead,
     },
     onExit: (code) => {
       log(`The game stopped with the code ${code}.`);

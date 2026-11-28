@@ -183,6 +183,24 @@ private:
 	uint32_t _last;
 };
 
+/// What one frame of the logo stills shows: the still, its alpha and the size of the window
+struct LogoFrame
+{
+	int32_t still {0};
+	uint8_t alpha {0};
+	uint16_t width {0};
+	uint16_t height {0};
+
+	[[nodiscard]] constexpr bool operator==(const LogoFrame&) const noexcept = default;
+};
+
+/// Whether the next frame of the logo stills needs a new picture. A frame that shows the same still, with the same alpha,
+/// in a window of the same size, shows the same picture as the last frame that the game drew.
+[[nodiscard]] constexpr bool LogoNeedsNewPicture(const std::optional<LogoFrame>& drawn, const LogoFrame& next) noexcept
+{
+	return drawn != next;
+}
+
 /// Developer tools: gives true when the tips screen at full fade is due a picture. The picture is of the first frame at full
 /// fade, and the game takes it one time.
 [[nodiscard]] constexpr bool TipPictureDue(bool requested, bool taken, float fade) noexcept
