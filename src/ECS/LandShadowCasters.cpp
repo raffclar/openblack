@@ -227,6 +227,11 @@ bool LandShadowChangesInPlace(const Registry& registry, entt::entity entity)
 	return registry.AnyOf<Abode, BuildProgress>(entity);
 }
 
+std::array<const entt::sparse_set*, 2> LandShadowInPlaceStores(const Registry& registry)
+{
+	return {registry.Underlying().storage<Abode>(), registry.Underlying().storage<BuildProgress>()};
+}
+
 uint64_t LandShadowCastersVersion(Registry& registry)
 {
 	auto& context = registry.Underlying().ctx();

@@ -68,6 +68,10 @@ private:
 /// shadow starts when its building ends, and an abode's shadow also depends on its type
 [[nodiscard]] bool LandShadowChangesInPlace(const Registry& registry, entt::entity entity);
 
+/// The stores of the components that make LandShadowChangesInPlace true. A thing in one of them is a thing whose shadow
+/// can change in place. A store is null while the registry has no component of its kind.
+[[nodiscard]] std::array<const entt::sparse_set*, 2> LandShadowInPlaceStores(const Registry& registry);
+
 /// A count that increases each time a thing with a mesh and a transform gets or loses a component that its land shadow
 /// depends on. While the count stays the same, the things that can cast into the land stay the same, and the shadow of
 /// each can change only with its transform, its mesh, its map cells, or (see LandShadowChangesInPlace) its state.
