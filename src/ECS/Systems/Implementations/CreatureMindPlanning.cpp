@@ -1218,15 +1218,17 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	                        ? chosen.activityObject
 	                        : mind_detail::LessonActivity(*tables, plan.desire, plan.object, plan.about);
 	auto built = PlanAgenda(creature, plan.action, plan.object, situated);
-	if (!built.has_value())
+	if (!built.has_value() || built->second.empty())
 	{
 		// What it does stops as a failure before the agenda is made, so it also stops when the agenda cannot be made. The
-		// creature then has no plan and decides again; the stored plan of the desire stays.
+		// creature keeps the new plan with no agenda: the next stop makes its action new. The turn with no agenda gives
+		// the plan a priority of 0, so the creature decides again. The stored plan of the desire stays.
 		if (Locator::entitiesRegistry::value().AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 		{
 			StopFightForPlan(creature, fightBodyEndsAgain);
 		}
 		StopForUnbuiltPlan(creature);
+		mind.planner.current = chosen;
 		return false;
 	}
 	auto& [executor, agenda] = *built;
@@ -1478,7 +1480,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.plannedTurn = mind.turn;
-	// Before the creature decides for itself, it stops a reaction when no agenda runs
 	const auto decisionState = [&registry, &mind, creature]() {
 		const auto* reaction = registry.TryGet<const LivingReaction>(creature);
 		const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
@@ -1489,6 +1490,13 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		    .fainted = needs != nullptr && needs->fainted,
 		};
 	};
+	// When no plan runs, the plan that it keeps with no agenda is not forced and does not count at its end
+	if (!only.has_value() && !mind.planActive && !decisionState().planRuns)
+	{
+		mind.planForced = false;
+		mind.forcedPlanCounts = false;
+	}
+	// Before the creature decides for itself, it stops a reaction when no agenda runs
 	if (!only.has_value() && creature_turn_order::StopsReactionBeforeDecision(decisionState()))
 	{
 		EndReaction(creature);

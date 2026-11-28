@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureActionHistory.h"
+#include "Creature/CreaturePlanner.h"
 
 using namespace openblack;
 using namespace openblack::creature_action_history;
@@ -62,4 +63,19 @@ TEST(CreatureActionHistory, APlanKeptWithNoAgendaIsNewWhenItStopsAndNoOtherActio
 	std::vector<uint32_t> turns {7, 7, 7, 7};
 	PlanEnded(turns, 2, {}, 0);
 	EXPECT_EQ(turns, (std::vector<uint32_t> {7, 7, 0, 7}));
+}
+
+TEST(CreatureActionHistory, EachStopWithNoPlanMakesTheLastPlanNewAgain)
+{
+	// The creature stopped its last plan, and no plan runs or stays now. A stop still makes the action of the last plan
+	// new, and no other action gets older.
+	creature_planner::PlannerState planner;
+	planner.lastAction = 2;
+	std::vector<uint32_t> turns {7, 7, 9, 7};
+	PlanEnded(turns, creature_planner::ActionInView(planner), {}, 0);
+	EXPECT_EQ(turns, (std::vector<uint32_t> {7, 7, 0, 7}));
+	// A plan that it keeps with no agenda is the action in view
+	planner.current = creature_planner::Plan {.action = 3};
+	PlanEnded(turns, creature_planner::ActionInView(planner), {}, 0);
+	EXPECT_EQ(turns, (std::vector<uint32_t> {7, 7, 0, 0}));
 }

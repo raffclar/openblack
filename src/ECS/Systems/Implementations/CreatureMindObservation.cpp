@@ -500,15 +500,17 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 	                    entt::to_integral(creature), action.name, entt::to_integral(gift),
 	                    chosen == creature_giving::KeptPlanUse::ActOn ? "to act on" : "to use");
 	const bool actsOnGift = chosen == creature_giving::KeptPlanUse::ActOn;
-	return ForceActivity(creature, {
-	                                   .desire = kept->desire,
-	                                   .activityObject = toEntity(whole),
-	                                   .action = action.name,
-	                                   .actionObject = actsOnGift ? gift : static_cast<entt::entity>(*kept->object),
-	                                   .instrument = actsOnGift ? toEntity(kept->instrument) : std::optional(gift),
-	                                   .ordered = true,
-	                                   .fightBodyEndsAgain = true,
-	                               });
+	// The kept plan takes the gift also when its action makes no steps. Then the creature does nothing else with it.
+	static_cast<void>(ForceActivity(creature, {
+	                                              .desire = kept->desire,
+	                                              .activityObject = toEntity(whole),
+	                                              .action = action.name,
+	                                              .actionObject = actsOnGift ? gift : static_cast<entt::entity>(*kept->object),
+	                                              .instrument = actsOnGift ? toEntity(kept->instrument) : std::optional(gift),
+	                                              .ordered = true,
+	                                              .fightBodyEndsAgain = true,
+	                                          }));
+	return true;
 }
 
 void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState& mind)

@@ -15,8 +15,6 @@
 #include <spdlog/spdlog.h>
 
 #include "Creature/CreatureMindTables.h"
-#include "Creature/CreaturePlanActions.h"
-#include "Creature/CreaturePlanner.h"
 #include "CreatureBodyBusy.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
@@ -140,7 +138,9 @@ bool CreatureMindSystem::DoForScript(entt::entity creature, std::string_view nam
 		return true;
 	}
 	// The order of the script is not a forced plan. When the script lets the creature go, it can take up reactions while
-	// it does the order
+	// it does the order. An order whose action makes no steps stops what the creature did, and the creature keeps the
+	// order as its plan with no agenda. For example, an eat from a pile makes no steps while the creature holds food that
+	// it can eat: it keeps what it holds and does not eat it. Under the control of the script it stands still.
 	if (!ForcePlan(creature, {.desire = Desire::ObeyPlayer,
 	                          .action = name,
 	                          .object = target,
@@ -148,32 +148,15 @@ bool CreatureMindSystem::DoForScript(entt::entity creature, std::string_view nam
 	                          .ordered = true,
 	                          .forced = false}))
 	{
-		return KeepOrderWithNoSteps(creature, name, target);
-	}
-	// The order of a script counts at the end of the plan, as the creature's own plans do
-	mind.forcedPlanCounts = true;
-	// When it falls dead, the faint step itself makes the reaction to the death. The order makes no other reaction.
-	return true;
-}
-
-bool CreatureMindSystem::KeepOrderWithNoSteps(entt::entity creature, std::string_view name, entt::entity target)
-{
-	// The order stops what the creature did as a failure, also when its action makes no steps. For example, an eat from
-	// a pile makes no steps while the creature holds food that it can eat. The creature keeps what it holds and does not
-	// eat it.
-	StopForUnbuiltPlan(creature);
-	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
-	const auto* tables = GetTables();
-	const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, name) : std::nullopt;
-	if (mind == nullptr || !action.has_value())
-	{
 		return false;
 	}
-	// It keeps the order as its plan, with no agenda. Under the control of the script it stands still. When the script
-	// lets it go, it chooses a new plan one turn later.
-	mind->planner.current = creature_planner::OrderWithNoSteps(*action, entt::to_integral(target));
-	// An action that openblack's creatures cannot do yet is not an action with no steps
-	return creature_plan_actions::For(name) != nullptr;
+	// The order of a script counts at the end of the plan, as the creature's own plans do
+	if (mind.planActive)
+	{
+		mind.forcedPlanCounts = true;
+	}
+	// When it falls dead, the faint step itself makes the reaction to the death. The order makes no other reaction.
+	return true;
 }
 
 void CreatureMindSystem::StopForScript(entt::entity creature)
