@@ -222,6 +222,9 @@ public:
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn. They
 	/// replace the player's old posts at points of their own. The posts on the temples stay.
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;
+	/// A new temple hangs its three leash posts at once, as its heart does when it is made. A temple that has posts, or
+	/// whose mesh does not have the points to hang them at, gets none.
+	virtual void HangPostsOf([[maybe_unused]] entt::entity temple) {}
 	/// A player taps one of their leash posts: it picks that leash, or unpicks it when tapped again, and swaps the worn
 	/// leash for it. The tap of a player on the post of another player does nothing.
 	virtual bool TapPost(PlayerNames player, entt::entity post) = 0;

@@ -41,6 +41,9 @@ void openblack::ecs::reflection::RegisterFields_Values_creatureo(entt::meta_ctx&
 	    .Field<&openblack::creature_object_beliefs::BeliefPool::slots>("slots")
 	    .Field<&openblack::creature_object_beliefs::BeliefPool::used>("used")
 	    .Field<&openblack::creature_object_beliefs::BeliefPool::oldest>("oldest");
+	Reflect<openblack::creature_object_beliefs::IndexEntry>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_beliefs::IndexEntry::thing>("thing")
+	    .Field<&openblack::creature_object_beliefs::IndexEntry::place>("place");
 	Reflect<openblack::creature_object_beliefs::StoreContents>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_beliefs::StoreContents::pools>("pools")
 	    .Field<&openblack::creature_object_beliefs::StoreContents::index>("index")

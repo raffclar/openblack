@@ -86,6 +86,42 @@ class MakeTiersTest(unittest.TestCase):
         self.assertEqual(tiers["lands"], {"land2": ["data/landscape/land2.lnd", "data/landscape/land2.fot"]})
         self.assertEqual(files["data/landscape/land2.lnd"], {"phase": 5, "order": 0})
 
+    def test_only_music_banks_get_blocks(self):
+        start = trace("land1", [
+            ("Audio/Dialogue/SpellDialogue.sad", 3 * BLOCK, 0, 2, 1.0),
+            ("Audio/Dialogue/SpellDialogue.sad", 3 * BLOCK, 1, 3, 2.0),
+            ("Audio/SFX/Creature/BApe.sad", 3 * BLOCK, 0, 2, 3.0),
+            ("Audio/Music/Align/Good.sad", 3 * BLOCK, 0, 2, 4.0),
+            ("Audio/Music/Align/Good.sad", 3 * BLOCK, 2, 2, 5.0),
+        ])
+        out = self.root / "asset-tiers.json"
+        files = json.loads(make_tiers.build(out, [self.write("traces/a.json", start)], []))["files"]
+        # The dialogue and the sound effects come whole in the first phase in which the game reads them
+        self.assertEqual(files["audio/dialogue/spelldialogue.sad"], {"phase": 2, "order": 0})
+        self.assertEqual(files["audio/sfx/creature/bape.sad"], {"phase": 2, "order": 1})
+        self.assertEqual(files["audio/music/align/good.sad"],
+                         {"phase": 2, "order": 2, "blocks": [[2, 0, 1], [2, 2, 1]]})
+
+    def test_film_music_comes_before_its_film(self):
+        start = trace("land1", [
+            ("Data/logo.bik", 10, 0, 0, 1.0),
+            ("Data/pre_intro.bik", 2 * BLOCK, 0, 1, 100.0),
+            ("Data/pre_intro.bik", 2 * BLOCK, 1, 1, 100.1),
+            ("Audio/Music/Intro/trailer.sad", 10, 0, 1, 133.0),
+            ("Data/tips.bik", 10, 0, 2, 5000.0),
+            # The music that starts more than FILM_MUSIC_MS after a film is not the music of the film
+            ("Audio/Music/Intro/intro.sad", 10, 0, 2, 5000.0 + make_tiers.FILM_MUSIC_MS + 1),
+            # A film of another phase does not move the music
+            ("Audio/Music/Late.sad", 10, 0, 3, 5000.5),
+        ])
+        out = self.root / "asset-tiers.json"
+        files = json.loads(make_tiers.build(out, [self.write("traces/a.json", start)], []))["files"]
+        self.assertEqual(files["audio/music/intro/trailer.sad"], {"phase": 1, "order": 0})
+        self.assertEqual(files["data/pre_intro.bik"], {"phase": 1, "order": 1})
+        self.assertEqual(files["data/tips.bik"], {"phase": 2, "order": 0})
+        self.assertEqual(files["audio/music/intro/intro.sad"], {"phase": 2, "order": 1})
+        self.assertEqual(files["audio/music/late.sad"], {"phase": 3, "order": 0})
+
     def test_check_finds_a_stale_file(self):
         out = self.root / "asset-tiers.json"
         start = self.write("traces/a.json", trace("land1", [("Data/a.txt", 10, 0, 0, 1.0)]))

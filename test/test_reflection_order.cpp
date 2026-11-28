@@ -220,6 +220,16 @@ TEST(ReflectionOrder, TheBeliefsOfACreatureSaveTheSameBytesThroughTheVisitorAsTh
 	ExpectVisitedSaveIsTheFieldSave(context, beliefs::BeliefPool {});
 	ExpectVisitedSaveIsTheFieldSave(context, contents);
 	ExpectVisitedSaveIsTheFieldSave(context, beliefs::StoreContents {});
+	ExpectVisitedSaveIsTheFieldSave(context, beliefs::IndexEntry {.thing = entt::entity {42}, .place = beliefPlace});
+
+	// The index of the contents writes the same bytes as a map from each thing to its place
+	const std::map<entt::entity, beliefs::BeliefPlace> asMap {{entt::entity {5}, {.kind = 2, .slot = 0}},
+	                                                          {entt::entity {42}, beliefPlace}};
+	BinaryWriter mapBytes(context);
+	Save(mapBytes, asMap);
+	BinaryWriter indexBytes(context);
+	Save(indexBytes, contents.index);
+	EXPECT_EQ(mapBytes.Bytes(), indexBytes.Bytes());
 }
 
 namespace

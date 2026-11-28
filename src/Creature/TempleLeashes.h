@@ -152,8 +152,8 @@ enum class TempleState : uint8_t
 	return temple == TempleState::Gone;
 }
 
-/// What a temple does about its leashes at the start of a turn. Each temple makes its own three leashes as it comes
-/// into being, by all paths: the land, the editor, an undo of a removal, or a script.
+/// What a temple does about its leashes when it hangs them. Each temple makes its own three leashes as it comes into
+/// being, by all paths: the land, a script, or the construction of a temple.
 enum class TempleSet : uint8_t
 {
 	/// The temple has its leashes
@@ -171,6 +171,13 @@ enum class TempleSet : uint8_t
 		return TempleSet::Has;
 	}
 	return unlinkedAtItsPoints ? TempleSet::TakesUnlinked : TempleSet::Makes;
+}
+
+/// Whether a leash takes the pick of the leash that goes on. Only the leashes on the player's own temple take it: the
+/// temple that the player got last, while it stands. A leash at points of its own takes it too.
+[[nodiscard]] constexpr bool TakesPick(bool onTemple, bool onOwnTemple)
+{
+	return !onTemple || onOwnTemple;
 }
 
 /// The three points on a temple that its leashes hang at, in the world: the first three extra points of the temple's

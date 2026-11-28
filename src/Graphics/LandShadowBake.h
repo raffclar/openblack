@@ -164,11 +164,12 @@ private:
 		size_t index;
 	};
 
-	/// A copy of a caster, as it was when its bake started
+	/// A copy of a caster, as it was when its bake started. Its cells are in the cells of the job.
 	struct BakeCaster
 	{
 		ecs::LandShadow shadow;
-		std::vector<uint32_t> cells;
+		uint32_t firstCell {0};
+		uint32_t cellCount {0};
 		ecs::components::Transform transform;
 		std::span<const LeafTriangle> leaves;
 		std::span<const ShapeTriangle> shape;
@@ -187,6 +188,8 @@ private:
 	{
 		std::vector<BakeBlock> blocks;
 		std::vector<BakeCaster> casters;
+		/// The cells of all the casters, one after the other, so that the job makes no list for each caster
+		std::vector<uint32_t> cells;
 		bool rowsFromFarEnd {false};
 		/// The texels along a side of a block: those of the land blocks' textures
 		int side {tree_shadows::k_BlockTexels};
@@ -210,9 +213,15 @@ private:
 	struct WatchedStores;
 	/// The watched things that changed what their shadows depend on since the last look at the casters: the casters
 	/// and the things that can start to cast. It reads only the given stores, thus a side thread can do the test while
-	/// the game's thread adds stores to the registry. When casters can be gone, a watched thing that lost its transform,
-	/// its mesh or its map cells changed.
-	[[nodiscard]] std::vector<WatchedChange> FindWatchedChanges(const WatchedStores& stores, bool castersCanBeGone) const;
+	/// the game's thread adds stores to the registry. With the marked things, it tests only the casters of the marked
+	/// entity numbers and the casters whose shadows can change in place; with none, it tests all the casters. When
+	/// casters can be gone, a watched thing that lost its transform, its mesh or its map cells changed.
+	[[nodiscard]] std::vector<WatchedChange> FindWatchedChanges(const WatchedStores& stores,
+	                                                            const std::optional<std::vector<uint32_t>>& marked,
+	                                                            bool castersCanBeGone) const;
+	/// The numbers of the things that the registry marked since the last take, none when the test must look at all the
+	/// casters. Call it on the game's thread.
+	[[nodiscard]] std::optional<std::vector<uint32_t>> TakeMarkedThings();
 	/// Waits for the test that StartWatchedTest started, and gives its answer. No test: no answer.
 	[[nodiscard]] std::optional<std::vector<WatchedChange>> TakeWatchedTest();
 	/// Looks at all the things that can cast, after a caster came or went, and marks the blocks whose shadows changed
@@ -274,6 +283,10 @@ private:
 	/// The answer of the test of the watched things that runs on the side thread
 	std::optional<std::vector<WatchedChange>> _watchedAnswer;
 	bool _watchedTestStarted {false};
+	/// The next test looks at all the casters: before the first look, and after a test whose answer no update used
+	bool _testAllCasters {true};
+	/// The registry whose marks the test took last
+	const ecs::Registry* _markedRegistry {nullptr};
 	/// The lanes that share the test of the watched things when there are many casters
 	std::unique_ptr<WorkerPool> _testWorkers;
 	/// The last member, so that its thread stops before the other members go

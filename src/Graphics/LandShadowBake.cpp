@@ -72,12 +72,15 @@ struct LandShadowBake::WatchedStores
 	    : transforms(registry.Underlying().storage<Transform>())
 	    , meshes(registry.Underlying().storage<MeshComponent>())
 	    , residents(registry.Underlying().storage<MapCellResident>())
+	    , inPlace(ecs::LandShadowInPlaceStores(registry))
 	    , shadows(registry)
 	{
 	}
 	const entt::storage_for_t<Transform>* transforms;
 	const entt::storage_for_t<MeshComponent>* meshes;
 	const entt::storage_for_t<MapCellResident>* residents;
+	/// The things whose shadows can change in place
+	std::array<const entt::sparse_set*, 2> inPlace;
 	ecs::LandShadowLookup shadows;
 };
 
@@ -488,6 +491,11 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	// The answer of the test that started before this update, when there is one. Nothing changed the world or the
 	// watched things after the test started.
 	auto testedAhead = TakeWatchedTest();
+	if (testedAhead.has_value())
+	{
+		// The marks that the test took are lost until the update uses its answer
+		_testAllCasters = true;
+	}
 	if (!Locator::terrainSystem::has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return;
@@ -543,8 +551,9 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	}
 	if (!_bakeAll && _castersVersion.has_value() && (castersSame || cameOrWent.has_value()))
 	{
-		const auto watched =
-		    testedAhead.has_value() ? std::move(*testedAhead) : FindWatchedChanges(WatchedStores(registry), !castersSame);
+		const auto watched = testedAhead.has_value()
+		                         ? std::move(*testedAhead)
+		                         : FindWatchedChanges(WatchedStores(registry), TakeMarkedThings(), !castersSame);
 		auto changed = cameOrWent.has_value() ? std::move(*cameOrWent) : std::vector<entt::entity> {};
 		std::ranges::transform(watched, std::back_inserter(changed), [this](const WatchedChange& change) {
 			return change.caster ? _baked.at(change.index).entity : _mayCast.at(change.index).entity;
@@ -565,6 +574,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		std::ranges::sort(changed);
 		const auto [repeatsFirst, repeatsLast] = std::ranges::unique(changed);
 		changed.erase(repeatsFirst, repeatsLast);
+		_testAllCasters = false;
 		if (changed.empty() && _dirty.empty())
 		{
 			return;
@@ -573,9 +583,11 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	}
 	else
 	{
+		// The look at all the casters keeps each caster as it is now. A later write marks the thing again.
 		LookAtAllCasters(casters);
 		_castersVersion = castersVersion;
 		_meshCount = meshCount;
+		_testAllCasters = false;
 	}
 
 	// A bake on the other threads that is still running holds back the next one: the blocks changed since then wait
@@ -626,7 +638,10 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	std::ranges::transform(job.blocks, std::back_inserter(baking), &BakeBlock::position);
 	std::ranges::sort(baking, [](glm::ivec2 a, glm::ivec2 b) { return a.x != b.x ? a.x < b.x : a.y < b.y; });
 	// Only the casters whose shadows fall into the blocks to bake go into the job, in the order of the casters
-	for (const auto entity : _casterBlocks.CastingInto(baking))
+	const auto castingInto = _casterBlocks.CastingInto(baking);
+	job.casters.reserve(castingInto.size());
+	job.cells.reserve(castingInto.size());
+	for (const auto entity : castingInto)
 	{
 		auto* found = FindBaked(entity);
 		assert(found != nullptr);
@@ -634,9 +649,11 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		const auto shadow = static_cast<LandShadow>(kept.from.shadow);
 		auto& baked = job.casters.emplace_back(BakeCaster {
 		    .shadow = shadow,
-		    .cells = kept.cells,
+		    .firstCell = static_cast<uint32_t>(job.cells.size()),
+		    .cellCount = static_cast<uint32_t>(kept.cells.size()),
 		    .transform = kept.transform,
 		});
+		job.cells.insert(job.cells.end(), kept.cells.begin(), kept.cells.end());
 		if (shadow == LandShadow::Leaves)
 		{
 			baked.leaves = LeavesOf(kept.from.mesh);
@@ -886,8 +903,9 @@ void LandShadowBake::FindBakedPlaces()
 	}
 }
 
-std::vector<LandShadowBake::WatchedChange> LandShadowBake::FindWatchedChanges(const WatchedStores& stores,
-                                                                              bool castersCanBeGone) const
+std::vector<LandShadowBake::WatchedChange>
+LandShadowBake::FindWatchedChanges(const WatchedStores& stores, const std::optional<std::vector<uint32_t>>& marked,
+                                   bool castersCanBeGone) const
 {
 	std::vector<WatchedChange> changes;
 	const auto* transforms = stores.transforms;
@@ -899,46 +917,80 @@ std::vector<LandShadowBake::WatchedChange> LandShadowBake::FindWatchedChanges(co
 		return changes;
 	}
 	const auto& shadows = stores.shadows;
-	const auto findChangedCasters = [&](size_t from, size_t to, std::vector<WatchedChange>& found) {
-		for (size_t i = from; i < to; ++i)
+	const auto casterChanged = [&](const Baked& caster) {
+		if (castersCanBeGone && (!transforms->contains(caster.entity) || !meshes->contains(caster.entity) ||
+		                         (caster.filed && !residents->contains(caster.entity))))
 		{
-			const auto& caster = _baked[i];
-			if (castersCanBeGone && (!transforms->contains(caster.entity) || !meshes->contains(caster.entity) ||
-			                         (caster.filed && !residents->contains(caster.entity))))
+			return true;
+		}
+		return (caster.shadowChangesInPlace && static_cast<uint32_t>(shadows.Of(caster.entity)) != caster.from.shadow) ||
+		       !same_bits::SameBits(transforms->get(caster.entity), caster.transform) ||
+		       meshes->get(caster.entity).id != caster.from.mesh ||
+		       (caster.filed && !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells));
+	};
+	if (marked.has_value())
+	{
+		// The registry marks each write of a caster's transform, mesh and map cells, and each loss of them. Thus only the
+		// marked things and the things whose shadows can change in place can be changed casters.
+		const auto testNumber = [&](uint32_t number) {
+			if (number >= _bakedPlaces.size())
 			{
-				found.push_back({.caster = true, .index = i});
+				return;
+			}
+			const auto place = _bakedPlaces[number];
+			if (place >= _baked.size() || entt::to_entity(_baked[place].entity) != number)
+			{
+				return;
+			}
+			if (casterChanged(_baked[place]))
+			{
+				changes.push_back({.caster = true, .index = place});
+			}
+		};
+		std::ranges::for_each(*marked, testNumber);
+		for (const auto* store : stores.inPlace)
+		{
+			if (store == nullptr)
+			{
 				continue;
 			}
-			const bool changed =
-			    (caster.shadowChangesInPlace && static_cast<uint32_t>(shadows.Of(caster.entity)) != caster.from.shadow) ||
-			    !same_bits::SameBits(transforms->get(caster.entity), caster.transform) ||
-			    meshes->get(caster.entity).id != caster.from.mesh ||
-			    (caster.filed && !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells));
-			if (changed)
+			for (const auto entity : *store)
 			{
-				found.push_back({.caster = true, .index = i});
+				testNumber(static_cast<uint32_t>(entt::to_entity(entity)));
 			}
 		}
-	};
-	// The lanes of the pool share many casters. Each share keeps its changes, and the changes then follow the order of
-	// the casters, as the changes of one walk do.
-	const size_t shares = _testWorkers != nullptr
-	                          ? std::clamp<size_t>(_baked.size() / k_LeastCastersToShare, 1, _testWorkers->GetLaneCount())
-	                          : 1;
-	if (shares == 1)
-	{
-		findChangedCasters(0, _baked.size(), changes);
 	}
 	else
 	{
-		std::vector<std::vector<WatchedChange>> found(shares);
-		const auto count = _baked.size();
-		_testWorkers->ForEach(shares, [&](size_t share, size_t /*lane*/) {
-			findChangedCasters(count * share / shares, count * (share + 1) / shares, found[share]);
-		});
-		for (const auto& share : found)
+		const auto findChangedCasters = [&](size_t from, size_t to, std::vector<WatchedChange>& found) {
+			for (size_t i = from; i < to; ++i)
+			{
+				if (casterChanged(_baked[i]))
+				{
+					found.push_back({.caster = true, .index = i});
+				}
+			}
+		};
+		// The lanes of the pool share many casters. Each share keeps its changes, and the changes then follow the order of
+		// the casters, as the changes of one walk do.
+		const size_t shares = _testWorkers != nullptr
+		                          ? std::clamp<size_t>(_baked.size() / k_LeastCastersToShare, 1, _testWorkers->GetLaneCount())
+		                          : 1;
+		if (shares == 1)
 		{
-			changes.insert(changes.end(), share.begin(), share.end());
+			findChangedCasters(0, _baked.size(), changes);
+		}
+		else
+		{
+			std::vector<std::vector<WatchedChange>> found(shares);
+			const auto count = _baked.size();
+			_testWorkers->ForEach(shares, [&](size_t share, size_t /*lane*/) {
+				findChangedCasters(count * share / shares, count * (share + 1) / shares, found[share]);
+			});
+			for (const auto& share : found)
+			{
+				changes.insert(changes.end(), share.begin(), share.end());
+			}
 		}
 	}
 	for (size_t i = 0; i < _mayCast.size(); ++i)
@@ -958,6 +1010,20 @@ std::vector<LandShadowBake::WatchedChange> LandShadowBake::FindWatchedChanges(co
 		}
 	}
 	return changes;
+}
+
+std::optional<std::vector<uint32_t>> LandShadowBake::TakeMarkedThings()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto marked = registry.ThingChanges().Take(ecs::ThingWrites::Reader::LandShadowBake);
+	// The marks belong to one registry. Until an update uses the answer of a test, the marks that the test took are not
+	// in the kept casters: then the next test looks at all the casters.
+	const bool all = std::exchange(_testAllCasters, true);
+	if (all || std::exchange(_markedRegistry, &registry) != &registry)
+	{
+		return std::nullopt;
+	}
+	return marked;
 }
 
 void LandShadowBake::StartWatchedTest()
@@ -986,8 +1052,8 @@ void LandShadowBake::StartWatchedTest()
 	}
 	_watchedTestStarted = true;
 	// The side thread reads only the stores that this thread finds now
-	_watchedTest->Start([this, stores = WatchedStores(std::as_const(registry)), castersCanBeGone] {
-		_watchedAnswer = FindWatchedChanges(stores, castersCanBeGone);
+	_watchedTest->Start([this, stores = WatchedStores(std::as_const(registry)), marked = TakeMarkedThings(), castersCanBeGone] {
+		_watchedAnswer = FindWatchedChanges(stores, marked, castersCanBeGone);
 	});
 }
 
@@ -1049,9 +1115,9 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 		coverage.fill(0);
 		for (const auto& caster : job.casters)
 		{
-			const bool takes = std::ranges::any_of(caster.cells, [&block](uint32_t index) {
-				return tree_shadows::TakesShadowFrom(block.position, CellOf(index));
-			});
+			const auto cells = std::span(job.cells).subspan(caster.firstCell, caster.cellCount);
+			const bool takes = std::ranges::any_of(
+			    cells, [&block](uint32_t index) { return tree_shadows::TakesShadowFrom(block.position, CellOf(index)); });
 			if (!takes)
 			{
 				continue;
