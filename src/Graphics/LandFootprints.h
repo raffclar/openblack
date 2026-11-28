@@ -70,12 +70,11 @@ public:
 
 	/// Paints again the blocks whose footprints changed since the last time
 	void Update();
-	/// Starts the search for the changed things on a thread of its own, before the next update needs it. The draw only
-	/// reads the world, thus the thread reads it while the draw continues. The thread reads only the component stores
-	/// that this thread finds before it starts. Call it only in a draw that calls Update.
+	/// Starts the search for the changed things on a thread of its own, before the next update needs it. The fill of the
+	/// drawn frame only reads the world, thus the thread reads it while the fill continues. The thread reads only the
+	/// component stores that this thread finds before it starts. Call it only in a fill that calls Update.
 	void StartSearch();
-	/// Waits for the search that StartSearch started. The blocks that it found stay for the next update. Call it at the
-	/// end of the draw.
+	/// Waits for the search that StartSearch started. The blocks that it found stay for the next update.
 	void ForgetSearch();
 	/// The next update paints again each block that has footprints, as after the land painted all of its blocks again
 	void PaintAgain();

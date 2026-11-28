@@ -82,7 +82,7 @@ namespace
 /// The colour of the player at this computer
 uint32_t OwnColour(const DrawnFrame& frame)
 {
-	return ecs::game_players::Colour(frame.hands.ownPlayer);
+	return player_colour::OnLand(frame.hands.ownPlayer, frame.land.number);
 }
 constexpr float k_ByteMax = 255.0f;
 /// The freeze phial's creature takes its spell in this way
@@ -594,35 +594,26 @@ struct HandPose
 	std::vector<glm::mat4> bones;
 };
 
-std::optional<HandPose> PoseOfHand(const ecs::Registry& registry, entt::entity drawnHand)
+std::optional<HandPose> PoseOfHand(const DrawnFrame& frame)
 {
 	using ecs::components::Hand;
-	using ecs::components::HandMiracleFx;
-	using ecs::components::Transform;
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(Hand::k_MeshId))
+	const auto& hands = frame.hands;
+	if (!meshes.Contains(Hand::k_MeshId) || !hands.miracleFx.has_value() || !hands.miraclePose.has_value())
 	{
 		return std::nullopt;
 	}
-	std::optional<HandPose> found;
-	registry.Each<const Hand, const HandMiracleFx, const Transform>([&](entt::entity entity, const Hand& hand,
-	                                                                    const HandMiracleFx& fx, const Transform& transform) {
-		if (found.has_value() || entity != drawnHand)
-		{
-			return;
-		}
-		// Placed as the world's models are
-		const auto model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
-		                   glm::scale(glm::mat4(1.0f), transform.scale);
-		const auto mesh = meshes.Handle(Hand::k_MeshId);
-		const auto& rest = mesh->GetBoneMatrices();
-		const auto& bones = hand.boneMatrices.size() == rest.size() ? hand.boneMatrices : rest;
-		HandPose pose {.fx = &fx, .model = model, .bones = {}};
-		pose.bones.reserve(bones.size());
-		std::ranges::transform(bones, std::back_inserter(pose.bones), [&model](const glm::mat4& bone) { return model * bone; });
-		found = std::move(pose);
-	});
-	return found;
+	// Placed as the world's models are
+	const auto& transform = hands.miraclePose->transform;
+	const auto model = glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation) *
+	                   glm::scale(glm::mat4(1.0f), transform.scale);
+	const auto mesh = meshes.Handle(Hand::k_MeshId);
+	const auto& rest = mesh->GetBoneMatrices();
+	const auto& bones = hands.miraclePose->bones.size() == rest.size() ? hands.miraclePose->bones : rest;
+	HandPose pose {.fx = &*hands.miracleFx, .model = model, .bones = {}};
+	pose.bones.reserve(bones.size());
+	std::ranges::transform(bones, std::back_inserter(pose.bones), [&model](const glm::mat4& bone) { return model * bone; });
+	return pose;
 }
 } // namespace
 
@@ -666,8 +657,6 @@ const Texture2D* Renderer::HandFlowTexture() const
 
 std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& desc) const
 {
-	using ecs::components::Hand;
-	using ecs::components::HandMiracleFx;
 	if (!desc.drawHand || !desc.drawHandEffects || IsMirrorScene(desc.viewId))
 	{
 		return std::nullopt;
@@ -677,36 +666,30 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 	{
 		return std::nullopt;
 	}
-	std::optional<HandGlowLook> look;
-	const auto drawnHand = desc.frame->hands.Drawn();
-	desc.entities.Each<const Hand, const HandMiracleFx>([&](entt::entity entity, const Hand&, const HandMiracleFx& fx) {
-		if (look.has_value() || !fx.glowing || entity != drawnHand)
-		{
-			return;
-		}
-		// The flow's sheet, an eighth of it at a time, running backwards over the hand in its player's colour at four
-		// fifths
-		const auto rgb = OwnColour(*desc.frame);
-		look = HandGlowLook {
-		    .flow = flow,
-		    .uvOffset = visuals::GlowUvOffset(fx.glowFrame),
-		    .uvScale = visuals::k_GlowCellSize,
-		    .colour = ColourOf(rgb) * k_ByteMax,
-		    .alpha = visuals::GlowAlpha(),
-		};
-	});
-	return look;
+	const auto& fx = desc.frame->hands.miracleFx;
+	if (!fx.has_value() || !fx->glowing)
+	{
+		return std::nullopt;
+	}
+	// The flow's sheet, an eighth of it at a time, running backwards over the hand in its player's colour at four fifths
+	const auto rgb = OwnColour(*desc.frame);
+	return HandGlowLook {
+	    .flow = flow,
+	    .uvOffset = visuals::GlowUvOffset(fx->glowFrame),
+	    .uvScale = visuals::k_GlowCellSize,
+	    .colour = ColourOf(rgb) * k_ByteMax,
+	    .alpha = visuals::GlowAlpha(),
+	};
 }
 
 void Renderer::DrawTribalPower(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::miracleFxSystem::has_value())
+	if (desc.viewId != RenderPass::Main)
 	{
 		return;
 	}
-	const auto& fx = Locator::miracleFxSystem::value();
-	const auto* texture = fx.GetTextTexture();
-	const auto vertices = fx.GetTribalPowerText();
+	const auto* texture = desc.frame->effects.tribalPowerTexture;
+	const auto& vertices = desc.frame->effects.tribalPowerText;
 	if (vertices.empty() || texture == nullptr)
 	{
 		return;
@@ -744,7 +727,6 @@ void Renderer::DrawTribalPower(const DrawSceneDesc& desc) const
 void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDepth) const
 {
 	using ecs::components::Hand;
-	using ecs::components::HandMiracleFx;
 	using ecs::components::OneOffSpellSeed;
 	if (desc.viewId != RenderPass::Main || !desc.drawHand || !desc.drawHandEffects || !Locator::rendereringSystem::has_value())
 	{
@@ -755,7 +737,7 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDept
 	{
 		return;
 	}
-	const auto pose = PoseOfHand(desc.entities, desc.frame->hands.Drawn());
+	const auto pose = PoseOfHand(*desc.frame);
 	if (!pose.has_value() || (pose->fx->bands.bracelets.empty() && pose->fx->bands.flying.empty()))
 	{
 		return;

@@ -15,6 +15,7 @@
 #include <functional>
 #include <initializer_list>
 #include <mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -46,6 +47,9 @@ public:
 		std::string registry;
 		std::string what;
 		uint64_t count {0};
+		/// The return addresses of the first read of this kind, from the innermost call. It is empty where the platform
+		/// cannot give them.
+		std::vector<uintptr_t> stack;
 	};
 
 	explicit DrawReadWatch(DrawReadCheck check, std::function<void(const Read&)> onFail = {});
@@ -62,6 +66,10 @@ public:
 
 	/// The kinds of reads, in the order of their first reads
 	[[nodiscard]] std::vector<Read> GetReads() const;
+
+	/// The names of the functions and the lines of the return addresses of a read's stack, from the innermost call. It
+	/// is empty where the platform cannot find them.
+	[[nodiscard]] static std::vector<std::string> DescribeStack(std::span<const uintptr_t> stack);
 
 private:
 	DrawReadCheck _check;

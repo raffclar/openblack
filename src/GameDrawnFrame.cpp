@@ -29,6 +29,7 @@
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -59,35 +60,36 @@ DrawnFrame::BoneRun KeepBones(DrawnFrame& frame, std::span<const glm::mat4> bone
 	return run;
 }
 
-/// The first draw that holds an instance takes it. Thus the pass uses the palette only when that first draw does.
-std::vector<bool> FirstHolderPalette(const RenderContext& models)
+using InstanceHolder = DrawnFrame::InstanceHolder;
+
+/// The first draw that holds an instance takes it. Thus the pass uses the palette only when that first draw does. The
+/// list keeps its memory from frame to frame.
+void FindFirstHolders(const RenderContext& models, std::vector<InstanceHolder>& holders)
 {
-	std::vector<bool> held(models.instanceUniforms.size(), false);
-	std::vector<bool> palette(models.instanceUniforms.size(), false);
+	holders.assign(models.instanceUniforms.size(), InstanceHolder::None);
 	if (!models.bonePaletteTexture)
 	{
-		return palette;
+		return;
 	}
 	for (const auto* descs : {&models.instancedDrawDescs, &models.fadingDrawDescs})
 	{
 		for (const auto& [meshId, placers] : *descs)
 		{
-			const auto end = std::min<size_t>(static_cast<size_t>(placers.offset) + placers.count, palette.size());
+			const auto end = std::min<size_t>(static_cast<size_t>(placers.offset) + placers.count, holders.size());
+			const auto taken = placers.bonePalette ? InstanceHolder::WithPalette : InstanceHolder::WithoutPalette;
 			for (size_t instance = placers.offset; instance < end; ++instance)
 			{
-				if (!held[instance])
+				if (holders[instance] == InstanceHolder::None)
 				{
-					held[instance] = true;
-					palette[instance] = placers.bonePalette;
+					holders[instance] = taken;
 				}
 			}
 		}
 	}
-	return palette;
 }
 
 DrawnFrame::EntityLook LookOf(DrawnFrame& frame, const ecs::Registry& registry, entt::entity entity, uint32_t instance,
-                              const std::vector<bool>& palette)
+                              std::span<const InstanceHolder> holders)
 {
 	DrawnFrame::EntityLook look;
 	if (const auto* pose = registry.TryGet<const ecs::components::VillagerPose>(entity))
@@ -101,7 +103,7 @@ DrawnFrame::EntityLook LookOf(DrawnFrame& frame, const ecs::Registry& registry, 
 		    .highDetail = registry.AllOf<ecs::components::HighDetail>(entity),
 		};
 		// A villager that the bone palette draws needs no bones of its own
-		if (instance >= palette.size() || !palette[instance])
+		if (instance >= holders.size() || holders[instance] != InstanceHolder::WithPalette)
 		{
 			villager.bones = KeepBones(frame, pose->bones);
 		}
@@ -270,6 +272,7 @@ void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uin
 	frame.land.island = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
 	frame.land.extent = frame.land.island != nullptr ? std::optional(frame.land.island->GetExtent()) : std::nullopt;
 	frame.land.highestHeight = frame.land.island != nullptr ? frame.land.island->HighestHeight() : 0.0f;
+	frame.land.number = ecs::game_players::LandNumber();
 	if (frame.land.island != nullptr)
 	{
 		frame.land.heights.Follow(*frame.land.island);
@@ -300,12 +303,12 @@ void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uin
 	const auto& models = renderingSystem.GetContext();
 	frame.models = &models;
 	frame.modelWrites = renderingSystem.GetContextWrites();
-	const auto palette = FirstHolderPalette(models);
+	FindFirstHolders(models, frame.instanceHolders);
 	const auto& registry = Locator::entitiesRegistry::value();
 	frame.entityLooks.reserve(models.entityDraws.size());
 	for (const auto& [entity, instance] : models.entityDraws)
 	{
-		frame.entityLooks.push_back(LookOf(frame, registry, entity, instance, palette));
+		frame.entityLooks.push_back(LookOf(frame, registry, entity, instance, frame.instanceHolders));
 	}
 	if (Locator::drawnRegistry::has_value())
 	{
@@ -313,7 +316,7 @@ void FillDrawnFrame(graphics::DrawnFrame& frame, const EngineConfig& config, uin
 		frame.drawnEntityLooks.reserve(models.drawnEntityDraws.size());
 		for (const auto& [entity, instance] : models.drawnEntityDraws)
 		{
-			frame.drawnEntityLooks.push_back(LookOf(frame, drawn, entity, instance, palette));
+			frame.drawnEntityLooks.push_back(LookOf(frame, drawn, entity, instance, frame.instanceHolders));
 		}
 	}
 }
