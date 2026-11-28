@@ -86,13 +86,17 @@ error_reports::FailureEvent MapDownload::ReportOf(std::string_view sha256, const
 	};
 }
 
-std::optional<lobby_api::OnlineMap> MapDownload::MapOfRoom(std::span<const lobby_api::OnlineMap> maps, std::string_view roomMap)
+std::optional<lobby_api::OnlineMap> MapDownload::MapOfRoom(std::span<const lobby_api::OnlineMap> maps, std::string_view roomMap,
+                                                           std::string_view roomLand)
 {
 	if (roomMap.empty())
 	{
 		return std::nullopt;
 	}
-	const auto found = std::ranges::find(maps, roomMap, &lobby_api::OnlineMap::sha256);
+	const auto roomName = online_map_land::MapName(roomLand);
+	const auto found = std::ranges::find_if(maps, [roomMap, &roomLand, &roomName](const lobby_api::OnlineMap& map) {
+		return map.sha256 == roomMap && (roomLand.empty() || online_map_land::detail::Lower(map.file) == roomName);
+	});
 	if (found == maps.end())
 	{
 		return std::nullopt;
