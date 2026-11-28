@@ -665,6 +665,35 @@ TEST(CreatureObjectBeliefs, TheFastIndexKeepsNoNoThingValue)
 	EXPECT_FALSE(index.Find(Thing(7)).has_value());
 }
 
+TEST(CreatureObjectBeliefs, PutBackContentsKeepTheIndexInTheOrderOfTheThings)
+{
+	// A load can give the things new numbers, thus the saved index can come back out of order. The store keeps the
+	// things in the order of their numbers, and the last entry of a thing, as a map that the load fills does.
+	Store store;
+	store.Add(Thing(30), 6, {});
+	store.Add(Thing(10), 6, {});
+	store.Add(Thing(20), 7, {});
+	auto contents = store.Contents();
+	std::ranges::reverse(contents.index);
+	// The first entry of thing 20 points to a wrong place, and its last entry to the true place
+	contents.index.push_back(contents.index.front());
+	contents.index.front().place = contents.index.at(1).place;
+	Store loaded;
+	loaded.SetContents(contents);
+	std::vector<entt::entity> things;
+	for (const auto& [thing, at] : loaded.Contents().index)
+	{
+		things.push_back(thing);
+	}
+	EXPECT_EQ(things, (std::vector {Thing(10), Thing(20), Thing(30)}));
+	ASSERT_NE(loaded.Find(Thing(20)), nullptr);
+	EXPECT_EQ(loaded.Find(Thing(20))->kind, 7u);
+	EXPECT_EQ(loaded.Find(Thing(40)), nullptr);
+	EXPECT_TRUE(loaded.Forget(Thing(10)));
+	EXPECT_FALSE(loaded.Forget(Thing(10)));
+	EXPECT_EQ(loaded.Size(), 2u);
+}
+
 TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)
 {
 	Store store;

@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <array>
-#include <map>
 #include <numeric>
 #include <optional>
 #include <span>
@@ -130,6 +129,22 @@ struct BeliefPlace
 	static constexpr bool k_SavesFlat = true;
 };
 
+/// The place of the belief about one thing, as the index of the contents keeps it
+struct IndexEntry
+{
+	entt::entity thing {entt::null};
+	BeliefPlace place {};
+
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.thing, self.place);
+	}
+	/// Each saved value is a number or a type that saves flat, thus a save writes them in one block
+	static constexpr bool k_SavesFlat = true;
+};
+
 /// The places of one kind of belief
 struct BeliefPool
 {
@@ -152,9 +167,10 @@ struct BeliefPool
 struct StoreContents
 {
 	std::array<BeliefPool, k_KindCount> pools {};
-	/// The place of the belief about each thing, in the order of the numbers of the things. A save writes the index in
-	/// this order, thus the index keeps it and the save does not sort it.
-	std::map<entt::entity, BeliefPlace> index;
+	/// The place of the belief about each thing, in the order of the numbers of the things, one entry for each thing. A
+	/// save writes the index in this order. The entries lie side by side in memory, thus a walk of them costs less than a
+	/// walk of a tree. A save writes the same bytes as a map in the order of its keys.
+	std::vector<IndexEntry> index;
 	uint64_t made {0};
 
 	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
@@ -242,9 +258,9 @@ public:
 		// effect. The no-thing value has the largest number, thus it can only be the last thing of the index of the
 		// contents.
 		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
-		if (!_contents.index.empty() && _contents.index.rbegin()->first == entt::null && gone(entt::null))
+		if (!_contents.index.empty() && _contents.index.back().thing == entt::null && gone(entt::null))
 		{
-			forgotten.emplace_back(_contents.index.rbegin()->second, entt::null);
+			forgotten.emplace_back(_contents.index.back().place, entt::null);
 		}
 		_places.ForEach([&gone, &forgotten](entt::entity thing, BeliefPlace at) {
 			if (gone(thing))
@@ -303,6 +319,7 @@ public:
 		_contents = contents;
 		_lookedAt = {};
 		_orders.reset();
+		SortIndex();
 		Reindex();
 	}
 
@@ -317,6 +334,12 @@ private:
 	ThingIndex _places;
 	/// Makes the fast index again from the index of the contents
 	void Reindex();
+	/// Puts the index of the contents in the order of the numbers of the things, and keeps the last entry of each thing.
+	/// A load can give the things new numbers, thus the order of the saved entries can change.
+	void SortIndex();
+	/// The entry of the thing in the index of the contents, or else the entry before which the thing goes
+	[[nodiscard]] std::vector<IndexEntry>::iterator IndexAt(entt::entity thing);
+	[[nodiscard]] std::vector<IndexEntry>::const_iterator IndexAt(entt::entity thing) const;
 	/// The places of the beliefs in the two orders that the store gives. The kind and the order of a belief do not
 	/// change, thus the lists stay true until a belief comes or goes. A copy of the store has the same beliefs in the
 	/// same places, thus it keeps the lists.

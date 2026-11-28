@@ -106,12 +106,16 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords
 		// Every place is taken: the belief at the oldest-kept marker gives way, and the marker stays where it is
 		slot = pool.oldest.value_or(0);
 		const auto replaced = pool.slots.at(slot)->thing;
-		_contents.index.erase(replaced);
+		if (const auto at = IndexAt(replaced); at != _contents.index.end() && at->thing == replaced)
+		{
+			_contents.index.erase(at);
+		}
 		_places.Erase(replaced);
 	}
 	_orders.reset();
 	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_contents.made};
-	_contents.index[thing] = Place {.kind = kind, .slot = slot};
+	// The thing has no entry here: the search above found no belief about it
+	_contents.index.insert(IndexAt(thing), IndexEntry {.thing = thing, .place = Place {.kind = kind, .slot = slot}});
 	_places.Set(thing, Place {.kind = kind, .slot = slot});
 	return {.belief = &*pool.slots.at(slot), .isNew = true};
 }
@@ -121,8 +125,10 @@ const Belief* Store::Find(entt::entity thing) const
 	// The fast index does not keep the no-thing value
 	if (thing == entt::null)
 	{
-		const auto known = _contents.index.find(thing);
-		return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+		const auto known = IndexAt(thing);
+		return known != _contents.index.end() && known->thing == thing
+		           ? &*_contents.pools.at(known->place.kind).slots.at(known->place.slot)
+		           : nullptr;
 	}
 	const auto known = _places.Find(thing);
 	return known.has_value() ? &*_contents.pools.at(known->kind).slots.at(known->slot) : nullptr;
@@ -131,6 +137,45 @@ const Belief* Store::Find(entt::entity thing) const
 Belief* Store::Find(entt::entity thing)
 {
 	return const_cast<Belief*>(std::as_const(*this).Find(thing));
+}
+
+std::vector<IndexEntry>::iterator Store::IndexAt(entt::entity thing)
+{
+	return std::ranges::lower_bound(_contents.index, thing, std::less {}, &IndexEntry::thing);
+}
+
+std::vector<IndexEntry>::const_iterator Store::IndexAt(entt::entity thing) const
+{
+	return std::ranges::lower_bound(_contents.index, thing, std::less {}, &IndexEntry::thing);
+}
+
+void Store::SortIndex()
+{
+	auto& index = _contents.index;
+	// Usually each number is larger than the number before it, and then the index stays as it is
+	const auto outOfOrder = std::ranges::adjacent_find(
+	    index, [](const IndexEntry& first, const IndexEntry& next) { return first.thing >= next.thing; });
+	if (outOfOrder == index.end())
+	{
+		return;
+	}
+	// The same entries as a map that a load fills in the saved order: each thing in the order of the numbers, with the
+	// place of its last saved entry
+	std::ranges::stable_sort(index, std::less {}, &IndexEntry::thing);
+	std::vector<IndexEntry> unique;
+	unique.reserve(index.size());
+	for (const auto& entry : index)
+	{
+		if (!unique.empty() && unique.back().thing == entry.thing)
+		{
+			unique.back() = entry;
+		}
+		else
+		{
+			unique.push_back(entry);
+		}
+	}
+	index = std::move(unique);
 }
 
 void Store::Reindex()
@@ -248,12 +293,12 @@ void ThingIndex::Grow()
 
 bool Store::Forget(entt::entity thing)
 {
-	const auto known = _contents.index.find(thing);
-	if (known == _contents.index.end())
+	const auto known = IndexAt(thing);
+	if (known == _contents.index.end() || known->thing != thing)
 	{
 		return false;
 	}
-	const auto [kind, slot] = known->second;
+	const auto [kind, slot] = known->place;
 	_orders.reset();
 	_contents.index.erase(known);
 	_places.Erase(thing);
