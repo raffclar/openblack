@@ -57,7 +57,7 @@ public:
 
 	/// Once a game turn: the start of the turn, then the turn of each leashed creature
 	virtual void ProcessTurn() = 0;
-	/// Once a game turn, before the creatures' own turns: the posts go up at the temples
+	/// Once a game turn, before the creatures' own turns: the posts go up at each temple that has none
 	virtual void BeginTurn() {}
 	/// A new land starts. At the next turn, its temples get their posts. The taps and refusals of the old land are
 	/// forgotten.
@@ -219,7 +219,8 @@ public:
 	/// The tooltip the hand shows for the leash over something, or over nothing, by its place among the game's tooltips
 	[[nodiscard]] virtual std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const = 0;
 
-	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
+	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn. They
+	/// replace the player's old posts at points of their own. The posts on the temples stay.
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;
 	/// A player taps one of their leash posts: it picks that leash, or unpicks it when tapped again, and swaps the worn
 	/// leash for it. The tap of a player on the post of another player does nothing.

@@ -124,4 +124,8 @@ struct Room
 /// True when the warning before the deadline is due: from 10 minutes before the deadline
 [[nodiscard]] bool WarningDue(std::optional<int64_t> deadline, int64_t now) noexcept;
 
+/// The line that the players read in the chat when the warning is due. It names the whole minutes that are left, and
+/// at least one.
+[[nodiscard]] std::string WarningLine(int64_t secondsLeft);
+
 } // namespace openblack::server::game_lifetime

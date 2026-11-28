@@ -348,13 +348,9 @@ bool MagicSystem::Remove(entt::entity entity)
 	{
 		return false;
 	}
-	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(entity))
+	if (registry.AllOf<SpellDispenser>(entity))
 	{
-		if (Locator::effectRequestSystem::has_value() && dispenser->effect != k_NoEffectHandle)
-		{
-			Locator::effectRequestSystem::value().Remove(dispenser->effect);
-		}
-		DestroyOrb(dispenser->orb);
+		ReleaseDispenser(entity);
 		registry.Destroy(entity);
 		return true;
 	}
@@ -364,6 +360,27 @@ bool MagicSystem::Remove(entt::entity entity)
 		return true;
 	}
 	return false;
+}
+
+void MagicSystem::ReleaseDispenser(entt::entity dispenser)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(dispenser))
+	{
+		return;
+	}
+	auto* component = registry.TryGet<SpellDispenser>(dispenser);
+	if (component == nullptr)
+	{
+		return;
+	}
+	if (Locator::effectRequestSystem::has_value() && component->effect != k_NoEffectHandle)
+	{
+		Locator::effectRequestSystem::value().Remove(component->effect);
+		component->effect = k_NoEffectHandle;
+	}
+	DestroyOrb(component->orb);
+	component->orb = entt::null;
 }
 
 void MagicSystem::DestroyOrb(entt::entity orb)

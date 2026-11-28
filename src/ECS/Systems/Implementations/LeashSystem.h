@@ -122,9 +122,10 @@ private:
 	bool SetType(entt::entity creature, LeashType type, creature_leash::TypeChangeBy by);
 	/// The creatures as the one-each assignment sees them
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
-	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
+	/// Hangs the posts of each temple that has none, when its heart mesh has the three points to hang them at
 	void PlacePostsAtTemples();
-	/// Hangs a player's three leash posts at three points, on the temple when it is not null
+	/// Hangs a player's three leash posts at three points, on the temple when it is not null. They replace the old posts
+	/// of that temple, or the player's old posts at points of their own.
 	void HangPosts(PlayerNames owner, const std::array<glm::vec3, 3>& points, entt::entity temple);
 	/// The state of the temple that the post hangs on
 	[[nodiscard]] temple_leashes::TempleState TempleOf(const ecs::components::LeashPost& post) const;
@@ -162,8 +163,6 @@ private:
 	components::CreatureLeashRope* DrawnRope(PlayerNames player);
 	/// The temple's leashes hang if the creature knows them, tumble and glow, the picked one carried in the hand
 	void UpdatePosts(float seconds);
-	/// Whether the posts have been looked for at the temples yet
-	bool _postsPlaced {false};
 	/// Whether the hand was out when the posts were last shown
 	bool _handShown {true};
 	/// The two leash-attach sounds play in turn for a tie

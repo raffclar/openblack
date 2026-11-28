@@ -386,8 +386,13 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	made.originalCastPlace = cast.originalCastPlace.value_or(place);
 	made.chants.chants = cast.chants;
 	made.chants.initialChants = cast.initialChants;
+	made.chants.strengthMultiplier = cast.strengthMultiplier;
 	made.age = cast.age;
 	made.magnitude = cast.magnitude;
+	made.movement = cast.movement;
+	// A spell of a worship site continues to the next mote of light from the prayer power that it spent
+	made.upkeepMotes = cast.upkeepMotes;
+	made.eventMotes = cast.eventMotes;
 	// A spell of the hand of a person follows that hand, such as a flock that still makes its animals
 	made.fromLocalHand = cast.fromHand;
 	made.humanCasting = cast.humanCasting.value_or(made.humanCasting);

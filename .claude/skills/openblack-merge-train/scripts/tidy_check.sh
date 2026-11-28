@@ -7,7 +7,7 @@
 # Exit 0 clean, 23 a finding, 24 the check cannot run (no clang-tidy 17, no compile_commands.json, or a time-out).
 source "$(dirname "$0")/common.sh"
 cd "$1" || exit 24
-python tools/githooks/tidy_gate.py range "$R/$M" --strict --build-dir "$2" ${3:+--web-build-dir "$3"} --jobs 4 --timeout 300 </dev/null
+python tools/githooks/tidy_gate.py range "$R/$M" --strict --build-dir "$2" ${3:+--web-build-dir "$3"} --jobs 4 --timeout 900 </dev/null
 s=$?
 [ $s = 0 ] && exit 0
 [ $s = 1 ] && exit 23

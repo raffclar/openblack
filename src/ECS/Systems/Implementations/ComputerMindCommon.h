@@ -67,8 +67,9 @@ entt::entity HandOf(PlayerNames player);
 [[nodiscard]] entt::entity TownNumbered(int number);
 
 /// The god reports where its hand and its camera are, as a player of a network game reports them. Only a god that has
-/// hands reports.
-void ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera);
+/// hands reports. The report after a step gives the place of the hand before the step, where the frames start to move
+/// what the hand holds.
+void ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera, std::optional<glm::vec3> stepStart = std::nullopt);
 
 /// The hand of the god starts to take the thing, at the speed of the god. When a hand holds the thing, the hand does not
 /// take it and the result is false.

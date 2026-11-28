@@ -243,3 +243,43 @@ TEST(TempleLeashes, TheCarriedLeashStaysOnTheWristOfTheMovedHand)
 		}
 	}
 }
+
+TEST(TempleLeashes, EachTempleMakesItsLeashesOnce)
+{
+	EXPECT_EQ(SetFor(true, false), TempleSet::Has);
+	EXPECT_EQ(SetFor(true, true), TempleSet::Has);
+	// A game saved before the leashes kept their temple: the temple takes the leashes at its points
+	EXPECT_EQ(SetFor(false, true), TempleSet::TakesUnlinked);
+	// A temple made after the land started, by the editor, an undo or a script
+	EXPECT_EQ(SetFor(false, false), TempleSet::Makes);
+}
+
+TEST(TempleLeashes, ALeashWithNoLinkHangsOnlyAtThePointItself)
+{
+	const glm::vec3 point {10.0f, 20.0f, 30.0f};
+	EXPECT_TRUE(HangsAt(point, point));
+	EXPECT_TRUE(HangsAt(point + glm::vec3(0.005f, 0.0f, 0.0f), point));
+	EXPECT_FALSE(HangsAt(point + glm::vec3(0.0f, 0.02f, 0.0f), point));
+	EXPECT_FALSE(HangsAt(point + glm::vec3(6.0f, 0.0f, 0.0f), point));
+}
+
+TEST(TempleLeashes, TheLeashesHangAtTheFirstThreePointsOfTheTemple)
+{
+	const auto at = [](float x, float y, float z) { return glm::translate(glm::mat4(1.0f), glm::vec3(x, y, z)); };
+	const std::array<glm::mat4, 4> points {at(1.0f, 2.0f, 3.0f), at(-1.0f, 2.0f, 0.0f), at(0.0f, 5.0f, -2.0f),
+	                                       at(9.0f, 9.0f, 9.0f)};
+	// The temple stands at (100, 10, 50), turned a quarter turn about the up axis
+	const auto temple = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 10.0f, 50.0f)) *
+	                    glm::rotate(glm::mat4(1.0f), k_FullTurn / 4.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	const auto hung = PointsOn(temple, points);
+	ASSERT_TRUE(hung.has_value());
+	EXPECT_NEAR(hung->at(0).x, 103.0f, k_Tolerance);
+	EXPECT_NEAR(hung->at(0).y, 12.0f, k_Tolerance);
+	EXPECT_NEAR(hung->at(0).z, 49.0f, k_Tolerance);
+	EXPECT_NEAR(hung->at(1).x, 100.0f, k_Tolerance);
+	EXPECT_NEAR(hung->at(1).z, 51.0f, k_Tolerance);
+	EXPECT_NEAR(hung->at(2).x, 98.0f, k_Tolerance);
+	EXPECT_NEAR(hung->at(2).y, 15.0f, k_Tolerance);
+	// A mesh with fewer than three points hangs no leashes
+	EXPECT_FALSE(PointsOn(temple, std::span(points).first(2)).has_value());
+}

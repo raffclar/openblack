@@ -61,6 +61,7 @@ public:
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	[[nodiscard]] std::optional<glm::vec3> GetReportedPointUnderCursor(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
+	void ReportMind(PlayerNames player, const player_commands::HandReport& report, std::optional<glm::vec3> stepStart) override;
 	void ReportPick(PlayerNames player, entt::entity object) override;
 	void ReportView(PlayerNames player, const player_commands::ViewReport& report) override;
 	[[nodiscard]] std::optional<ReportedView> GetReportedView(PlayerNames player) const noexcept override;

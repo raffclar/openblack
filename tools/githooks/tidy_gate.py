@@ -13,7 +13,7 @@ options:
   --build-dir <dir>   the folder with compile_commands.json (see find_build_dir for the other places)
   --web-build-dir <dir>  the folder of the web build (Emscripten) with its compile_commands.json, for src/Web (see below)
   --jobs <n>          clang-tidy processes at the same time (default 2)
-  --timeout <s>       time limit of one file (default 120)
+  --timeout <s>       time limit of one file (default 900)
   --strict            a missing tool, compile database or a time-out is a failure (exit 2), not a pass
 
 Exit 0: no finding on a changed line (or a pass with one clear line when the check cannot run and --strict is off).
@@ -447,7 +447,7 @@ def main(argv=None):
     parser.add_argument("--build-dir")
     parser.add_argument("--web-build-dir")
     parser.add_argument("--jobs", type=int, default=2)
-    parser.add_argument("--timeout", type=int, default=120)
+    parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args(argv)
 

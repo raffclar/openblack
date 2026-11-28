@@ -1109,10 +1109,17 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	    .duration = world.Float(record, "spellDuration").value_or(-1.0f),
 	    .age = world.Float(record, "spellAge").value_or(0.0f),
 	    .magnitude = world.Float(record, "spellMagnitude").value_or(0.0f),
+	    .strengthMultiplier = world.Float(record, "spellStrengthMultiplier").value_or(1.0f),
+	    .upkeepMotes = world.Float(record, "spellUpkeepMotes").value_or(0.0f),
+	    .eventMotes = world.Float(record, "spellEventMotes").value_or(0.0f),
 	    .humanCasting = world.Word(record, "spellHumanCasting").value_or(0) != 0,
 	};
 	spell.castPlace = CoordsOf(world, record, "spellCastPlace");
 	spell.originalCastPlace = CoordsOf(world, record, "spellOriginalCastPlace");
+	if (const auto movement = world.Raw(record, "spellMovement"); movement.size() == sizeof(spell.movement))
+	{
+		spell.movement = PointAt(movement, 0);
+	}
 	if (const auto info = world.Raw(record, "spellProcessInfo"); info.size() == k_ProcessInfoSize)
 	{
 		spell.casterPoint = PointAt(info, k_CasterPointAt);

@@ -553,6 +553,10 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	const auto* program = _shaderManager->GetShader("WorldTextured");
+	// Outside the temple, after the draws that the game makes at once and before every sorted key
+	const auto viewId =
+	    onMap.has_value() ? static_cast<bgfx::ViewId>(desc.viewId) : static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	const uint32_t depth = onMap.has_value() ? 0 : graphics::zsort::k_AtOnceAfterLand;
 	// A warm-up draws one triangle of no size, with the border's textures and states
 	if (_warmingUp)
 	{
@@ -568,7 +572,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
 		bgfx::setVertexBuffer(0, &vertexBuffer);
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		program->Submit(viewId, depth);
 		return;
 	}
 	// The fill copied only the circles of the borders that show
@@ -612,7 +616,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		bgfx::setIndexBuffer(&indexBuffer);
 		// Blended over what is behind, tested against depth but leaving none, both sides
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		program->Submit(viewId, depth);
 	}
 }
 

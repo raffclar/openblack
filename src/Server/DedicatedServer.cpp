@@ -1124,6 +1124,7 @@ public:
 			_warned = true;
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game server ends in {} seconds: its deadline comes",
 			                   *_limits.deadline - now);
+			host.AnnounceToPlayers(game_lifetime::WarningLine(*_limits.deadline - now));
 		}
 		_end = game_lifetime::Check(_limits, game_lifetime::Room {.secondsSinceListen = sinceListen,
 		                                                          .now = now,
