@@ -13,6 +13,7 @@
 #include <array>
 #include <limits>
 #include <set>
+#include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -55,6 +56,15 @@ players::Settings WithPlayers(uint32_t count)
 {
 	players::Settings settings;
 	settings.count = count;
+	return settings;
+}
+
+/// The settings for a number of players, with ranges of fairness that each place meets
+players::Settings WithoutRanges(uint32_t count)
+{
+	auto settings = WithPlayers(count);
+	settings.landShare = {.least = 0.0f, .most = 1.0f};
+	settings.flatShare = {.least = 0.0f, .most = 1.0f};
 	return settings;
 }
 
@@ -273,13 +283,13 @@ TEST(LandgenPlayers, AStartSeesTheLakesNearIt)
 	const players::Settings settings;
 	const auto firstLand = players::GroundAt(land.heights, rises, first.x, first.z, settings, &lakes).land;
 
-	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, k_Ground, WithPlayers(2));
+	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, k_Ground, WithoutRanges(2));
 	ASSERT_EQ(blind.size(), 1u);
 	EXPECT_LT(players::GroundAt(land.heights, rises, blind[0].x, blind[0].z, settings, &lakes).land, firstLand * 0.9f);
 
 	auto ground = k_Ground;
 	ground.lakes = &lakes;
-	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithPlayers(2));
+	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithoutRanges(2));
 	ASSERT_EQ(starts.size(), 1u);
 	EXPECT_GE(players::GroundAt(land.heights, rises, starts[0].x, starts[0].z, settings, &lakes).land, firstLand * 0.98f);
 }
@@ -302,15 +312,109 @@ TEST(LandgenPlayers, TheFlatGroundOfAStartIsFlatInTheUnitsThatTheGameDraws)
 	const players::Settings settings;
 	const auto firstFlat = players::GroundAt(land.heights, drawnRises, first.x, first.z, settings).flat;
 
-	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, k_Ground, WithPlayers(2));
+	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, k_Ground, WithoutRanges(2));
 	ASSERT_EQ(blind.size(), 1u);
 	EXPECT_LT(players::GroundAt(land.heights, drawnRises, blind[0].x, blind[0].z, settings).flat, firstFlat * 0.8f);
 
 	auto ground = k_Ground;
 	ground.drawnUnits = &units;
-	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithPlayers(2));
+	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithoutRanges(2));
 	ASSERT_EQ(starts.size(), 1u);
 	EXPECT_GE(players::GroundAt(land.heights, drawnRises, starts[0].x, starts[0].z, settings).flat, firstFlat * 0.9f);
+}
+
+TEST(LandgenPlayers, TheFairnessIsTheLeastValueOverTheMostValue)
+{
+	EXPECT_FLOAT_EQ(players::Fairness(std::array {80.0f, 100.0f, 90.0f}), 0.8f);
+	EXPECT_FLOAT_EQ(players::Fairness(std::array {0.0f, 0.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(players::Fairness(std::span<const float> {}), 0.0f);
+}
+
+TEST(LandgenPlayers, TheDistanceToTheRangesIsZeroInTheTwoRanges)
+{
+	const players::Settings settings;
+	// Land 0.90 and flat ground 0.80 are in the ranges
+	const std::array inside {players::StartGround {.land = 100.0f, .flat = 100.0f},
+	                         players::StartGround {.land = 90.0f, .flat = 80.0f}};
+	EXPECT_FLOAT_EQ(players::DistanceToRanges(inside, settings), 0.0f);
+	// Land 0.50 is 0.34 below its range, and flat ground 0.50 is 0.28 below its range
+	const std::array below {players::StartGround {.land = 100.0f, .flat = 100.0f},
+	                        players::StartGround {.land = 50.0f, .flat = 50.0f}};
+	EXPECT_NEAR(players::DistanceToRanges(below, settings), 0.62f, 1e-5f);
+	// The same ground at each start is 0.02 above each range
+	const std::array same {players::StartGround {.land = 100.0f, .flat = 100.0f},
+	                       players::StartGround {.land = 100.0f, .flat = 100.0f}};
+	EXPECT_NEAR(players::DistanceToRanges(same, settings), 0.04f, 1e-5f);
+}
+
+TEST(LandgenPlayers, AStartKeepsTheGroundInTheRangesOfTheSkirmishLands)
+{
+	// Three round islands in the sea. Player one is on the west island, and a sixth of its ground is steep. Lakes cover
+	// a fifth of the north island, and all its dry ground is flat. Lakes cover less of the south island, and a fifth of
+	// its ground is steep. The north island costs less, but its dry land is out of the range. The ground of the south
+	// island is in the two ranges.
+	FakeLand land;
+	land.heights = Grid<float>(k_Side, 0.0f);
+	Grid<uint8_t> lakes(k_Side, 0);
+	Grid<float> units(k_Side, 20.0f);
+	const players::Start first {.x = 60.0f, .z = 128.0f};
+	const players::Start north {.x = 130.0f, .z = 50.0f};
+	const players::Start south {.x = 130.0f, .z = 206.0f};
+	constexpr float k_Island = 52.0f;
+	const auto near = [](int x, int z, const players::Start& middle) {
+		return Distance(static_cast<float>(x), static_cast<float>(z), middle.x, middle.z) <= k_Island;
+	};
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			// The ground goes up 6 units and down again in each wave. The four rows at the two edges of a wave are steep.
+			int wave = 0;
+			uint32_t lakeShare = 0;
+			if (near(x, z, first))
+			{
+				wave = 24;
+			}
+			else if (near(x, z, north))
+			{
+				lakeShare = 20;
+			}
+			else if (near(x, z, south))
+			{
+				wave = 20;
+				lakeShare = 14;
+			}
+			else
+			{
+				continue;
+			}
+			land.heights.At(x, z) = 20.0f;
+			if (wave > 0 && (z % wave) < wave / 2)
+			{
+				units.At(x, z) = 26.0f;
+			}
+			const auto hash = (static_cast<uint32_t>(x) * 73856093u) ^ (static_cast<uint32_t>(z) * 19349663u);
+			lakes.At(x, z) = (hash % 100u) < lakeShare ? 1 : 0;
+		}
+	}
+	auto ground = k_Ground;
+	ground.lakes = &lakes;
+	ground.drawnUnits = &units;
+	const auto rises = players::Rises(units);
+	const players::Settings settings;
+	const auto groundOf = [&](const players::Start& start) {
+		return players::GroundAt(land.heights, rises, start.x, start.z, settings, &lakes);
+	};
+
+	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithoutRanges(2));
+	ASSERT_EQ(blind.size(), 1u);
+	EXPECT_LT(blind[0].z, 128.0f);
+	EXPECT_GT(players::DistanceToRanges(std::array {groundOf(first), groundOf(blind[0])}, settings), 0.0f);
+
+	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithPlayers(2));
+	ASSERT_EQ(starts.size(), 1u);
+	EXPECT_GT(starts[0].z, 128.0f);
+	EXPECT_FLOAT_EQ(players::DistanceToRanges(std::array {groundOf(first), groundOf(starts[0])}, settings), 0.0f);
 }
 
 TEST(LandgenPlayers, EachPlayerHasItsOwnSeed)

@@ -54,6 +54,13 @@ struct Ground
 	const Grid<float>* drawnUnits {nullptr};
 };
 
+/// The least and the most value of a share
+struct ShareRange
+{
+	float least;
+	float most;
+};
+
 /// The rules for the start areas of the other players, from the five skirmish lands (TwoGods, ThreeGods, FourGods,
 /// Island Wars and Firestorm)
 struct Settings
@@ -75,6 +82,11 @@ struct Settings
 	float climateCost {40.0f};
 	float landCost {100.0f};
 	float flatCost {100.0f};
+	/// The fairness of the dry land and of the flat ground of the starts on the skirmish lands: the start with the
+	/// least ground has this share of the ground of the start with the most. The search keeps the starts in the two
+	/// ranges when a place can do this.
+	ShareRange landShare {.least = 0.84f, .most = 0.98f};
+	ShareRange flatShare {.least = 0.78f, .most = 0.98f};
 	/// The step in corners between two places that the search tries, and between two corners that it counts
 	int step {4};
 	int countStep {2};
@@ -97,6 +109,13 @@ struct StartGround
 	float flat;
 };
 
+/// The least value over the most value, or 0 when there is no value or the most value is 0
+[[nodiscard]] float Fairness(std::span<const float> values);
+
+/// How far the fairness of the dry land and of the flat ground of the starts is from settings.landShare and
+/// settings.flatShare: the sum of the two distances. The distance is 0 when the two values are in their ranges.
+[[nodiscard]] float DistanceToRanges(std::span<const StartGround> grounds, const Settings& settings);
+
 /// The rise over the run at each corner, from the heights in altitudes. The rise along each axis is the difference of
 /// the two corners next to the corner, or of the corner and the next corner at the edge of the map.
 [[nodiscard]] Grid<float> Rises(const Grid<float>& heights);
@@ -109,8 +128,9 @@ struct StartGround
 /// The start areas of players two and up, in the order of the players. `townOffsets` gives the place of the town of
 /// each player from the middle of its start, in corners, player one first. The town of each start is at least
 /// settings.nearestRival from each town before it. It is at most settings.farthestRival from the nearest town before it
-/// when such a place exists. Of these places, the start is the place whose roughness, height, climate and ground are
-/// nearest to the start of player one. The list is shorter when the land has no room for all players.
+/// when such a place exists. Of these places, the start is the place that keeps the fairness of the ground of the starts
+/// nearest to settings.landShare and settings.flatShare. Of those, it is the place whose roughness, height, climate and
+/// ground are nearest to the start of player one. The list is shorter when the land has no room for all players.
 [[nodiscard]] std::vector<Start> FindStarts(const Grid<float>& heights, const Grid<float>& seaDistance,
                                             const Grid<float>& riverDistance, Start first, std::span<const Start> townOffsets,
                                             const Ground& ground, const Settings& settings);

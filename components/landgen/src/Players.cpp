@@ -66,6 +66,33 @@ struct Candidate
 }
 } // namespace
 
+float players::Fairness(std::span<const float> values)
+{
+	if (values.empty())
+	{
+		return 0.0f;
+	}
+	const auto [fewest, most] = std::ranges::minmax(values);
+	return most > 0.0f ? fewest / most : 0.0f;
+}
+
+float players::DistanceToRanges(std::span<const StartGround> grounds, const Settings& settings)
+{
+	std::vector<float> lands;
+	std::vector<float> flats;
+	lands.reserve(grounds.size());
+	flats.reserve(grounds.size());
+	for (const auto& ground : grounds)
+	{
+		lands.push_back(ground.land);
+		flats.push_back(ground.flat);
+	}
+	const auto off = [](float share, const ShareRange& range) {
+		return std::max({range.least - share, share - range.most, 0.0f});
+	};
+	return off(Fairness(lands), settings.landShare) + off(Fairness(flats), settings.flatShare);
+}
+
 Grid<float> players::Rises(const Grid<float>& heights)
 {
 	const int side = heights.side;
@@ -187,12 +214,14 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 	};
 
 	std::vector<Start> placed {first};
+	std::vector<StartGround> placedGround {reference.ground};
 	std::vector<Start> towns {{.x = first.x + townOffsets[0].x, .z = first.z + townOffsets[0].z}};
 	while (placed.size() < count)
 	{
 		const auto& offset = townOffsets[placed.size()];
 		std::optional<size_t> best;
 		float bestCost = 0.0f;
+		float bestOff = 0.0f;
 		bool bestInReach = false;
 		for (size_t i = 0; i < candidates.size(); ++i)
 		{
@@ -207,13 +236,21 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 			{
 				continue;
 			}
-			// A place in the reach of a town of a start comes before a place out of the reach
+			// A place in the reach of a town of a start comes before a place out of the reach. Of these places, a place
+			// that keeps the ground of all starts nearer to the ranges of the skirmish lands comes first. A place in the
+			// two ranges has a distance of 0, and then the cost of the place decides.
 			const bool inReach = closest <= farthest;
+			placedGround.push_back(candidates[i].ground);
+			const float placeOff = DistanceToRanges(placedGround, settings);
+			placedGround.pop_back();
 			const float placeCost = cost(candidates[i]);
-			if (!best.has_value() || (inReach && !bestInReach) || (inReach == bestInReach && placeCost < bestCost))
+			const bool better =
+			    inReach != bestInReach ? inReach : (placeOff < bestOff || (placeOff == bestOff && placeCost < bestCost));
+			if (!best.has_value() || better)
 			{
 				best = i;
 				bestCost = placeCost;
+				bestOff = placeOff;
 				bestInReach = inReach;
 			}
 		}
@@ -223,6 +260,7 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 		}
 		const auto& start = candidates[*best].place;
 		placed.push_back(start);
+		placedGround.push_back(candidates[*best].ground);
 		towns.push_back({.x = start.x + offset.x, .z = start.z + offset.z});
 	}
 	return {placed.begin() + 1, placed.end()};

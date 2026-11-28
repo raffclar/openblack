@@ -463,18 +463,40 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		startLakes = LakesNow(heights, settings.highLakes, firstDry);
 		startUnits = MakeDrawnUnits(heights, land.heightCurve);
 	}
-	for (const auto& other :
-	     players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
-	                         {.lowest = startSettings.lowest,
-	                         .highest = startSettings.highest,
-	                         .nearestSea = startSettings.nearestSea,
-	                         .farthestSea = startSettings.farthestSea,
-	                         .riverDistance = startSettings.riverDistance,
-	                         .flatRadius = startSettings.flatRadius,
-	                         .parts = startParts.has_value() ? &*startParts : nullptr,
-	                         .lakes = startLakes.has_value() ? &*startLakes : nullptr,
-	                         .drawnUnits = startUnits.has_value() ? &*startUnits : nullptr},
-	                         settings.players))
+	const auto findStarts = [&]() {
+		return players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
+		                           {.lowest = startSettings.lowest,
+		                            .highest = startSettings.highest,
+		                            .nearestSea = startSettings.nearestSea,
+		                            .farthestSea = startSettings.farthestSea,
+		                            .riverDistance = startSettings.riverDistance,
+		                            .flatRadius = startSettings.flatRadius,
+		                            .parts = startParts.has_value() ? &*startParts : nullptr,
+		                            .lakes = startLakes.has_value() ? &*startLakes : nullptr,
+		                            .drawnUnits = startUnits.has_value() ? &*startUnits : nullptr},
+		                           settings.players);
+	};
+	auto otherStarts = findStarts();
+	// The flat ground of each start and of its town is a dry circle for the lakes. Because of this, a lake near a start
+	// can get a lower level or become dry. The second search sees the lakes that the dry circles of the first starts
+	// leave.
+	if (!otherStarts.empty())
+	{
+		std::vector<lakes::Keep> dry {
+		    {.x = land.start.x, .z = land.start.z, .radius = startSettings.flatRadius},
+		    {.x = land.start.x + townOffsets[0].x, .z = land.start.z + townOffsets[0].z, .radius = settings.sites.flatRadius},
+		};
+		for (size_t i = 0; i < otherStarts.size(); ++i)
+		{
+			const auto& start = otherStarts[i];
+			const auto& offset = townOffsets[i + 1];
+			dry.push_back({.x = start.x, .z = start.z, .radius = startSettings.flatRadius});
+			dry.push_back({.x = start.x + offset.x, .z = start.z + offset.z, .radius = settings.sites.flatRadius});
+		}
+		startLakes = LakesNow(heights, settings.highLakes, dry);
+		otherStarts = findStarts();
+	}
+	for (const auto& other : otherStarts)
 	{
 		land.otherStarts.push_back({.x = other.x, .z = other.z, .radius = startSettings.flatRadius});
 		FlattenStartArea(heights, land.otherStarts.back(), startSettings);
