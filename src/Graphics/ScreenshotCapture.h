@@ -31,6 +31,8 @@
 namespace openblack::graphics
 {
 
+class ShaderManager;
+
 /// How a picture of the screen is read
 enum class ScreenshotRoute : uint8_t
 {
@@ -198,8 +200,14 @@ public:
 	OffscreenScreenshots& operator=(const OffscreenScreenshots&) = delete;
 	~OffscreenScreenshots();
 
-	/// Draws the frame being made aside, at the window's size, for a picture written to path once read back
-	void Begin(const std::filesystem::path& path, glm::u16vec2 size);
+	/// Draws the frame being made aside, at the window's size, for a picture written to path once read back. All the
+	/// pictures of one frame share the frame that is drawn aside. With shown, the window still shows the frame: the
+	/// debug windows and the pointer draw over it in the window and are not in the picture. Call Show to copy the
+	/// frame into the window.
+	void Begin(const std::filesystem::path& path, glm::u16vec2 size, bool shown = false);
+	/// Copies the frame that is drawn aside into the window, when Begin was told to show it. Call this after the passes
+	/// of the frame are submitted and before the debug windows.
+	void Show(const ShaderManager& shaders, glm::u16vec2 window) const;
 	/// Call this when bgfx has the frame with the number frame. It gives the passes back to the window. It writes each
 	/// picture whose pixels are back, or makes it when the game asked for it in memory. It records each picture that
 	/// it cannot write.
@@ -210,7 +218,8 @@ public:
 private:
 	struct Capture
 	{
-		std::filesystem::path path;
+		/// The pictures that this frame makes
+		std::vector<std::filesystem::path> paths;
 		glm::u16vec2 size;
 		FrameBufferHandle frameBuffer;
 		TextureHandle readBack;
@@ -225,6 +234,8 @@ private:
 	bool _redirected {false};
 	/// The target that they draw into
 	std::optional<FrameBufferHandle> _redirectedTo;
+	/// The colours of that target, when the window shows the frame
+	std::optional<TextureHandle> _shownFrame;
 };
 
 } // namespace openblack::graphics

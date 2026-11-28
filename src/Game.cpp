@@ -1395,14 +1395,14 @@ bool Game::RunFrame() noexcept
 			{
 				Locator::rendererInterface::value().RequestDeviceRestore(graphics::device_restore::Request::Lose);
 			}
-			// A picture without the debug windows: the frame's windows are made as ever but not drawn
-			const bool debugGuiInScreenshot = screenshotThisFrame && !_screenshotHidesDebugGui;
-			// The pictures of a challenge, of the creature's page and of a saved game go with the frame that the game
-			// draws next without the debug windows. Only that frame does not show the debug windows. The frames that wait
-			// for the pixels show them.
-			const bool pictureThisFrame =
-			    drawsFrame && !debugGuiInScreenshot && Locator::rendererInterface::value().ReleasePicturesForFrame();
-			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount || pictureThisFrame;
+			// The pictures of a challenge, of the creature's page and of a saved game are of the frame that the game draws
+			// next, without the debug windows. The renderer draws that frame aside and shows it in the window, so the debug
+			// windows stay on the screen.
+			if (drawsFrame)
+			{
+				static_cast<void>(Locator::rendererInterface::value().ReleasePicturesForFrame());
+			}
+			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount;
 			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				// The debug windows draw after the scene. The check counts their reads with names of their own.

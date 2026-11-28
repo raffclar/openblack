@@ -1071,6 +1071,8 @@ void Renderer::Frame() noexcept
 	// The good sky's glow over the frame is the last draw of the frame before the debug windows and the pointer
 	_screenGlow->Submit(*_shaderManager, static_cast<glm::u16vec2>(detail::SceneTarget(nullptr)),
 	                    _offscreenShots->RedirectedTo());
+	// A frame that a picture drew aside shows in the window under the debug windows and the pointer
+	_offscreenShots->Show(*_shaderManager, static_cast<glm::u16vec2>(detail::SceneTarget(nullptr)));
 	// bgfx reads the window one time in a frame, thus one request gives the pixels to all the pictures of the frame
 	if (const auto sent = _bgfxCallback->batch.Send(); sent.has_value())
 	{
@@ -1262,9 +1264,20 @@ bool Renderer::ReleasePicturesForFrame() noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::ReleasePicturesForFrame");
 	const auto names = _bgfxCallback->batch.Release();
+	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
+	const bool canDrawAside = size.x != 0 && size.y != 0 && bgfx::getRendererType() != bgfx::RendererType::Noop;
 	for (const auto& name : names)
 	{
-		RequestScreenshot(name);
+		if (canDrawAside)
+		{
+			// The frame is drawn aside and shown in the window with the debug windows over it. The picture is of the frame
+			// without them, so the debug windows do not blink when the picture is taken.
+			_offscreenShots->Begin(name, size, true);
+		}
+		else
+		{
+			RequestScreenshot(name);
+		}
 	}
 	return !names.empty();
 }

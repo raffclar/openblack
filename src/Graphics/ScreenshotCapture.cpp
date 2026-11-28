@@ -19,11 +19,18 @@
 #include <bgfx/bgfx.h>
 #include <bimg/bimg.h>
 #include <bx/file.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec4.hpp>
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugDownload.h"
 #include "Common/PlayerProfiles.h"
 #include "GraphicsHandleBgfx.h"
+#include "RendererDetail.h"
+#include "ShaderManager.h"
+#include "ShaderProgram.h"
 
 namespace openblack::graphics
 {
@@ -34,6 +41,9 @@ namespace
 constexpr std::string_view k_UncapturedNote = "Unable to capture screenshot ";
 /// The first view after every pass: a copy asked for in it is made once the whole frame is drawn
 constexpr auto k_CopyView = static_cast<bgfx::ViewId>(RenderPass::_count);
+/// The view that copies the frame drawn aside into the window. It comes after the copy view by number, but it runs
+/// before the debug windows (see Show).
+constexpr auto k_ShowView = static_cast<bgfx::ViewId>(k_CopyView + 1);
 constexpr uint32_t k_BytesPerPixel = 4;
 } // namespace
 
@@ -255,8 +265,14 @@ OffscreenScreenshots::~OffscreenScreenshots()
 	std::ranges::for_each(_captures, &OffscreenScreenshots::Release);
 }
 
-void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2 size)
+void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2 size, bool shown)
 {
+	// The pictures of one frame are all of the frame that is drawn aside now
+	if (_redirected && !_captures.empty())
+	{
+		_captures.back().paths.push_back(path);
+		return;
+	}
 	const std::array textures = {
 	    bgfx::createTexture2D(size.x, size.y, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_RT),
 	    bgfx::createTexture2D(size.x, size.y, false, 1, bgfx::TextureFormat::D24S8, BGFX_TEXTURE_RT_WRITE_ONLY),
@@ -269,10 +285,19 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 
 	for (const auto pass : k_ScreenPasses)
 	{
+		// A frame that the window shows keeps the debug windows and the pointer in the window
+		if (shown && (pass == RenderPass::ImGui || pass == RenderPass::Cursor))
+		{
+			continue;
+		}
 		bgfx::setViewFrameBuffer(static_cast<bgfx::ViewId>(pass), frameBuffer);
 	}
 	_redirected = true;
 	_redirectedTo = fromBgfx(frameBuffer);
+	if (shown)
+	{
+		_shownFrame = fromBgfx(textures[0]);
+	}
 	bgfx::TextureRegion to;
 	to.init(readBack);
 	bgfx::TextureRegion from;
@@ -280,7 +305,7 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 	bgfx::blit(k_CopyView, to, from);
 
 	Capture capture {
-	    .path = path,
+	    .paths = {path},
 	    .size = size,
 	    .frameBuffer = fromBgfx(frameBuffer),
 	    .readBack = fromBgfx(readBack),
@@ -294,6 +319,46 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 	_captures.push_back(std::move(capture));
 }
 
+void OffscreenScreenshots::Show(const ShaderManager& shaders, glm::u16vec2 window) const
+{
+	const auto* copy = shaders.GetShader("ScreenCopy");
+	if (!_shownFrame.has_value() || copy == nullptr || window.x == 0 || window.y == 0)
+	{
+		return;
+	}
+	// The views after the glow keep their order, with the copy of the frame in front of them
+	constexpr auto k_First = static_cast<bgfx::ViewId>(static_cast<uint8_t>(RenderPass::ScreenGlow) + 1);
+	constexpr auto k_Count = static_cast<uint16_t>(k_ShowView - k_First + 1);
+	static const auto k_Order = [] {
+		std::array<bgfx::ViewId, k_Count> order {};
+		order[0] = k_ShowView;
+		for (uint16_t i = 1; i < k_Count; ++i)
+		{
+			order.at(i) = static_cast<bgfx::ViewId>(k_First + i - 1);
+		}
+		return order;
+	}();
+	bgfx::setViewOrder(k_First, k_Count, k_Order.data());
+	const auto viewId = k_ShowView;
+	const glm::vec2 size(window);
+	const auto projection =
+	    bgfx::getCaps()->originBottomLeft ? glm::ortho(0.0f, size.x, 0.0f, size.y) : glm::ortho(0.0f, size.x, size.y, 0.0f);
+	const glm::mat4 identity(1.0f);
+	bgfx::setViewFrameBuffer(viewId, BGFX_INVALID_HANDLE);
+	bgfx::setViewRect(viewId, 0, 0, window.x, window.y);
+	bgfx::setViewMode(viewId, bgfx::ViewMode::Sequential);
+	bgfx::setViewTransform(viewId, glm::value_ptr(identity), glm::value_ptr(projection));
+	bgfx::setViewClear(viewId, BGFX_CLEAR_NONE);
+	if (const auto sampler = copy->FindUniform("s_screenCopy"); sampler.has_value())
+	{
+		copy->SetTextureSampler(*sampler, 0, *_shownFrame);
+	}
+	const glm::vec4 u_screenCopy {size.x, size.y, 0.0f, 0.0f};
+	copy->SetUniformValue("u_screenCopy", &u_screenCopy);
+	detail::SubmitLandQuad(viewId, *copy, {0.0f, 0.0f}, size, {0.0f, 0.0f}, {1.0f, 1.0f},
+	                       BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+}
+
 void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failures, ScreenPictures& pictures)
 {
 	if (_redirected)
@@ -304,6 +369,7 @@ void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failur
 		}
 		_redirected = false;
 		_redirectedTo.reset();
+		_shownFrame.reset();
 	}
 	std::erase_if(_captures, [frame, &failures, &pictures](Capture& capture) {
 		if (frame < capture.readyAt)
@@ -311,28 +377,30 @@ void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failur
 			return false;
 		}
 		const bool yflip = bgfx::getCaps()->originBottomLeft;
-		if (ScreenPictures::InMemory(capture.path.string()))
+		for (const auto& path : capture.paths)
 		{
-			pictures.Make(capture.path.string(), {.width = capture.size.x,
-			                                      .height = capture.size.y,
-			                                      .pitch = capture.size.x * k_BytesPerPixel,
-			                                      .yflip = yflip,
-			                                      .bgra = capture.pixels});
-			Release(capture);
-			return true;
-		}
-		if (auto why = WriteScreenshotPng(capture.path, capture.size.x, capture.size.y, capture.size.x * k_BytesPerPixel,
-		                                  capture.pixels, yflip);
-		    !why.empty())
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save the screenshot drawn aside at {}: {}",
-			                    player_profiles::PathForLog(capture.path), why);
-			failures.Record(capture.path.string(), "the picture drawn aside couldn't be written: " + why);
-		}
-		else
-		{
-			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot drawn aside ({}x{}) saved at {}", capture.size.x,
-			                   capture.size.y, player_profiles::PathForLog(capture.path));
+			if (ScreenPictures::InMemory(path.string()))
+			{
+				pictures.Make(path.string(), {.width = capture.size.x,
+				                              .height = capture.size.y,
+				                              .pitch = capture.size.x * k_BytesPerPixel,
+				                              .yflip = yflip,
+				                              .bgra = capture.pixels});
+				continue;
+			}
+			if (auto why = WriteScreenshotPng(path, capture.size.x, capture.size.y, capture.size.x * k_BytesPerPixel,
+			                                  capture.pixels, yflip);
+			    !why.empty())
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save the screenshot drawn aside at {}: {}",
+				                    player_profiles::PathForLog(path), why);
+				failures.Record(path.string(), "the picture drawn aside couldn't be written: " + why);
+			}
+			else
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot drawn aside ({}x{}) saved at {}", capture.size.x,
+				                   capture.size.y, player_profiles::PathForLog(path));
+			}
 		}
 		Release(capture);
 		return true;
