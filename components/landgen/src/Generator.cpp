@@ -15,6 +15,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <span>
 #include <utility>
 
 #include "landgen/LakeShore.h"
@@ -73,6 +74,26 @@ Grid<uint8_t> Mask(int side, auto&& test)
 		mask.values[i] = test(i) ? 1 : 0;
 	}
 	return mask;
+}
+
+/// The corners of the lakes that the ground holds now, from the heights rounded to whole altitudes. No lake covers a
+/// circle of `dry`.
+Grid<uint8_t> LakesNow(const Grid<float>& heights, const lakes::Settings& settings, std::span<const lakes::Keep> dry = {})
+{
+	Grid<float> rounded(heights.side, 0.0f);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		rounded.values[i] = std::floor(std::clamp(heights.values[i], 0.0f, terrain::k_HighestAltitude) + 0.5f);
+	}
+	Grid<uint8_t> corners(heights.side, 0);
+	for (const auto& lake : lakes::Find(rounded, static_cast<float>(k_SeaLevelAltitude), settings, dry))
+	{
+		for (const auto corner : lake.corners)
+		{
+			corners.values[corner] = 1;
+		}
+	}
+	return corners;
 }
 
 /// The height units that the game draws at each corner, from the heights through the curve
@@ -423,11 +444,24 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	}
 	// The start of each other player is on the part of the land of player one, so that a path joins the starts
 	std::optional<Grid<uint32_t>> startParts;
+	// The search for the other starts sees the lakes that the land holds after the start of player one, so that the
+	// ground of each start is the dry ground near it. As for the lakes of the land, no lake covers the flat ground of
+	// the start or the town of player one. The search finds the flat ground from the height units that the game draws.
+	std::optional<Grid<uint8_t>> startLakes;
+	std::optional<Grid<float>> startUnits;
 	if (playerCount > 1)
 	{
 		const Grid<uint8_t> noRivers(side, 0);
 		startParts =
 		    paths::Parts({.heights = heights, .curve = land.heightCurve, .water = sea, .rivers = noRivers}, settings.paths);
+		const std::array firstDry {
+		    lakes::Keep {.x = land.start.x, .z = land.start.z, .radius = startSettings.flatRadius},
+		    lakes::Keep {.x = land.start.x + townOffsets[0].x,
+		                 .z = land.start.z + townOffsets[0].z,
+		                 .radius = settings.sites.flatRadius},
+		};
+		startLakes = LakesNow(heights, settings.highLakes, firstDry);
+		startUnits = MakeDrawnUnits(heights, land.heightCurve);
 	}
 	for (const auto& other :
 	     players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
@@ -437,7 +471,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	                         .farthestSea = startSettings.farthestSea,
 	                         .riverDistance = startSettings.riverDistance,
 	                         .flatRadius = startSettings.flatRadius,
-	                         .parts = startParts.has_value() ? &*startParts : nullptr},
+	                         .parts = startParts.has_value() ? &*startParts : nullptr,
+	                         .lakes = startLakes.has_value() ? &*startLakes : nullptr,
+	                         .drawnUnits = startUnits.has_value() ? &*startUnits : nullptr},
 	                         settings.players))
 	{
 		land.otherStarts.push_back({.x = other.x, .z = other.z, .radius = startSettings.flatRadius});
@@ -470,19 +506,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		startAreas.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
 	}
 	// The lakes that the ground holds now. No town goes into one of them.
-	Grid<float> roundedNow(side, 0.0f);
-	for (size_t i = 0; i < heights.values.size(); ++i)
-	{
-		roundedNow.values[i] = std::floor(std::clamp(heights.values[i], 0.0f, terrain::k_HighestAltitude) + 0.5f);
-	}
-	Grid<uint8_t> lakesNow(side, 0);
-	for (const auto& lake : lakes::Find(roundedNow, static_cast<float>(k_SeaLevelAltitude), settings.highLakes))
-	{
-		for (const auto corner : lake.corners)
-		{
-			lakesNow.values[corner] = 1;
-		}
-	}
+	const auto lakesNow = LakesNow(heights, settings.highLakes);
 	const auto sites = settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTowns, startAreas, seed,
 	                                         settings.sites, &lakesNow);
 	const StartSettings townGround {.flatRadius = settings.sites.flatRadius, .blendRadius = settings.sites.blendRadius};

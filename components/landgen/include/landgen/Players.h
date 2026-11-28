@@ -46,6 +46,12 @@ struct Ground
 	/// The part of the land of each corner, as `paths::Parts` gives it. A start is on the part of the start of player
 	/// one, so that a path can join the two starts. Without the parts, a start can be on any part.
 	const Grid<uint32_t>* parts {nullptr};
+	/// The corners under a lake or on its shore. A lake corner is not dry land in the ground of a start. Without the
+	/// lakes, all ground above the sea is dry land.
+	const Grid<uint8_t>* lakes {nullptr};
+	/// The height units that the game draws at each corner. The test for flat ground uses their slope, because the
+	/// curve of the heights makes the high ground steeper. Without them, the test uses the heights.
+	const Grid<float>* drawnUnits {nullptr};
 };
 
 /// The rules for the start areas of the other players, from the five skirmish lands (TwoGods, ThreeGods, FourGods,
@@ -96,9 +102,9 @@ struct StartGround
 [[nodiscard]] Grid<float> Rises(const Grid<float>& heights);
 
 /// The dry land and the flat dry land within settings.groundRadius of a place in corners. The heights are altitudes, and
-/// `rises` comes from Rises.
+/// `rises` comes from Rises. A corner that `lakes` marks is not dry land.
 [[nodiscard]] StartGround GroundAt(const Grid<float>& heights, const Grid<float>& rises, float x, float z,
-                                   const Settings& settings);
+                                   const Settings& settings, const Grid<uint8_t>* lakes = nullptr);
 
 /// The start areas of players two and up, in the order of the players. `townOffsets` gives the place of the town of
 /// each player from the middle of its start, in corners, player one first. The town of each start is at least

@@ -96,7 +96,8 @@ Grid<float> players::Rises(const Grid<float>& heights)
 	return rises;
 }
 
-StartGround players::GroundAt(const Grid<float>& heights, const Grid<float>& rises, float x, float z, const Settings& settings)
+StartGround players::GroundAt(const Grid<float>& heights, const Grid<float>& rises, float x, float z, const Settings& settings,
+                              const Grid<uint8_t>* lakes)
 {
 	const float reach = settings.groundRadius / k_MetresPerCorner;
 	const int whole = static_cast<int>(reach);
@@ -112,7 +113,7 @@ StartGround players::GroundAt(const Grid<float>& heights, const Grid<float>& ris
 			const int px = cx + dx;
 			const int pz = cz + dz;
 			if (!heights.Contains(px, pz) || static_cast<float>((dx * dx) + (dz * dz)) > reach * reach ||
-			    heights.At(px, pz) <= terrain::k_SeaLevel)
+			    heights.At(px, pz) <= terrain::k_SeaLevel || (lakes != nullptr && lakes->At(px, pz) != 0))
 			{
 				continue;
 			}
@@ -139,7 +140,7 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 	const float last = static_cast<float>(std::max(side - 1, 1));
 	const auto reach = static_cast<int>(ground.flatRadius);
 	const int step = std::max(settings.step, 1);
-	const auto rises = Rises(heights);
+	const auto rises = Rises(ground.drawnUnits != nullptr ? *ground.drawnUnits : heights);
 
 	const auto firstX = static_cast<int>(first.x);
 	const auto firstZ = static_cast<int>(first.z);
@@ -147,7 +148,7 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 	    .place = first,
 	    .rough = RoughnessAt(heights, firstX, firstZ, reach),
 	    .height = heights.At(firstX, firstZ),
-	    .ground = GroundAt(heights, rises, first.x, first.z, settings),
+	    .ground = GroundAt(heights, rises, first.x, first.z, settings, ground.lakes),
 	};
 	const auto partOf = [&ground](int x, int z) { return ground.parts == nullptr ? 0u : ground.parts->At(x, z); };
 	const auto firstPart = partOf(firstX, firstZ);
@@ -172,7 +173,7 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 			candidates.push_back({.place = {.x = fx, .z = fz},
 			                      .rough = RoughnessAt(heights, x, z, reach),
 			                      .height = height,
-			                      .ground = GroundAt(heights, rises, fx, fz, settings)});
+			                      .ground = GroundAt(heights, rises, fx, fz, settings, ground.lakes)});
 		}
 	}
 

@@ -230,6 +230,89 @@ TEST(LandgenPlayers, TheGroundCountsTheDryLandAndTheFlatLand)
 	EXPECT_NEAR(ground.flat, ground.land / 2.0f, k_Circle * 0.05f);
 }
 
+TEST(LandgenPlayers, TheGroundOfAStartHasNoLakeCorners)
+{
+	// All the land is flat and dry, and a lake covers the east half
+	const FakeLand land;
+	Grid<uint8_t> lakes(k_Side, 0);
+	for (int x = 128; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			lakes.At(x, z) = 1;
+		}
+	}
+	const auto rises = players::Rises(land.heights);
+	const players::Settings settings;
+	const auto dry = players::GroundAt(land.heights, rises, 128.0f, 128.0f, settings);
+	const auto withLake = players::GroundAt(land.heights, rises, 128.0f, 128.0f, settings, &lakes);
+	EXPECT_EQ(dry.flat, dry.land);
+	EXPECT_NEAR(withLake.land, dry.land / 2.0f, dry.land * 0.05f);
+	EXPECT_EQ(withLake.flat, withLake.land);
+}
+
+TEST(LandgenPlayers, AStartSeesTheLakesNearIt)
+{
+	// All the land is flat and dry, with a lake of radius 40 corners near player one. Without the lakes, the
+	// search puts the second start next to the lake. With the lakes, the ground of the second start is as dry as the
+	// ground of player one.
+	const FakeLand land;
+	Grid<uint8_t> lakes(k_Side, 0);
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			if (Distance(static_cast<float>(x), static_cast<float>(z), 128.0f, 80.0f) <= 40.0f)
+			{
+				lakes.At(x, z) = 1;
+			}
+		}
+	}
+	const players::Start first {.x = 60.0f, .z = 128.0f};
+	const auto rises = players::Rises(land.heights);
+	const players::Settings settings;
+	const auto firstLand = players::GroundAt(land.heights, rises, first.x, first.z, settings, &lakes).land;
+
+	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, k_Ground, WithPlayers(2));
+	ASSERT_EQ(blind.size(), 1u);
+	EXPECT_LT(players::GroundAt(land.heights, rises, blind[0].x, blind[0].z, settings, &lakes).land, firstLand * 0.9f);
+
+	auto ground = k_Ground;
+	ground.lakes = &lakes;
+	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithPlayers(2));
+	ASSERT_EQ(starts.size(), 1u);
+	EXPECT_GE(players::GroundAt(land.heights, rises, starts[0].x, starts[0].z, settings, &lakes).land, firstLand * 0.98f);
+}
+
+TEST(LandgenPlayers, TheFlatGroundOfAStartIsFlatInTheUnitsThatTheGameDraws)
+{
+	// The heights are flat everywhere. The curve of the heights makes the ground on one side of player one steep in the
+	// units that the game draws.
+	const FakeLand land;
+	Grid<float> units(k_Side, 20.0f);
+	for (int x = 80; x < k_Side; ++x)
+	{
+		for (int z = 100; z < k_Side; ++z)
+		{
+			units.At(x, z) = 20.0f + (static_cast<float>(z % 8) * 3.0f);
+		}
+	}
+	const players::Start first {.x = 60.0f, .z = 128.0f};
+	const auto drawnRises = players::Rises(units);
+	const players::Settings settings;
+	const auto firstFlat = players::GroundAt(land.heights, drawnRises, first.x, first.z, settings).flat;
+
+	const auto blind = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, k_Ground, WithPlayers(2));
+	ASSERT_EQ(blind.size(), 1u);
+	EXPECT_LT(players::GroundAt(land.heights, drawnRises, blind[0].x, blind[0].z, settings).flat, firstFlat * 0.8f);
+
+	auto ground = k_Ground;
+	ground.drawnUnits = &units;
+	const auto starts = players::FindStarts(land.heights, land.sea, land.rivers, first, k_Offsets, ground, WithPlayers(2));
+	ASSERT_EQ(starts.size(), 1u);
+	EXPECT_GE(players::GroundAt(land.heights, drawnRises, starts[0].x, starts[0].z, settings).flat, firstFlat * 0.9f);
+}
+
 TEST(LandgenPlayers, EachPlayerHasItsOwnSeed)
 {
 	std::set<uint64_t> seeds {7};
