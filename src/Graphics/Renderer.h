@@ -98,6 +98,7 @@ namespace graphics
 {
 class FrameBuffer;
 class LandFootprints;
+class QuadIndices;
 class LandShadowBake;
 class L3DSubMesh;
 class OffscreenScreenshots;
@@ -807,6 +808,9 @@ private:
 	/// and big forests' unless they are drawn moving
 	mutable std::unique_ptr<LandShadowBake> _landShadowBake;
 	mutable std::unique_ptr<LandFootprints> _landFootprints;
+	/// The shared indices of the quads of the ground blobs and of the creatures' footprints, made at their first draw
+	mutable std::unique_ptr<QuadIndices> _groundBlobQuads;
+	mutable std::unique_ptr<QuadIndices> _footprintQuads;
 	/// Whether this frame's land takes the baked shadows
 	mutable bool _landShadowsBaked {false};
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
