@@ -791,9 +791,8 @@ async function writeAsset(folder, name, bytes) {
     await writable.write(bytes);
     await writable.close();
   } catch (error) {
-    // A write that fails must not leave a part of the file in the folder
+    // A write that fails does not change the file. The next visit removes an empty file of the wrong size.
     await Promise.resolve(writable.abort?.()).catch(() => {});
-    await Promise.resolve(folder.removeEntry(name)).catch(() => {});
     throw error;
   }
   return handle.getFile();
