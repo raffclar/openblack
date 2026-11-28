@@ -1044,6 +1044,24 @@ check('a bank that comes whole after its first block removes the block', async (
   assert.deepEqual(file.blocks.filter((block) => folder.children.has(block)), []);
 });
 
+check('the page never removes a bank of one block, because its block is the whole bank', async () => {
+  const files = { 'Audio/Music/small.sad': 'HEAD', 'Audio/Music/align/Good.sad': 'HEADmusic of the good god' };
+  const site = fakeSite(files, { index: streamedText(files, Object.keys(files)) });
+  const root = new FakeFolder();
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  const { store } = await streamAssets(index, { fetchFile: site.fetchFile, digest, root });
+  await store.drained();
+  const small = numberOf(index.files, 'Audio/Music/small.sad');
+  const good = numberOf(index.files, 'Audio/Music/align/Good.sad');
+  await store.obtain(small, 0, 4);
+  await store.getWholeJob(good, 'now');
+  await store.obtain(good, 0, 100);
+  await store.drained();
+  const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+  assert.equal(folder.children.has(sha('HEAD')), true);
+  assert.notEqual(store.fileOf(small), null);
+});
+
 check('a block that a bank that is not whole also has stays in the folder', async () => {
   const files = { 'Audio/Music/one.sad': 'HEADfirst bank', 'Audio/Music/two.sad': 'HEADother bank' };
   const site = fakeSite(files, { index: streamedText(files, Object.keys(files)) });

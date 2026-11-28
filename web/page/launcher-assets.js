@@ -1130,6 +1130,10 @@ class AssetStore {
     }
     for (const user of done) {
       await this.joinBlocks(user);
+      // The whole file can arrive while the block downloads. The page then does not keep the block.
+      if (this.fileOf(user) && !this.full) {
+        await this.removeJoinedBlocks(user);
+      }
     }
   }
 
@@ -1166,13 +1170,14 @@ class AssetStore {
   }
 
   /**
-   * Removes each block of the file from the folder, when each file that has the block is kept whole. A failure goes
-   * only to the log: the next visit removes the block.
+   * Removes each block of the file from the folder, when each file that has the block is kept whole. A file of one
+   * block has the SHA-256 of the block, and the page never removes the content of a whole file. A failure goes only to
+   * the log: the next visit removes the block.
    */
   async removeJoinedBlocks(number) {
     for (const block of new Set(this.files[number].blocks)) {
       const users = this.blockUsers.get(block) ?? [];
-      if (!this.kept.has(block) || users.some((user) => !this.fileOf(user.number))) {
+      if (!this.kept.has(block) || this.users.has(block) || users.some((user) => !this.fileOf(user.number))) {
         continue;
       }
       this.kept.delete(block);
