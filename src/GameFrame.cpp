@@ -297,7 +297,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::FilmClock:
 		// The clock of a full-screen video counts the frames that are due by the real clock
-		Locator::videoSystem::value().CountDueFrames(std::chrono::steady_clock::now());
+		Locator::videoSystem::value().CountDueFrames(machine_clock::Now());
 		break;
 	case Step::DrawClock:
 		// The real time since the last draw, which the steps of the draw go by
@@ -305,7 +305,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Video:
 		// A full-screen video shows the frames that are due, fades, and ends
-		Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
+		Locator::videoSystem::value().Update(machine_clock::Now());
 		break;
 	case Step::PauseText:
 		// The words of the pause and the speed, as the draw finishes

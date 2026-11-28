@@ -66,6 +66,10 @@ public:
 		/// Sleeps one step of the wait for a frame and gives the time after it. When the hook is empty, the video system
 		/// does not wait
 		std::function<std::chrono::steady_clock::time_point()> waitStep;
+		/// The game's clock moves by a fixed time each frame, as in a run that takes pictures. The video then decodes each
+		/// frame on this thread when it is due and does not wait for a frame, so that two runs show the same frames. When
+		/// the hook is empty, the clock is not fixed
+		std::function<bool()> fixedClock;
 	};
 
 	/// The game's: the time system's pause, the cinematic director's bars, the scripts' music, the resource cache
@@ -119,6 +123,8 @@ private:
 		bool buffering {false};
 	};
 
+	/// True when the game's clock moves by a fixed time each frame
+	[[nodiscard]] bool FixedClock() const;
 	/// Counts the frames due by the real clock and takes the newest of them decoded
 	void DecodeDue(std::chrono::steady_clock::time_point now);
 	/// True while the clock of a file that streams must wait: before the first frame and after a packet that did not

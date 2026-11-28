@@ -29,6 +29,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/IntegerSteps.h"
+#include "Common/MachineClock.h"
 #include "Common/SameBits.h"
 #include "Common/SideThread.h"
 #include "Common/WorkerPool.h"
@@ -1074,7 +1075,17 @@ std::optional<std::vector<LandShadowBake::WatchedChange>> LandShadowBake::TakeWa
 
 void LandShadowBake::ApplyFinishedBake()
 {
-	if (!_bake.valid() || _bake.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+	if (!_bake.valid())
+	{
+		return;
+	}
+	// With a fixed frame time, the shadows of a bake always show from the next update, so that two runs give the same
+	// pictures. Otherwise they show from the first update after the bake ends.
+	if (machine_clock::FixedFrameTime())
+	{
+		_bake.wait();
+	}
+	else if (_bake.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 	{
 		return;
 	}

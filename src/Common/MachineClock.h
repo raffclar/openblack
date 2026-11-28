@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <ctime>
 
+#include <chrono>
+
 /// The machine's clock as the game reads it, to time presses, pick among sounds and know the date. Read through the time
 /// system, it follows a fixed frame time and counts from when the clock was last restarted, so that a seeded,
 /// deterministic run reads the same numbers each time; without a time system (tests that make a system alone) it is the
@@ -20,6 +22,12 @@ namespace openblack::machine_clock
 {
 /// Milliseconds, wrapping as the machine's count does
 [[nodiscard]] uint32_t Ticks();
+/// True when each frame takes a fixed game time, as in a run that takes pictures. The things that the game does on other
+/// threads must then show at a fixed frame, not at the frame in which the thread ends
+[[nodiscard]] bool FixedFrameTime();
+/// A point of the real clock, for the things that play by the real time also while the game pauses, such as a video. With
+/// a fixed frame time it is the tick count, so that two runs of one build show the same video frames at the same frame
+[[nodiscard]] std::chrono::steady_clock::time_point Now();
 /// Seconds since 1970
 [[nodiscard]] int64_t UnixTime();
 /// The local date and time of a count of seconds since 1970, by the computer's time zone

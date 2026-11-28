@@ -23,6 +23,7 @@
 #define LOCATOR_IMPLEMENTATIONS 1
 #include "BinkTestFiles.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
+#include "Video/VideoRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -50,6 +51,8 @@ struct FakeGame
 	/// When set, the wait for a frame steps this clock on by the sleep of each step
 	std::optional<Clock::time_point> waitClock;
 	int waitSteps {0};
+	/// The game's clock moves by a fixed time each frame
+	bool fixedClock {false};
 
 	VideoSystem::Hooks Hooks()
 	{
@@ -79,6 +82,7 @@ struct FakeGame
 			    return *waitClock;
 		    })
 		                                      : nullptr,
+		    .fixedClock = [this]() { return fixedClock; },
 		};
 	}
 };
@@ -209,6 +213,41 @@ TEST(VideoSystem, WhileItCoversTheScreenTheGameWaitsForTheNextFrame)
 	EXPECT_EQ(game.waitSteps, 65);
 	EXPECT_EQ(videos.GetStatus()->frame, 2);
 	EXPECT_EQ(videos.GetPicture()->serial, 2u);
+}
+
+TEST(VideoSystem, WithAFixedClockTheGameDoesNotWaitForAFrame)
+{
+	FakeGame game;
+	game.files["a.bik"] = MakeVideo(300, 24);
+	game.waitClock = k_Start + 10ms;
+	game.fixedClock = true;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.Play("a.bik");
+	videos.Update(k_Start);
+	// No frame can come while the fixed clock waits: the game draws the first frame again
+	videos.Update(k_Start + 10ms);
+	EXPECT_EQ(game.waitSteps, 0);
+	EXPECT_EQ(videos.GetStatus()->frame, 1);
+	videos.Update(k_Start + 42ms);
+	EXPECT_EQ(videos.GetStatus()->frame, 2);
+}
+
+TEST(VideoSystem, WithAFixedClockThePictureIsTheFrameDueAlsoWhenAThreadDecodes)
+{
+	FakeGame game;
+	game.files["a.bik"] = MakeVideo(300, 24);
+	game.fixedClock = true;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Worker);
+	videos.Play("a.bik");
+	// Each update shows the frame due at once, not the newest frame that a thread decoded in time
+	for (int i = 0; i < 40; ++i)
+	{
+		const auto now = k_Start + std::chrono::milliseconds(20 * i);
+		videos.Update(now);
+		const auto due = video::FramesDue(std::chrono::milliseconds(20 * i), 24, 1);
+		ASSERT_TRUE(videos.GetPicture().has_value());
+		EXPECT_EQ(videos.GetPicture()->serial, due) << "update " << i;
+	}
 }
 
 TEST(VideoSystem, AFrameThatCameBeforeTheUpdateNeedsNoWait)

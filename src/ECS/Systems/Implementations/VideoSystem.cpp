@@ -18,6 +18,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/MachineClock.h"
 #include "Common/SleepDebt.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Registry.h"
@@ -118,6 +119,7 @@ VideoSystem::Hooks GameHooks()
 		        });
 		        return std::chrono::steady_clock::now();
 	        },
+	    .fixedClock = []() { return machine_clock::FixedFrameTime(); },
 	};
 }
 } // namespace
@@ -195,7 +197,9 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 		std::string error;
 		if (auto reader = bink::FrameReader::Create(video.file, &error))
 		{
-			video.frames = std::make_unique<video::FrameQueue>(std::move(*reader), _decodeMode);
+			// With a fixed clock, the frame shown is the frame due, not the newest that a thread decoded in time
+			const auto mode = FixedClock() ? video::DecodeMode::Inline : _decodeMode;
+			video.frames = std::make_unique<video::FrameQueue>(std::move(*reader), mode);
 		}
 		else
 		{
@@ -350,7 +354,8 @@ void VideoSystem::UpdateFallingSpell(std::chrono::steady_clock::time_point now)
 
 void VideoSystem::WaitForFrame(std::chrono::steady_clock::time_point now)
 {
-	if (!_hooks.waitStep)
+	// With a fixed clock, no frame can come while the game waits
+	if (!_hooks.waitStep || FixedClock())
 	{
 		return;
 	}
@@ -367,6 +372,11 @@ void VideoSystem::WaitForFrame(std::chrono::steady_clock::time_point now)
 			return;
 		}
 	}
+}
+
+bool VideoSystem::FixedClock() const
+{
+	return _hooks.fixedClock && _hooks.fixedClock();
 }
 
 void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)

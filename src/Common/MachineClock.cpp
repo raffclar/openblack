@@ -26,6 +26,20 @@ uint32_t machine_clock::Ticks()
 	return static_cast<uint32_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
 }
 
+bool machine_clock::FixedFrameTime()
+{
+	return Locator::time::has_value() && Locator::time::value().GetFixedFrameTime().has_value();
+}
+
+std::chrono::steady_clock::time_point machine_clock::Now()
+{
+	if (FixedFrameTime())
+	{
+		return std::chrono::steady_clock::time_point(std::chrono::milliseconds(Locator::time::value().GetTicks()));
+	}
+	return std::chrono::steady_clock::now();
+}
+
 int64_t machine_clock::UnixTime()
 {
 	if (Locator::time::has_value())
