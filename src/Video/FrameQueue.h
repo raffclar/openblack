@@ -14,6 +14,7 @@
 #include <cstdint>
 
 #include <array>
+#include <chrono>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -53,6 +54,8 @@ class FrameQueue
 public:
 	/// Frames held at once: the one shown and those decoded ahead of it
 	static constexpr size_t k_Slots = 4;
+	/// How often the worker looks for the next packet of a file that streams
+	static constexpr std::chrono::milliseconds k_StreamPoll {5};
 
 	FrameQueue(bink::FrameReader reader, DecodeMode mode);
 	~FrameQueue();

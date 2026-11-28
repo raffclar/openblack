@@ -73,6 +73,11 @@ const k_AssetSoonRules = [
 const k_AssetHeaderRules = [
   /^audio\/music\/.*\.sad$/,
 ];
+// With a tiers file: the films. The game plays a film while its blocks arrive (src/Resources/Loaders.cpp, VideoLoader),
+// thus the page gets each film in blocks, in the order of the film, in the phase of the film.
+const k_AssetFilmRules = [
+  /\.bik$/,
+];
 // The number of blocks after a block that the game reads, which the page gets next, so that the music plays on
 const k_AssetReadAheadBlocks = 2;
 
@@ -514,10 +519,17 @@ function planAssetTiers(files, tiers = null, blockSize = 0) {
         phases[soon < 0 ? k_AssetPhaseLater : k_AssetPhaseSoon].push({ number, block: null, order: k_AssetMostFiles + soon });
         return;
       }
-      // Only the music banks come in blocks. The page gets each other bank whole in its phase, so that no sample of
-      // the dialogue or of the sound effects waits for the site when it first plays.
+      // Only the music banks and the films come in blocks. The page gets each other bank whole in its phase, so that
+      // no sample of the dialogue or of the sound effects waits for the site when it first plays.
+      const lower = file.path.toLowerCase();
+      if (file.blocks && blockSize === tiers.blockSize && k_AssetFilmRules.some((rule) => rule.test(lower))) {
+        file.blocks.forEach((_, block) => {
+          phases[assetPhaseOf(tiers, tier.phase)].push({ number, block, order: tier.order });
+        });
+        return;
+      }
       const inBlocks = file.blocks && tier.blocks !== null && blockSize === tiers.blockSize &&
-        k_AssetHeaderRules.some((rule) => rule.test(file.path.toLowerCase()));
+        k_AssetHeaderRules.some((rule) => rule.test(lower));
       if (!inBlocks) {
         phases[assetPhaseOf(tiers, tier.phase)].push({ number, block: null, order: tier.order });
         return;
@@ -805,7 +817,8 @@ class AssetStore {
   getBlockJob(number, block, priority, front = false) {
     const file = this.files[number];
     const sha256 = file.blocks[block];
-    if (this.kept.has(sha256)) {
+    // The page removes the blocks of a file that it keeps whole
+    if (this.kept.has(sha256) || this.fileOf(number)) {
       return Promise.resolve();
     }
     const { start, end } = assetBlockBounds(file, this.blockSize, block);

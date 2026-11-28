@@ -12,6 +12,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -184,6 +185,123 @@ TEST(BinkFile, OpenReadsWhatParseReads)
 	std::string error;
 	EXPECT_FALSE(BinkFile::Open(path, &error).has_value());
 	EXPECT_NE(error.find("cannot open"), std::string::npos);
+}
+
+TEST(BinkFile, AStreamReadsWhatParseReads)
+{
+	const auto data = MakeBik(Packets({8, 4, 6}), {.width = 640, .height = 360, .keyFrames = {0, 2}});
+	const auto parsed = BinkFile::Parse(data);
+	ASSERT_TRUE(parsed.has_value());
+	const GatedBytes bytes(data, data.size());
+	auto streamed = BinkFile::Stream(bytes.Reader(), bytes.Size(), 16);
+	ASSERT_TRUE(streamed.has_value());
+	ASSERT_TRUE(streamed->WaitForFrame(2));
+	EXPECT_EQ(streamed->Size(), parsed->Size());
+	EXPECT_EQ(streamed->FrameCount(), parsed->FrameCount());
+	EXPECT_EQ(streamed->Width(), parsed->Width());
+	EXPECT_EQ(streamed->KeyFrameCount(), parsed->KeyFrameCount());
+	for (uint32_t frame = 0; frame <= parsed->FrameCount(); ++frame)
+	{
+		EXPECT_EQ(streamed->FrameOffset(frame), parsed->FrameOffset(frame));
+		const auto a = streamed->VideoPacket(frame);
+		const auto b = parsed->VideoPacket(frame);
+		EXPECT_TRUE(std::ranges::equal(a, b)) << frame;
+	}
+	// A file that does not stream has all its bytes and no speed
+	EXPECT_TRUE(parsed->IsComplete());
+	EXPECT_FALSE(parsed->ReadSpeed().has_value());
+}
+
+TEST(BinkFile, AStreamGivesEachPacketWhenItArrives)
+{
+	const auto data = MakeBik(Packets({40, 40, 40}));
+	const auto parsed = BinkFile::Parse(data);
+	ASSERT_TRUE(parsed.has_value());
+	// The first chunk has the header, the tables and no whole packet
+	constexpr uint32_t k_Chunk = 64;
+	GatedBytes bytes(data, k_Chunk);
+	auto file = BinkFile::Stream(bytes.Reader(), bytes.Size(), k_Chunk);
+	ASSERT_TRUE(file.has_value());
+	EXPECT_EQ(file->BytesRead(), k_Chunk);
+	EXPECT_FALSE(file->IsComplete());
+	EXPECT_FALSE(file->HasFrame(0));
+	EXPECT_FALSE(file->ReadSpeed().has_value());
+	// Past the last frame, no packet is necessary
+	EXPECT_TRUE(file->HasFrame(3));
+
+	bytes.Open(parsed->FrameOffset(1) + k_Chunk);
+	ASSERT_TRUE(file->WaitForFrame(0));
+	EXPECT_EQ(file->BytesRead() % k_Chunk, 0u);
+	EXPECT_TRUE(file->ReadSpeed().has_value());
+	EXPECT_FALSE(file->IsComplete());
+
+	bytes.Open(data.size());
+	ASSERT_TRUE(file->WaitForFrame(2));
+	EXPECT_TRUE(file->IsComplete());
+	EXPECT_FALSE(file->HasFailed());
+	EXPECT_EQ(file->VideoPacket(2)[0], 3);
+}
+
+TEST(BinkFile, AStreamThatFailsGivesNoMorePackets)
+{
+	const auto data = MakeBik(Packets({40, 40, 40}));
+	GatedBytes bytes(data, 64);
+	auto file = BinkFile::Stream(bytes.Reader(), bytes.Size(), 64);
+	ASSERT_TRUE(file.has_value());
+	bytes.Fail();
+	EXPECT_FALSE(file->WaitForFrame(2));
+	EXPECT_TRUE(file->HasFailed());
+	EXPECT_FALSE(file->HasFrame(2));
+}
+
+TEST(BinkFile, AStreamChecksThePacketsAsTheyArrive)
+{
+	// The audio size of the second packet is past its packet
+	std::vector<uint8_t> bad = {2, 0, 0, 0, 0xA, 0xA, 1, 2};
+	const std::vector<uint8_t> good = {2, 0, 0, 0, 0xA, 0xA, 1, 2, 3, 4};
+	bad[0] = 99;
+	const auto data = MakeBik({good, bad}, {.audioTracks = 1});
+	EXPECT_FALSE(BinkFile::Parse(data).has_value());
+	const GatedBytes bytes(data, data.size());
+	auto file = BinkFile::Stream(bytes.Reader(), bytes.Size(), 4);
+	ASSERT_TRUE(file.has_value());
+	EXPECT_TRUE(file->WaitForFrame(0));
+	EXPECT_FALSE(file->WaitForFrame(1));
+	EXPECT_TRUE(file->HasFailed());
+}
+
+TEST(BinkFile, AStreamRejectsABadStart)
+{
+	std::string error;
+	auto data = MakeBik(Packets({4}));
+	data[0] = 'X';
+	const GatedBytes bytes(data, data.size());
+	EXPECT_FALSE(BinkFile::Stream(bytes.Reader(), bytes.Size(), 16, &error).has_value());
+	EXPECT_NE(error.find("signature"), std::string::npos);
+
+	// The size of the file does not agree with the frame table
+	const auto good = MakeBik(Packets({4, 4}));
+	const GatedBytes longer(good, good.size());
+	EXPECT_FALSE(BinkFile::Stream(longer.Reader(), good.size() - 1, 16, &error).has_value());
+
+	GatedBytes failing(good, 0);
+	failing.Fail();
+	EXPECT_FALSE(BinkFile::Stream(failing.Reader(), good.size(), 16, &error).has_value());
+	EXPECT_NE(error.find("header"), std::string::npos);
+}
+
+TEST(BinkFile, AStreamCanGoWhileItsReadWaits)
+{
+	const auto data = MakeBik(Packets({40, 40, 40}));
+	GatedBytes bytes(data, 64);
+	{
+		auto file = BinkFile::Stream(bytes.Reader(), bytes.Size(), 64);
+		ASSERT_TRUE(file.has_value());
+		auto moved = std::move(*file);
+		EXPECT_FALSE(moved.IsComplete());
+	}
+	// The thread of the stream ends after its read
+	bytes.Open(data.size());
 }
 
 TEST(BinkFile, TheGamesVideos)

@@ -73,8 +73,19 @@ void FrameQueue::DecodeInto(DecodedFrame& slot)
 
 void FrameQueue::Run()
 {
+	const auto& file = _reader.GetFile();
 	while (true)
 	{
+		// A file that streams can be without the packet of the next frame. The worker waits for the packet here, where
+		// a stop ends the wait at once
+		while (!file.HasFrame(_next) && !file.HasFailed())
+		{
+			std::unique_lock lock(_mutex);
+			if (_changed.wait_for(lock, k_StreamPoll, [this]() { return _stop; }))
+			{
+				return;
+			}
+		}
 		size_t index = 0;
 		{
 			std::unique_lock lock(_mutex);

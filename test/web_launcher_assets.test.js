@@ -507,10 +507,22 @@ check('the tiers give each file and each run of blocks its phase, and a file tha
     ['Data/Landscape/Land1.lnd', 'Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad 0'],
     ['Audio/Music/align/Good.sad 2'],
     ['Audio/Music/align/Good.sad 3', 'Audio/Music/align/Good.sad 4', 'Data/Spells/Anims/heal.anm'],
-    ['Data/INTRO.bik', 'Data/Landscape/Land2.lnd', 'Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']]);
+    ['Data/INTRO.bik 0', 'Data/INTRO.bik 1', 'Data/INTRO.bik 2', 'Data/INTRO.bik 3', 'Data/Landscape/Land2.lnd',
+      'Data/Landscape/land2.fot', 'Online Maps/mpm_2p_1.map']]);
   // The list has blocks of another size: the page gets the whole file
   assert.deepEqual(paths(planAssetTiers(files, tiers, 8)[2]),
     ['Data/Landscape/Land1.lnd', 'Data/AllMeshes.g3d', 'Audio/Music/align/Good.sad']);
+  assert.deepEqual(paths(planAssetTiers(files, tiers, 8)[5])[0], 'Data/INTRO.bik');
+});
+
+check('the page gets a film in its blocks, in the order of the film, in the phase of the film', () => {
+  const films = { 'Data/pre_intro.bik': 'the pre-intro film, in four blocks' };
+  const filmFiles = parseAssetIndex(streamedText(films, Object.keys(films))).files;
+  const filmTiers = parseAssetTiers(tiersText({ files: { 'data/pre_intro.bik': { phase: 1, order: 0 } } }));
+  const phases = planAssetTiers(filmFiles, filmTiers, k_BlockSize);
+  assert.deepEqual(phases[1].map(({ block }) => block), filmFiles[0].blocks.map((_, block) => block));
+  assert.ok(filmFiles[0].blocks.length > 1);
+  assert.deepEqual(phases.filter((items, phase) => phase !== 1).flat(), []);
 });
 
 check('the tiers file of the page starts the game with the boot files and never gets the low-detail meshes first', () => {
@@ -607,9 +619,11 @@ check('before the start the page gets only the boot files, then the phases and t
   assert.equal(entry('Data/Landscape/Land1.lnd').file, null);
   await store.drained();
   const music = assetAddress('Audio/Music/align/Good.sad');
+  // The intro film comes in its blocks
+  const intro = assetAddress('Data/INTRO.bik');
   assert.deepEqual([...site.requests.keys()].sort(), [k_AssetIndexAddress, assetAddress('Data/AllMeshes.g3d'),
-    assetAddress('Data/INTRO.bik'), assetAddress('Data/Landscape/Land1.lnd'), `${music} bytes=0-3`,
-    assetAddress('Data/Spells/Anims/heal.anm')].sort());
+    `${intro} bytes=0-3`, `${intro} bytes=4-7`, `${intro} bytes=8-11`, `${intro} bytes=12-13`,
+    assetAddress('Data/Landscape/Land1.lnd'), `${music} bytes=0-3`, assetAddress('Data/Spells/Anims/heal.anm')].sort());
   assert.equal(Buffer.from(store.fileOf(numberOf(index.files, 'Data/Landscape/Land1.lnd')).bytes).toString(), 'land one');
   assert.equal(entry('Data/Landscape/Land2.lnd').file, null);
   assert.equal(entry('Data/Landscape/Land2.lnd').size, 8);
@@ -684,9 +698,11 @@ check('with hashed addresses the page gets the files and the blocks at their add
   const { store } = await streamAssets(index, { fetchFile: site.fetchFile, digest, root });
   await store.drained();
   const music = hashedAssetAddress(sha(k_Streamed['Audio/Music/align/Good.sad']));
+  const intro = hashedAssetAddress(sha('the intro film'));
   assert.deepEqual([...site.requests.keys()].sort(), [k_AssetIndexAddress,
-    hashedAssetAddress(sha('meshes')), hashedAssetAddress(sha('the intro film')), hashedAssetAddress(sha('land one')),
-    `${music} bytes=0-3`, hashedAssetAddress(sha('heal'))].sort());
+    hashedAssetAddress(sha('meshes')), `${intro} bytes=0-3`, `${intro} bytes=4-7`, `${intro} bytes=8-11`,
+    `${intro} bytes=12-13`, hashedAssetAddress(sha('land one')), `${music} bytes=0-3`, hashedAssetAddress(sha('heal'))]
+    .sort());
   await store.obtain(numberOf(index.files, 'Data/Landscape/Land2.lnd'));
   assert.equal(site.requests.get(hashedAssetAddress(sha('land two'))), 1);
   for (const [key, cache] of site.caches) {
@@ -981,19 +997,27 @@ check('the game starts with the boot files, and the page then gets the phases in
   assert.equal(model.totals().remaining, 0);
 });
 
-check('a film that a phase gets whole comes whole to the game that reads it, and not a second time in blocks', async () => {
+check('a film comes in its blocks in its phase, the game reads its first block first, and the page joins it', async () => {
   const text = { 'Data/pre_intro.bik': 'the pre-intro film, in seven blocks' };
   const root = new FakeFolder();
   const site = fakeSite(text, { index: streamedText(text, Object.keys(text)) });
   const { index } = await fetchAssetIndex(site.fetchFile);
   const { store } = await streamAssets(index, { fetchFile: site.fetchFile, digest, root });
-  // The film runs in its phase. The game then reads it, and the other files of the phases wait for it.
-  const read = store.obtain(0, 0, 100);
+  // The game reads the header of the film: it waits only for the first block, and the film plays while the others come
+  const read = store.obtain(0, 0, 4);
   assert.equal(store.waitsNow(), true);
   await read;
+  assert.notEqual(store.blocksOf(0)[0], null);
   await store.drained();
   assert.equal(store.waitsNow(), false);
-  assert.deepEqual([...site.requests.keys()], [k_AssetIndexAddress, assetAddress('Data/pre_intro.bik')]);
+  const film = assetAddress('Data/pre_intro.bik');
+  const ranges = index.files[0].blocks.map((_, block) => {
+    const start = block * k_BlockSize;
+    return `${film} bytes=${start}-${Math.min(index.files[0].size, start + k_BlockSize) - 1}`;
+  });
+  assert.deepEqual([...site.requests.keys()].sort(), [k_AssetIndexAddress, ...ranges].sort());
+  assert.ok([...site.requests.values()].every((count) => count === 1));
+  // With all its blocks, the page keeps the film whole
   assert.equal(Buffer.from(store.fileOf(0).bytes).toString(), text['Data/pre_intro.bik']);
 });
 

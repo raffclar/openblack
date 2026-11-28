@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -139,6 +140,23 @@ inline constexpr std::chrono::microseconds k_FrameWaitSleep {500};
 /// How many frames are due `elapsed` after a video's first frame: frame i is due at i / fps seconds, the file's exact
 /// fraction
 [[nodiscard]] uint32_t FramesDue(std::chrono::microseconds elapsed, uint32_t fpsNumerator, uint32_t fpsDenominator) noexcept;
+
+/// The first time after a video's first frame at which `frames` frames are due: the reverse of FramesDue. Zero for one
+/// frame or none
+[[nodiscard]] std::chrono::microseconds TimeOfFramesDue(uint32_t frames, uint32_t fpsNumerator,
+                                                        uint32_t fpsDenominator) noexcept;
+
+/// The part of the measured speed of a stream that the start of a video counts on, so that a slower stream does not stop
+/// the video
+inline constexpr double k_StreamSpeedMargin = 0.75;
+
+/// Whether a stream gives the packet of each frame from `frame` before the frame is due, when the video plays from now.
+/// The stream has `bytesRead` bytes from the start of the file, and reads `bytesPerSecond` bytes a second, of which the
+/// rule counts k_StreamSpeedMargin. Packet `frame` + n is due n frames from now, and `frameEnds` gives where each packet
+/// ends. With no speed, only the bytes of all the packets that remain are enough
+[[nodiscard]] bool StreamCoversPlay(std::span<const uint32_t> frameEnds, uint32_t frame, uint64_t bytesRead,
+                                    std::optional<double> bytesPerSecond, uint32_t fpsNumerator,
+                                    uint32_t fpsDenominator) noexcept;
 
 /// The falling spell's time into its film: frame * 1000 / fps in 32-bit integers, wrapping as the game's do
 [[nodiscard]] int32_t FilmMilliseconds(int32_t frame, int32_t fps) noexcept;

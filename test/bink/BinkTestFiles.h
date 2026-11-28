@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
 #include <filesystem>
 #include <initializer_list>
+#include <memory>
+#include <mutex>
 #include <numeric>
 #include <optional>
 #include <span>
@@ -246,6 +249,67 @@ inline std::vector<uint8_t> MotionFrame(int32_t dx)
 	f.Repeat(2, static_cast<uint32_t>(BlockType::Skip)).Ends(2).EndPlane();
 	return f.SkipPlane(true).SkipPlane(true).Bytes();
 }
+
+/// The bytes of a file that a test gives to a stream part by part. A read waits until the test opens all its bytes, or
+/// until the test makes the reads fail
+class GatedBytes
+{
+public:
+	explicit GatedBytes(std::vector<uint8_t> data, size_t open = 0)
+	    : _state(std::make_shared<State>())
+	{
+		_state->data = std::move(data);
+		_state->open = open;
+	}
+
+	/// Lets the reads have the bytes before `bytes`
+	void Open(size_t bytes)
+	{
+		{
+			const std::scoped_lock lock(_state->mutex);
+			_state->open = bytes;
+		}
+		_state->changed.notify_all();
+	}
+
+	/// Makes each read that waits, and each next read, fail
+	void Fail()
+	{
+		{
+			const std::scoped_lock lock(_state->mutex);
+			_state->failed = true;
+		}
+		_state->changed.notify_all();
+	}
+
+	[[nodiscard]] uint64_t Size() const { return _state->data.size(); }
+
+	/// The read of a stream, which keeps the bytes while the stream needs them
+	[[nodiscard]] ReadBytes Reader() const
+	{
+		return [state = _state](uint64_t offset, std::span<uint8_t> out) {
+			std::unique_lock lock(state->mutex);
+			state->changed.wait(lock, [&] { return state->failed || offset + out.size() <= state->open; });
+			if (state->failed || offset + out.size() > state->data.size())
+			{
+				return false;
+			}
+			std::copy_n(state->data.begin() + static_cast<std::ptrdiff_t>(offset), out.size(), out.begin());
+			return true;
+		};
+	}
+
+private:
+	struct State
+	{
+		std::vector<uint8_t> data;
+		size_t open {0};
+		bool failed {false};
+		std::mutex mutex;
+		std::condition_variable changed;
+	};
+	std::shared_ptr<State> _state;
+};
 
 /// The game's folder when OPENBLACK_GAME_PATH names one
 inline std::optional<std::filesystem::path> GamePath()
