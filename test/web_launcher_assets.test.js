@@ -1008,7 +1008,8 @@ check('a film comes in its blocks in its phase, the game reads its first block f
   const read = store.obtain(0, 0, 4);
   assert.equal(store.waitsNow(), true);
   await read;
-  assert.notEqual(store.blocksOf(0)[0], null);
+  // The other blocks can arrive first: the page then has joined the film, and keeps it whole in place of the block
+  assert.ok(store.blocksOf(0)[0] !== null || store.fileOf(0) !== null);
   await store.drained();
   assert.equal(store.waitsNow(), false);
   const film = assetAddress('Data/pre_intro.bik');
