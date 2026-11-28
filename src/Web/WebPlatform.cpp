@@ -58,6 +58,15 @@ EM_JS(void, openblack_send_frame, (), {
 EM_JS(void, openblack_set_present, (int canvas), {
 	postMessage({ openblackPresent: canvas ? 'canvas' : 'image' });
 });
+// This function adds one to the count of game frames in a shared array (web/page/launcher.js). The game thread calls it
+// after each frame that it gives to the render thread outside RunFrames, for example a frame of the pre-intro film.
+// The page then knows that the game draws, also when the game thread does not wait for a display frame.
+EM_JS(void, openblack_count_game_frame, (), {
+	const gameFrames = globalThis.openblackWeb && globalThis.openblackWeb.gameFrames;
+	if (gameFrames) {
+		Atomics.add(gameFrames, 0, 1);
+	}
+});
 // The game thread waits for the next display frame of the browser. While it waits, the browser shows the frame that the
 // canvas has, and completes the WebGPU work that waits for it. The program links with JSPI, which keeps the stack of the
 // game thread while it waits.
@@ -441,6 +450,11 @@ void openblack::web::PresentFrame()
 	else if (!GetRenderThread().running.load())
 	{
 		SendFrameAndWait();
+	}
+	else
+	{
+		// A start-up screen or a loading screen does not always wait for a display frame between its frames
+		openblack_count_game_frame();
 	}
 	// The page sends its input events to the game thread as calls that wait in the queue of the thread. The thread does
 	// these calls when it gives control back to the browser, which it does only between two frames of RunFrames. A
