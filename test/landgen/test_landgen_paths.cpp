@@ -459,3 +459,36 @@ TEST(LandgenPaths, APathAtTheFootOfACliffDoesNotCoverTheTopOfTheCliff)
 	}
 	EXPECT_EQ(Draw(std::span(&path, 1), land.water, {}, slope, 0.8391f).values, plain.values);
 }
+
+TEST(LandgenPaths, AWayTakesTheLevelSideOfTheWaterAndNotTheSideOfAHill)
+{
+	FlatLand land;
+	// A lake in the middle. On the south side of the lake, the land rises to the south at 1 in 2 from the shore, so the
+	// way on that side runs along the side of a hill. The north side is level, and the two ways have the same length.
+	for (int x = 10; x <= 38; ++x)
+	{
+		for (int z = 14; z <= 34; ++z)
+		{
+			land.water.At(x, z) = 1;
+		}
+	}
+	constexpr float k_UnitsPerCorner = 7.5f;
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			land.heights.At(x, z) = 20.0f + (k_UnitsPerCorner * static_cast<float>(std::clamp(13 - z, 0, 5)));
+		}
+	}
+	const auto way = FindWay(land.GroundOf(), land.laid, {5.0f, 24.0f}, {43.0f, 24.0f}, 1, Straight());
+	ASSERT_TRUE(way.has_value());
+	EXPECT_FALSE(Touches(*way, land.water));
+	EXPECT_TRUE(std::ranges::all_of(*way, [](const Point& point) { return point.z >= 14.0f; }));
+
+	// The way with no cost for the side of a hill is not shorter. Thus the cost only picks the level side.
+	auto plain = Straight();
+	plain.sideWeight = 0.0f;
+	const auto plainWay = FindWay(land.GroundOf(), land.laid, {5.0f, 24.0f}, {43.0f, 24.0f}, 1, plain);
+	ASSERT_TRUE(plainWay.has_value());
+	EXPECT_LE(LengthOf(*plainWay), LengthOf(*way) + 0.01f);
+}

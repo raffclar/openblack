@@ -65,6 +65,13 @@ struct Settings
 	/// the change to the land becomes less by this rise over the run. The ground is then
 	/// never steeper than the land by more than this value.
 	float taper {0.2f};
+	/// On a cliff, the change to the land becomes less as fast as this slope lets it, or by the taper where that is
+	/// faster. Thus a cut or a fill does not go far along a cliff. The value is the rise over the run of the 90th
+	/// percentile of the cliff corners of the five story lands (66 degrees).
+	float steepestFace {2.28f};
+	/// The bed and its banks change no corner farther than this distance from the bed, in metres. Before this distance,
+	/// the change becomes less with the slope of the cut bank.
+	float farthestChange {120.0f};
 	/// The deepest cut or the highest fill of a bank of the fixed slope next to the bed, in metres. A steep side that the
 	/// bank meets within this height, such as a low cliff, gets the full bank.
 	float deepestBank {20.0f};

@@ -80,6 +80,12 @@ struct Settings
 	/// The cost of a step grows with the square of its slope (the rise over the run) times this value, so that a path
 	/// keeps to easy ground
 	float slopeWeight {40.0f};
+	/// The cost of a step also grows with the square of the slope across the step times this value. Thus a path keeps
+	/// away from the steep sides of the hills.
+	float sideWeight {5.0f};
+	/// A slope across the step steeper than this value costs as much as this value. Thus a path does not go far round a
+	/// long ridge with steep sides.
+	float steepestSide {1.0f};
 	/// A step with more rise over run than this is a cliff, and no path takes it (about 35 degrees)
 	float steepest {0.7f};
 	/// The cost of each step onto the bank of a river. A path crosses a river only where it must.
@@ -123,6 +129,11 @@ struct Ground
 	/// Not 0 on the rivers and their banks
 	const Grid<uint8_t>& rivers;
 };
+
+/// The parts of the land that the ways can join. Each corner out of the water gets the number of its part, from 1. Two
+/// corners have the same number when a way can go from one to the other with no step into the water or up a cliff. The
+/// corners in the water get 0.
+[[nodiscard]] Grid<uint32_t> Parts(const Ground& ground, const Settings& settings);
 
 /// The links that join each place after the first to the nearest place before it. The places of the towns of a land
 /// make a chain from the first town, so these links join all the towns.

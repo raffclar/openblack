@@ -149,6 +149,8 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 	    .height = heights.At(firstX, firstZ),
 	    .ground = GroundAt(heights, rises, first.x, first.z, settings),
 	};
+	const auto partOf = [&ground](int x, int z) { return ground.parts == nullptr ? 0u : ground.parts->At(x, z); };
+	const auto firstPart = partOf(firstX, firstZ);
 	const float nearest = settings.nearestRival / k_MetresPerCorner;
 	const float farthest = settings.farthestRival / k_MetresPerCorner;
 
@@ -160,7 +162,8 @@ std::vector<Start> players::FindStarts(const Grid<float>& heights, const Grid<fl
 		{
 			const float height = heights.At(x, z);
 			if (height < ground.lowest || height > ground.highest || seaDistance.At(x, z) < ground.nearestSea ||
-			    seaDistance.At(x, z) > ground.farthestSea || riverDistance.At(x, z) < ground.riverDistance)
+			    seaDistance.At(x, z) > ground.farthestSea || riverDistance.At(x, z) < ground.riverDistance ||
+			    partOf(x, z) != firstPart)
 			{
 				continue;
 			}

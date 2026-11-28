@@ -17,6 +17,7 @@
 
 #include <gtest/gtest.h>
 #include <landgen/Generator.h>
+#include <landgen/Paths.h>
 #include <landgen/Players.h>
 #include <landgen/Settlement.h>
 
@@ -132,6 +133,51 @@ TEST(LandgenPlayers, AStartTakesTheGroundThatIsNearestToTheGroundOfPlayerOne)
 	ASSERT_EQ(starts.size(), 1u);
 	EXPECT_NEAR(starts[0].x, 128.0f, 15.0f);
 	EXPECT_NEAR(starts[0].z, 80.0f, 15.0f);
+}
+
+TEST(LandgenPlayers, AStartIsOnThePartOfTheLandOfPlayerOne)
+{
+	// Player one is on the west square. The north square has the ground of player one, but a ring of cliffs divides it from
+	// the land round it. The south square is higher, but a way goes to it.
+	FakeLand land;
+	land.heights = Grid<float>(k_Side, 90.0f);
+	const auto square = [&land](int middleX, int middleZ, float height) {
+		for (int x = middleX - 15; x <= middleX + 15; ++x)
+		{
+			for (int z = middleZ - 15; z <= middleZ + 15; ++z)
+			{
+				land.heights.At(x, z) = height;
+			}
+		}
+	};
+	square(40, 128, 20.0f);
+	square(128, 80, 20.0f);
+	square(128, 176, 50.0f);
+	// The parts of the land: the ways cross level ground everywhere, but for the ring of cliffs round the north square
+	const HeightCurve curve {};
+	const Grid<uint8_t> none(k_Side, 0);
+	Grid<float> walkable(k_Side, 20.0f);
+	for (int x = 128 - 17; x <= 128 + 17; ++x)
+	{
+		for (int z = 80 - 17; z <= 80 + 17; ++z)
+		{
+			if (std::abs(x - 128) > 15 || std::abs(z - 80) > 15)
+			{
+				walkable.At(x, z) = 200.0f;
+			}
+		}
+	}
+	const auto parts = paths::Parts({.heights = walkable, .curve = curve, .water = none, .rivers = none}, paths::Settings {});
+	ASSERT_NE(parts.At(128, 80), parts.At(40, 128));
+	ASSERT_EQ(parts.At(128, 176), parts.At(40, 128));
+
+	auto ground = k_Ground;
+	ground.parts = &parts;
+	const auto starts =
+	    players::FindStarts(land.heights, land.sea, land.rivers, {.x = 40.0f, .z = 128.0f}, k_Offsets, ground, WithPlayers(2));
+	ASSERT_EQ(starts.size(), 1u);
+	EXPECT_NEAR(starts[0].x, 128.0f, 15.0f);
+	EXPECT_NEAR(starts[0].z, 176.0f, 15.0f);
 }
 
 TEST(LandgenPlayers, ALandWithNoRoomGetsFewerStarts)
