@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <map>
 #include <optional>
 #include <span>
 #include <utility>
@@ -23,6 +24,7 @@
 
 #include "3D/InfluenceCircle.h"
 #include "3D/Lightning.h"
+#include "3D/OrientedText.h"
 #include "3D/Rain.h"
 #include "3D/Snowfall.h"
 #include "3D/WaterRings.h"
@@ -36,16 +38,20 @@
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/HighDetailRules.h"
+#include "ECS/IntroRules.h"
+#include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/VillagerEyes.h"
 #include "Enums.h"
+#include "Gestures/GestureHints.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSymbolLayout.h"
 
 namespace openblack::graphics
 {
+class Texture2D;
 
 /// What the effects of the frame draw, as the steps of the frame made it before the draw. The renderer fills it on the
 /// game's thread. The passes read only this for these effects, not the world.
@@ -238,6 +244,26 @@ struct DrawnEffects
 	std::vector<snowfall::Tile> snowTiles;
 	/// A copy of the flakes that each quarter shows, as many as the quarter with the most flakes
 	std::vector<snowfall::Flake> snowFlakes;
+	/// How far the beat of the highlights of the scrolls is, from 0 to 1, when the game has the highlights. The models
+	/// of the particles that face the camera beat with it.
+	std::optional<float> highlightPulseShare;
+	/// The words over the land while the game pauses, and their texture, when the game has them
+	std::vector<OrientedTextVertex> pauseText;
+	const Texture2D* pauseTextTexture {nullptr};
+	/// The words of the tribal power over the land, and their texture, when the game has them
+	std::vector<OrientedTextVertex> tribalPowerText;
+	const Texture2D* tribalPowerTexture {nullptr};
+	/// What the light of the game's start draws, while there is a light
+	std::optional<ecs::intro_rules::light::Frame> introLight;
+	/// The point by which the light of the game's start sorts among the things that blend
+	glm::vec3 introLightSortPoint {0.0f};
+	/// The advisors and the trails of their smoke, as the advisors drew them in the steps of the frame
+	std::vector<ecs::systems::AdvisorSystemInterface::Draw> advisorDraws;
+	std::vector<ecs::systems::AdvisorSystemInterface::TrailVertex> advisorTrails;
+	/// The row of the hints of the gestures, when the game has gestures
+	std::optional<gesture_hints::Row> gestureHints;
+	/// What the effect of the holder of each pictured seed of the row draws, by miracle, for the hints that show
+	std::map<MagicType, particles::draw::Frame> hintEffects;
 
 	[[nodiscard]] std::span<const TownBelief> TownBeliefs() const
 	{

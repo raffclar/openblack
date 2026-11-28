@@ -206,35 +206,36 @@ constexpr bool k_Browser = true;
 constexpr bool k_Browser = false;
 #endif
 
-/// Draws the player's creature in the falling spell's film, when the film shows it, and the film's effects
-void DrawFilmCreature(const graphics::RendererInterface::DrawSceneDesc& drawDesc)
+/// The player's creature in the falling spell's film and the film's effects, when the film shows them
+std::optional<graphics::interface_creatures::FilmCreature> FilmCreatureShown()
 {
 	if (!Locator::filmCreatureSystem::has_value() || !Locator::windowing::has_value() ||
 	    !Locator::videoSystem::value().HidesWorld())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto shown = Locator::filmCreatureSystem::value().GetShown();
 	if (!shown.has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	// The renderer draws the creature over the film's picture, where the picture is on the window
 	const auto size = Locator::windowing::value().GetSize();
 	const auto rect = video::LetterboxRect(size.x, size.y);
-	Locator::rendererInterface::value().DrawFilmCreature(
-	    drawDesc, {.copy = shown->copy,
-	               .copyShown = shown->copyShown,
-	               .view = shown->view,
-	               .projection = shown->projection,
-	               .viewOrigin = glm::vec2(static_cast<float>(rect.x), static_cast<float>(rect.y)),
-	               .viewSize = glm::vec2(static_cast<float>(rect.width), static_cast<float>(rect.height)),
-	               .light = shown->light,
-	               .colour = shown->colour,
-	               .added = shown->added,
-	               .stars = shown->stars,
-	               .fans = shown->fans,
-	               .fanDepth = shown->fanDepth});
+	return graphics::interface_creatures::FilmCreature {
+	    .copy = shown->copy,
+	    .copyShown = shown->copyShown,
+	    .view = shown->view,
+	    .projection = shown->projection,
+	    .viewOrigin = glm::vec2(static_cast<float>(rect.x), static_cast<float>(rect.y)),
+	    .viewSize = glm::vec2(static_cast<float>(rect.width), static_cast<float>(rect.height)),
+	    .light = shown->light,
+	    .colour = shown->colour,
+	    .added = shown->added,
+	    .stars = shown->stars,
+	    .fans = shown->fans,
+	    .fanDepth = shown->fanDepth,
+	};
 }
 
 } // namespace
@@ -1343,8 +1344,17 @@ bool Game::RunFrame() noexcept
 				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
 				// The interface's creatures of this frame are not shown, and are not kept for the next
 				Locator::rendererInterface::value().ShowInterfaceCreatures({});
+				// The film's copy of the creature and its motes go into the drawn copy before the draw
+				const auto film = FilmCreatureShown();
+				if (film.has_value())
+				{
+					Locator::rendererInterface::value().FillFilmCreature(*_drawnFrame, *film);
+				}
 				WatchDrawReads(true);
-				DrawFilmCreature(drawDesc);
+				if (film.has_value())
+				{
+					Locator::rendererInterface::value().DrawFilmCreature(drawDesc, *film);
+				}
 				WatchDrawReads(false);
 			}
 			else
@@ -1395,7 +1405,10 @@ bool Game::RunFrame() noexcept
 			const bool hiddenThisFrame = _debugGuiHiddenFrame == _frameCount || pictureThisFrame;
 			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
+				// The debug windows draw after the scene. The check counts their reads with names of their own.
+				WatchDrawReads(true, true);
 				Locator::debugGui::value().Draw();
+				WatchDrawReads(false);
 			}
 		}
 

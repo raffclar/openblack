@@ -36,9 +36,11 @@
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/DrawLoadBlock.h"
+#include "Graphics/DrawnFrame.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/InstanceDesc.h"
@@ -367,6 +369,92 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const DrawnCreatures:
 	}
 }
 
+void Renderer::FillFilmCreature(DrawnFrame& frame, const interface_creatures::FilmCreature& shown) const
+{
+	auto& film = frame.creatures.filmCreature;
+	film.reset();
+	// The film's motes, which the film's effects draw with its stars
+	_filmParticleFrame.Clear();
+	if (Locator::liquidParticleSystem::has_value())
+	{
+		Locator::liquidParticleSystem::value().CollectDrawFrame(_filmParticleFrame);
+	}
+	if (Locator::entitiesRegistry::has_value())
+	{
+		NameShellMeshes(_filmParticleFrame, Locator::entitiesRegistry::value());
+	}
+	// The copy is a thing of the drawn registry, and its creature a thing of the land
+	if (!shown.copyShown || !Locator::drawnRegistry::has_value() || !Locator::entitiesRegistry::has_value() ||
+	    !Locator::drawnRegistry::value().Valid(shown.copy))
+	{
+		return;
+	}
+	const auto& copies = Locator::drawnRegistry::value();
+	const auto& bodies = Locator::entitiesRegistry::value();
+	const auto* copy = copies.TryGet<const ecs::components::CreatureCopy>(shown.copy);
+	const auto* transform = copies.TryGet<const ecs::components::Transform>(shown.copy);
+	const auto* animation = copies.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
+	if (copy == nullptr || transform == nullptr || !bodies.Valid(copy->creature))
+	{
+		return;
+	}
+	const auto* mesh = bodies.TryGet<const ecs::components::Mesh>(copy->creature);
+	const auto* creature = bodies.TryGet<const ecs::components::Creature>(copy->creature);
+	// The copy is drawn with its own shape
+	const auto* morph = ecs::components::ShapeOfCopy(copies, shown.copy, bodies);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (mesh == nullptr || creature == nullptr || morph == nullptr || !meshes.Contains(mesh->id))
+	{
+		return;
+	}
+	const auto body = meshes.Handle(mesh->id);
+	const bool posed = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size();
+	const auto bones =
+	    posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(body->GetBoneMatrices());
+	if (bones.empty())
+	{
+		return;
+	}
+	DrawnCreatures::Film kept {
+	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
+	    .mesh = mesh->id,
+	    .bones = std::vector<glm::mat4>(bones.begin(), bones.end()),
+	    .shape = ShapeOf(creature->species, morph->drawn),
+	    .eyes = std::nullopt,
+	    .hair = std::nullopt,
+	    .position = transform->position,
+	    .handGlows = std::nullopt,
+	};
+	// The copy has a skin of its own. The film hides the world, thus the fill of the scene does not send the skin of the
+	// copy. This fill sends it. A copy without a skin of its own shows the skin of its creature.
+	if (!_warmingUp)
+	{
+		UploadCreatureSkins(copies, _drawnCreatureSkins);
+	}
+	if (const auto own = _drawnCreatureSkins.find(shown.copy); own != _drawnCreatureSkins.end())
+	{
+		kept.shape.skins = own->second.drawn;
+	}
+	else if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
+	{
+		kept.shape.skins = skins->second.drawn;
+	}
+	if (const auto* eyes = copies.TryGet<const ecs::components::CreatureEyes>(shown.copy); eyes != nullptr)
+	{
+		kept.eyes = *eyes;
+	}
+	if (const auto* hair = copies.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	    hair != nullptr && Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
+	{
+		kept.hair = *hair;
+	}
+	if (const auto* glows = copies.TryGet<const ecs::components::CreatureHandGlows>(shown.copy); glows != nullptr)
+	{
+		kept.handGlows = *glows;
+	}
+	film = std::move(kept);
+}
+
 void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const
 {
 	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f)
@@ -389,45 +477,22 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	// blends over what is before it
 	_shaderManager->SetViewOrder(RenderPass::FilmCreature, ViewOrder::Sequential);
 	bgfx::touch(viewId);
-	if (shown.copyShown)
+	if (shown.copyShown && desc.frame->creatures.filmCreature.has_value())
 	{
-		DrawFilmCopy(desc, shown);
+		DrawFilmCopy(desc, shown, *desc.frame->creatures.filmCreature);
 	}
 	DrawFilmEffects(shown);
 }
 
-void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const
+void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown,
+                            const DrawnCreatures::Film& copy) const
 {
-	// The copy is a thing of the drawn registry, and its creature a thing of the land
-	if (!Locator::drawnRegistry::has_value() || !Locator::drawnRegistry::value().Valid(shown.copy))
-	{
-		return;
-	}
-	const auto& copies = Locator::drawnRegistry::value();
-	const auto* copy = copies.TryGet<const ecs::components::CreatureCopy>(shown.copy);
-	const auto* transform = copies.TryGet<const ecs::components::Transform>(shown.copy);
-	const auto* animation = copies.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
-	if (copy == nullptr || transform == nullptr || !desc.entities.Valid(copy->creature))
-	{
-		return;
-	}
-	const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(copy->creature);
-	const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(copy->creature);
-	// The copy is drawn with its own shape
-	const auto* morph = ecs::components::ShapeOfCopy(copies, shown.copy, desc.entities);
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (mesh == nullptr || creature == nullptr || morph == nullptr || !meshes.Contains(mesh->id))
+	if (!meshes.Contains(copy.mesh))
 	{
 		return;
 	}
-	const auto body = meshes.Handle(mesh->id);
-	const bool posed = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size();
-	const auto bones =
-	    posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(body->GetBoneMatrices());
-	if (bones.empty())
-	{
-		return;
-	}
+	const auto body = meshes.Handle(copy.mesh);
 
 	if (!_filmCreatureInstance.has_value())
 	{
@@ -443,32 +508,15 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 		// Each draw gives the instances first, thus the device keeps no copy after a restore
 		bgfx::setDeviceRestoreByApplication(toBgfx(*_filmCreatureInstance));
 	}
-	const ecs::systems::RenderContext::ObjectInstance instance {
-	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};
+	const ecs::systems::RenderContext::ObjectInstance instance {.model = copy.model};
 	bgfx::update(toBgfx(*_filmCreatureInstance), 0, bgfx::copy(&instance, sizeof(instance)));
 
-	const auto ids =
-	    creature_morph::MeshesOf(creature->species, morph->drawn, [&meshes](entt::id_type id) { return meshes.Contains(id); });
 	L3DMeshSubmitDesc::MorphTargets targets {
-	    .meshes = {&*meshes.Handle(ids.evilGood), &*meshes.Handle(ids.thinFat), &*meshes.Handle(ids.weakStrong)},
-	    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
-	    .skins = {},
-	    .blendSeams = Locator::config::value().blendCreatureSeams,
+	    .meshes = copy.shape.meshes,
+	    .weights = copy.shape.weights,
+	    .skins = copy.shape.skins,
+	    .blendSeams = copy.shape.blendSeams,
 	};
-	// The copy has a skin of its own. The film hides the world, thus the draw of the scene does not send the skin of the
-	// copy. This draw sends it. A copy without a skin of its own shows the skin of its creature.
-	if (!_warmingUp)
-	{
-		UploadCreatureSkins(copies, _drawnCreatureSkins);
-	}
-	if (const auto own = _drawnCreatureSkins.find(shown.copy); own != _drawnCreatureSkins.end())
-	{
-		targets.skins = own->second.drawn;
-	}
-	else if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
-	{
-		targets.skins = skins->second.drawn;
-	}
 
 	// The film's light shades the colour of its own in place of the land's light. The renderer adds the second colour
 	// after the texture. Nothing of the land or its haze reaches it.
@@ -489,31 +537,30 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 	submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = shown.colour, .alpha = 1.0f};
 	submitDesc.lightAdd = shown.added;
 	submitDesc.instanceDesc = std::make_unique<graphics::InstanceDesc>(*_filmCreatureInstance, 0, 1);
-	submitDesc.modelMatrices = bones.data();
-	submitDesc.matrixCount = static_cast<uint8_t>(bones.size());
+	submitDesc.modelMatrices = copy.bones.data();
+	submitDesc.matrixCount = static_cast<uint8_t>(copy.bones.size());
 	submitDesc.morphTargets = &targets;
 	DrawMesh(*body, submitDesc, std::numeric_limits<uint8_t>::max());
 	submitDesc.morphTargets = nullptr;
 
-	if (const auto* eyes = copies.TryGet<const ecs::components::CreatureEyes>(shown.copy); eyes != nullptr)
+	if (copy.eyes.has_value())
 	{
-		DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+		DrawCreatureEyes(desc, *copy.eyes, submitDesc, 0.0f, 0.0f, 0);
 	}
 	// Its own hair, which hangs from its own pose, faces the film's camera. The hair takes the colour of its own and the
 	// added colour that the body takes.
-	if (const auto* hair = copies.TryGet<const ecs::components::CreatureHair>(shown.copy);
-	    hair != nullptr && Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
+	if (copy.hair.has_value())
 	{
 		const creature_hair_light::Colours colours {.light = shown.colour, .added = glm::round(shown.added * 255.0f)};
-		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]),
+		DrawCreatureHair(desc, *copy.hair, copy.position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]),
 		                 colours.light, colours.added);
 		// The next hair with the environment map takes these colours
 		_hairLightCarried = colours;
 	}
 	// The glows on its hands
-	if (const auto* glows = copies.TryGet<const ecs::components::CreatureHandGlows>(shown.copy); glows != nullptr)
+	if (copy.handGlows.has_value())
 	{
-		DrawCreatureHandGlows(static_cast<uint16_t>(RenderPass::FilmCreature), *glows, shown.projection, false, 0);
+		DrawCreatureHandGlows(static_cast<uint16_t>(RenderPass::FilmCreature), *copy.handGlows, shown.projection, false, 0);
 	}
 }
 
