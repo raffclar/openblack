@@ -15,7 +15,8 @@
 // the game will probably read next, one at a time. A player can also get all the files before the start.
 //
 // When the land is ready, the page gets the other files in the background, one at a time, when nothing else waits: the
-// music banks, the other lands, the network maps and the files of the creature species. The player can turn this off.
+// music banks, the other lands, the network maps and the files of the creature species. The alignment music of the
+// alignment that the game plays now comes before the other music banks. The player can turn this off.
 // The page does this only when the browser keeps the storage, and when the browser has the space for the files.
 //
 // The list of the third version also gives packs: the bytes of two or more small files one after the other, at the
@@ -132,6 +133,21 @@ const k_AssetBackgroundRules = [
   /^online maps\//,
   /^(audio\/sfx\/creature\/|data\/ctr\/|data\/creaturemesh\/)/,
 ];
+// The alignment music banks: the music of the land and of the towns in the evil, neutral or good version. The land
+// plays the version of the alignment at the camera, and the temple and the citadel play the version of the alignment of
+// the player (src/Sound/GameMusic.cpp).
+const k_AssetAlignmentMusicRule = /^audio\/music\/align\/(?:[a-z]+_)?(evil|neutral|good)\.sad$/;
+// The versions of the alignment music, in the order of the alignment index of the game: evil, neutral and good
+const k_AssetAlignmentNames = ['evil', 'neutral', 'good'];
+// The game divides the alignment from evil to good into seven steps, and each step has a version of the music. The step
+// is (alignment + 1) / 2 * k_AssetAlignmentSteps, truncated, and at most 6.
+const k_AssetAlignmentSteps = 6.9999995;
+const k_AssetAlignmentIndex = [0, 0, 1, 1, 1, 2, 2];
+// The line of the game log when the music changes. It gives the alignment at the camera and the alignment of the
+// player.
+const k_AssetMusicLogRule = /Music Playing \S+ \(alignment at the camera (-?[\d.]+), the player's (-?[\d.]+)\)/;
+// The line of the game log for a step of the load of a land or a map, with the name of the land or the map
+const k_AssetLandLogRule = /Load land ([^:\s]+): /;
 // The page gets the files in the background only when the free space of the browser is at least this number of times
 // the bytes of these files, so that the browser does not remove other data of the site
 const k_AssetBackgroundSpaceFactor = 2;
@@ -499,8 +515,10 @@ function assetFreeSpace(estimate) {
  * function that is true for the SHA-256 of each file and block that the page keeps. The groups of
  * k_AssetBackgroundRules come first, in their order, then all the other files. A music bank in blocks comes in blocks,
  * so that the music can read each block when it arrives. The page joins the blocks when it has all of them.
+ * alignments is a list of the versions of the alignment music (k_AssetAlignmentNames) that the game plays now. The
+ * alignment music banks of these versions come before all the other files.
  */
-function planAssetBackground(files, { have = () => false } = {}) {
+function planAssetBackground(files, { have = () => false, alignments = [] } = {}) {
   const seen = new Set();
   const items = [];
   files.forEach((file, number) => {
@@ -510,7 +528,11 @@ function planAssetBackground(files, { have = () => false } = {}) {
     }
     seen.add(file.sha256);
     const group = k_AssetBackgroundRules.findIndex((rule) => rule.test(lower));
-    const order = group < 0 ? k_AssetBackgroundRules.length : group;
+    const version = k_AssetAlignmentMusicRule.exec(lower)?.[1];
+    let order = group < 0 ? k_AssetBackgroundRules.length : group;
+    if (version !== undefined && alignments.includes(version)) {
+      order = -1;
+    }
     if (file.blocks && k_AssetHeaderRules.some((rule) => rule.test(lower))) {
       file.blocks.forEach((block, index) => {
         if (!have(block) && !seen.has(block)) {
@@ -524,6 +546,36 @@ function planAssetBackground(files, { have = () => false } = {}) {
   });
   // The sort keeps the order of the list in each group
   return items.sort((a, b) => a.order - b.order).map(({ number, block }) => ({ number, block }));
+}
+
+/**
+ * The lower-case name of the land or the map that the game starts to load, from a line of the game log, or null. The
+ * game writes a line with the name for each step of the load (src/Common/LoadTimer.cpp).
+ */
+function assetLandOfLog(line) {
+  const found = k_AssetLandLogRule.exec(line);
+  return found ? found[1].toLowerCase() : null;
+}
+
+/** The version of the alignment music (k_AssetAlignmentNames) of an alignment from -1 (evil) to 1 (good) */
+function alignmentMusicName(alignment) {
+  const step = Math.trunc(Math.min((alignment + 1) / 2 * k_AssetAlignmentSteps, k_AssetAlignmentIndex.length - 1));
+  return k_AssetAlignmentNames[k_AssetAlignmentIndex[Math.max(0, step)]];
+}
+
+/**
+ * The versions of the alignment music that the game can play now, from a line of the game log: the version of the
+ * alignment of the player first, then the version of the alignment at the camera when it is another version. Gives
+ * null for a line that is not a line of the music.
+ */
+function musicAlignmentsOfLog(line) {
+  const found = k_AssetMusicLogRule.exec(line);
+  if (!found) {
+    return null;
+  }
+  const camera = alignmentMusicName(Number(found[1]));
+  const player = alignmentMusicName(Number(found[2]));
+  return player === camera ? [player] : [player, camera];
 }
 
 /** The bytes of the items of planAssetBackground */
@@ -850,8 +902,10 @@ function planAssetTiers(files, tiers = null, blockSize = 0) {
  *   the tiers give for the next land.
  * - After the game read a file of a network map: the other files of the same map, and the files that the tiers give
  *   for the map.
+ * With land in place of path, the files that the tiers give for the land or the map of that lower-case name. The game
+ * makes some maps, such as the map for 32 gods, and reads no file of such a map (see assetLandOfLog).
  */
-function planAssetPrefetch(files, { path, have = () => false, tiers = null }) {
+function planAssetPrefetch(files, { path = null, land = null, have = () => false, tiers = null }) {
   const numbers = [];
   const seen = new Set();
   const addNumber = (number) => {
@@ -873,10 +927,14 @@ function planAssetPrefetch(files, { path, have = () => false, tiers = null }) {
     const numberOf = new Map(files.map((file, number) => [file.path.toLowerCase(), number]));
     paths.map((other) => numberOf.get(other)).filter((number) => number !== undefined).forEach(addNumber);
   };
+  if (land !== null) {
+    addTiers(tiers?.lands.get(land) ?? []);
+    return numbers;
+  }
   const lower = path.toLowerCase();
-  const land = /^data\/landscape\/land([1-4])\.lnd$/.exec(lower);
-  if (land) {
-    const next = Number(land[1]) + 1;
+  const story = /^data\/landscape\/land([1-4])\.lnd$/.exec(lower);
+  if (story) {
+    const next = Number(story[1]) + 1;
     add((other) => other === `data/landscape/land${next}.lnd` || other === `data/landscape/land${next}.fot`);
     addTiers(tiers?.lands.get(`land${next}`) ?? []);
     return numbers;
@@ -1174,6 +1232,24 @@ class AssetStore {
       const job = block === null ? this.getWholeJob(number, 'background') : this.getBlockJob(number, block, 'background');
       job.catch((error) => this.log(`The page cannot get ${this.files[number].path} in the background: ${error.message}`));
     }
+  }
+
+  /**
+   * Puts the waiting jobs of the background queue in the order of a new plan of the background (planAssetBackground).
+   * A waiting job that the plan does not give keeps its place after the jobs of the plan.
+   */
+  reorderBackground(items) {
+    const ranks = new Map();
+    items.forEach(({ number, block }, rank) => {
+      const file = this.files[number];
+      const key = block === null ? `file ${file.sha256}` : `block ${file.blocks[block]}`;
+      if (!ranks.has(key)) {
+        ranks.set(key, rank);
+      }
+    });
+    const rankOf = (job) => ranks.get(job.key) ?? items.length;
+    // The sort keeps the order of the jobs that have the same rank
+    this.waiting.background.sort((a, b) => rankOf(a) - rankOf(b));
   }
 
   /**
@@ -1897,6 +1973,7 @@ if (typeof module !== 'undefined') {
     assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore, assetPathRecord, parseAssetPathRecord,
     planAssetReuse, isQuotaError, assetFreeSpace, planAssetBackground, assetItemBytes, assetBackgroundStop, writeAsset,
+    alignmentMusicName, musicAlignmentsOfLog, assetLandOfLog,
     parseAssetPacks, assetPackWorth, assetPackWatch, fetchAssetPack,
     k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile, k_AssetSmallDownloads,
     k_AssetPhaseDownloads, k_AssetDownloads, k_AssetPackShare,

@@ -1,0 +1,147 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index c06ddd6..ccd9833 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -2371,6 +2371,8 @@ WGPU_IMPORT
+ 			m_occlusionQuery.invalidate(_handle);
+ 		}
+ 
++		bool updateUniforms(UniformBuffer* _uniformBuffer, uint32_t _begin, uint32_t _end);
++
+ 		void setMarker(const char* _marker, uint16_t _len) override
+ 		{
+ 			BX_UNUSED(_marker, _len);
+@@ -4574,6 +4576,9 @@ WGPU_IMPORT
+ 		uint8_t m_fsScratch[64<<10];
+ 		uint8_t m_vsScratch[64<<10];
+ 
++		// True when a uniform value changed after the last copy of the program uniforms into the stage blocks.
++		bool m_uniformsChanged = true;
++
+ 		uint32_t m_lost = 0;
+ 	};
+ 
+@@ -4734,6 +4739,66 @@ WGPU_IMPORT
+ 		bx::free(g_allocator, temp);
+ 	}
+ 
++	// Writes the uniform values of a draw, as rendererUpdateUniforms does. The function does not write a value that has
++	// the same bytes as the current value. It returns true when a value changed.
++	bool RendererContextWGPU::updateUniforms(UniformBuffer* _uniformBuffer, uint32_t _begin, uint32_t _end)
++	{
++		bool changed = false;
++
++		_uniformBuffer->reset(_begin);
++		while (_uniformBuffer->getPos() < _end)
++		{
++			const uint32_t opcode = _uniformBuffer->read();
++
++			if (UniformType::End == opcode)
++			{
++				break;
++			}
++
++			uint8_t type;
++			uint16_t loc;
++			uint16_t num;
++			uint16_t copy;
++			UniformBuffer::decodeOpcode(opcode, type, loc, num, copy);
++
++			const void* data;
++
++			if (type & kUniformRefBit)
++			{
++				type &= ~kUniformRefBit;
++				data = bx::loadUnaligned<const void*>(_uniformBuffer->read(sizeof(data) ) );
++
++				if (UniformType::Count <= type)
++				{
++					continue;
++				}
++			}
++			else
++			{
++				const char* ptr = _uniformBuffer->read(g_uniformTypeSize[type]*num);
++
++				if (UniformType::Count <= type)
++				{
++					setMarker(ptr, uint16_t(g_uniformTypeSize[type]*num)-1);
++					continue;
++				}
++
++				data = copy ? (const void*)ptr : (const void*)*(const char**)ptr;
++			}
++
++			const uint32_t size = g_uniformTypeSize[type]*num;
++			uint8_t* value = (uint8_t*)m_uniforms[loc];
++
++			if (!sameBytes(value, (const uint8_t*)data, size) )
++			{
++				bx::memCopy(value, data, size);
++				changed = true;
++			}
++		}
++
++		return changed;
++	}
++
+ 	void BufferWGPU::create(uint32_t _size, void* _data, uint16_t _flags, bool _vertex, uint32_t _stride)
+ 	{
+ 		BX_UNUSED(_stride);
+@@ -7419,6 +7484,7 @@ WGPU_IMPORT
+ 			};
+ 
+ 			bx::memCopy(m_uniforms[m_mipGen->u_mipGen.idx], mipGenData, 16);
++			m_uniformsChanged = true;
+ 
+ 			if (NULL != program.m_vsh->m_constantBuffer)
+ 			{
+@@ -7573,6 +7639,7 @@ WGPU_IMPORT
+ 			const UniformCacheItem& uci = _ucs.advance();
+ 
+ 			bx::memCopy(m_uniforms[uci.m_handle], &_ucs.m_frame->m_uniformCacheFrame.m_data[uci.m_offset], uci.m_size);
++			m_uniformsChanged = true;
+ 		}
+ 	}
+ 
+@@ -7591,6 +7658,7 @@ WGPU_IMPORT
+ 		}
+ 
+ 		m_mipGen = &_mipGen;
++		m_uniformsChanged = true;
+ 		m_occlusionQuery.readResultsAsync(_render);
+ 		m_gpuTimer.readResultsAsync();
+ 		WGPU_CHECK(wgpuInstanceProcessEvents(s_renderWGPU->m_instance) );
+@@ -8187,6 +8255,7 @@ WGPU_IMPORT
+ 					bool programChanged = false;
+ 					bool constantsChanged = compute.m_uniformBegin < compute.m_uniformEnd;
+ 					rendererUpdateUniforms(this, _render->m_uniformBuffer[compute.m_uniformIdx], compute.m_uniformBegin, compute.m_uniformEnd);
++					m_uniformsChanged = m_uniformsChanged || constantsChanged;
+ 
+ 					if (key.m_program.idx != currentProgram.idx)
+ 					{
+@@ -8301,8 +8370,14 @@ WGPU_IMPORT
+ 				currentState.m_stencil = newStencil;
+ 
+ 				bool programChanged = false;
+-				bool constantsChanged = draw.m_uniformBegin < draw.m_uniformEnd;
+-				rendererUpdateUniforms(this, _render->m_uniformBuffer[draw.m_uniformIdx], draw.m_uniformBegin, draw.m_uniformEnd);
++				// The submit copies the program uniforms into the stage blocks only when a uniform value or the program
++				// changed. A draw with the same values as before uses the stage blocks of the last draw.
++				if (updateUniforms(_render->m_uniformBuffer[draw.m_uniformIdx], draw.m_uniformBegin, draw.m_uniformEnd) )
++				{
++					m_uniformsChanged = true;
++				}
++
++				bool constantsChanged = m_uniformsChanged;
+ 
+ 				const uint64_t state = draw.m_stateFlags & stateMask;
+ 				const uint32_t sampleMask = renderView->m_sampleMask & draw.m_sampleMask;
+@@ -8425,6 +8500,7 @@ WGPU_IMPORT
+ 				||  currentProgram.idx != key.m_program.idx)
+ 				{
+ 					currentProgram = key.m_program;
++					m_uniformsChanged = false;
+ 
+ 					UniformBuffer* vcb = program.m_vsh->m_constantBuffer;
+ 					if (NULL != vcb)

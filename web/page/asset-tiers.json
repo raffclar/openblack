@@ -1,7 +1,7 @@
 {
  "block_size": 1048576,
  "format": 1,
- "made_from": {"later": ["traces/land2.json", "traces/land3.json", "traces/land4.json", "traces/land5.json", "traces/landt.json", "traces/mpm_2p_1.json", "traces/mpm_3p_1.json", "traces/mpm_4p_1.json"], "start": ["traces/land1-new-player.json"]},
+ "made_from": {"later": ["traces/land2.json", "traces/land3.json", "traces/land4.json", "traces/land5.json", "traces/landt.json", "traces/mpm_2p_1.json", "traces/mpm_3p_1.json", "traces/mpm_4p_1.json", "traces/obm_32p_1.json"], "start": ["traces/land1-new-player.json"]},
  "phases": ["boot", "pre-intro", "startup", "land-load", "land-soon", "later", "background"],
  "start_phases": 4,
  "files": {
@@ -854,6 +854,7 @@
   "scripts/map.txt": {"order": 1, "phase": 0},
   "scripts/playgrounds/construct.txt": {"order": 103, "phase": 2},
   "scripts/playgrounds/death comes to those that wait.txt": {"order": 104, "phase": 2},
+  "scripts/playgrounds/fightgods.txt": {"order": 21, "phase": 5},
   "scripts/playgrounds/firestorm.txt": {"order": 105, "phase": 2},
   "scripts/playgrounds/fourgods.txt": {"order": 106, "phase": 2},
   "scripts/playgrounds/island wars.txt": {"order": 107, "phase": 2},
@@ -870,6 +871,7 @@
   "landt": ["data/landscape/landt.lnd"],
   "mpm_2p_1": ["online maps/mpm_2p_1.map", "data/landscape/mpm_2p_1.fot", "data/textures/lethis.cps"],
   "mpm_3p_1": ["online maps/mpm_3p_1.map", "data/landscape/mpm_3p_1.fot", "data/textures/lethis.cps", "data/textures/kazarr.cps"],
-  "mpm_4p_1": ["online maps/mpm_4p_1.map", "data/landscape/mpm_4p_1.fot", "data/textures/lethis.cps", "data/textures/kazarr.cps", "data/textures/nemesis.cps"]
+  "mpm_4p_1": ["online maps/mpm_4p_1.map", "data/landscape/mpm_4p_1.fot", "data/textures/lethis.cps", "data/textures/kazarr.cps", "data/textures/nemesis.cps"],
+  "obm_32p_1": ["scripts/playgrounds/fightgods.txt", "online maps/mpm_4p_1.map", "data/textures/lethis.cps", "data/textures/kazarr.cps", "data/textures/nemesis.cps"]
  }
 }

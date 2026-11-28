@@ -25,7 +25,6 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
-#include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -104,15 +103,45 @@ void PlacePictureView(RenderPass pass, const FrameBuffer* frameBuffer, const ges
 }
 } // namespace
 
-void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
+void Renderer::CollectGestureHints(DrawnEffects& effects, const DrawSceneDesc& drawDesc) const
 {
 	namespace hints = gesture_hints;
-	using ecs::components::LeashPost;
-	if (!Locator::gestureSystem::has_value() || !Locator::windowing::has_value() || desc.camera == nullptr)
+	effects.gestureHints.reset();
+	effects.hintEffects.clear();
+	if (!Locator::gestureSystem::has_value())
 	{
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
+	effects.gestureHints = row;
+	if (_warmingUp || !hints::Shows(row, drawDesc.frame->templeActive) || !Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	// The effect of the holder of a seed draws over the picture of each hint of the seed's miracle
+	const auto& particles = Locator::particleSystem::value();
+	for (const auto& hint : row.hints)
+	{
+		const auto picture = hint.seed != SpellSeedType::None ? row.seeds.find(hint.magic) : row.seeds.end();
+		if (hint.path.empty() || hint.leash != LeashType::None || picture == row.seeds.end() ||
+		    !picture->second.holderEffect.has_value() || effects.hintEffects.contains(hint.magic))
+		{
+			continue;
+		}
+		particles.CollectEffectDrawFrame(*picture->second.holderEffect, drawDesc.frame->clock.turnFraction,
+		                                 effects.hintEffects[hint.magic]);
+	}
+}
+
+void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
+{
+	namespace hints = gesture_hints;
+	using ecs::components::LeashPost;
+	if (!desc.frame->effects.gestureHints.has_value() || !Locator::windowing::has_value() || desc.camera == nullptr)
+	{
+		return;
+	}
+	const auto& row = *desc.frame->effects.gestureHints;
 	const bool inTemple = desc.frame->templeActive;
 	if (!_warmingUp && !hints::Shows(row, inTemple))
 	{
@@ -199,12 +228,12 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 {
 	namespace hints = gesture_hints;
 	using ecs::components::OneOffSpellSeed;
-	if (!Locator::gestureSystem::has_value() || !Locator::windowing::has_value() || !Locator::infoConstants::has_value() ||
-	    desc.camera == nullptr)
+	if (!desc.frame->effects.gestureHints.has_value() || !Locator::windowing::has_value() ||
+	    !Locator::infoConstants::has_value() || desc.camera == nullptr)
 	{
 		return;
 	}
-	const auto& row = Locator::gestureSystem::value().GetHints();
+	const auto& row = *desc.frame->effects.gestureHints;
 	const bool inTemple = desc.frame->templeActive;
 	if (!_warmingUp && !hints::Shows(row, inTemple))
 	{
@@ -234,7 +263,8 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		                      .drawVegetation = false,
 		                      .drawBoundingBoxes = false,
 		                      .cullBack = desc.cullBack,
-		                      .wireframe = desc.wireframe};
+		                      .wireframe = desc.wireframe,
+		                      .frame = desc.frame};
 	};
 	// The globe adds its mesh over what is behind by the texture's alpha, at the row's alpha. It writes its depth, also
 	// where the texture has no alpha. These are the materials that the game changes when it makes the globe.
@@ -259,7 +289,7 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 	// a bat or a dove. The rings have the colour of this player.
 	const auto own = desc.frame->hands.ownPlayer;
 	const float alignment = desc.frame->hands.ownAlignment;
-	const auto ringColour = ColourOf(ecs::game_players::Colour(own));
+	const auto ringColour = ColourOf(player_colour::OnLand(own, desc.frame->land.number));
 
 	// The warm-up draws a globe of no size in the view of each picture, and each seed of no size in the first view.
 	// Thus the renderer has the pipelines before the first picture shows.
@@ -291,8 +321,7 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 	const float focal = hints::FocalPixels(hints::RowWidth(screen), desc.camera->GetHorizontalFieldOfView());
 	const auto view = hints::CollarView();
 	const auto alpha = hints::PictureAlpha(row.alpha);
-	const auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
-	const float turnFraction = desc.frame->clock.turnFraction;
+	const auto& hintEffects = desc.frame->effects.hintEffects;
 
 	size_t used = 0;
 	for (size_t slot = 0; slot < row.hints.size() && used < k_SeedPasses.size(); ++slot)
@@ -334,15 +363,11 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 		                      .unlitWhite = true,
 		                      .way = object_draw::Way::AtOnce});
 
-		// Then the effect of its holder, over the model
-		if (particles != nullptr && shown.holderEffect.has_value())
+		// Then the effect of its holder, over the model, as the fill collected it
+		if (const auto effect = hintEffects.find(hint.magic); effect != hintEffects.end() && !effect->second.items.empty())
 		{
-			particles->CollectEffectDrawFrame(*shown.holderEffect, turnFraction, _hintParticleFrame);
-			if (!_hintParticleFrame.items.empty())
-			{
-				particles::draw::Order(_hintParticleFrame, eye, std::nullopt, _hintParticleCommands, _hintParticleSpriteOrder);
-				SubmitParticleFrame(scene, _hintParticleFrame, _hintParticleCommands, _hintParticleSpriteOrder, {}, eye);
-			}
+			particles::draw::Order(effect->second, eye, std::nullopt, _hintParticleCommands, _hintParticleSpriteOrder);
+			SubmitParticleFrame(scene, effect->second, _hintParticleCommands, _hintParticleSpriteOrder, {}, eye);
 		}
 
 		// Then a ring for each power-up level. The renderer draws each ring two times, added over what is behind, with no

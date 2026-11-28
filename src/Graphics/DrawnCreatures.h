@@ -140,11 +140,28 @@ struct DrawnCreatures
 		std::vector<tattoo_menu::Layer> layers;
 	};
 
+	/// The copy of the player's creature that the falling spell's film shows in this frame
+	struct Film
+	{
+		glm::mat4 model {1.0f};
+		entt::id_type mesh {0};
+		std::vector<glm::mat4> bones;
+		Shape shape;
+		std::optional<ecs::components::CreatureEyes> eyes;
+		/// Its own hair, when the game shows the hair
+		std::optional<ecs::components::CreatureHair> hair;
+		/// Where the copy is. Its hair hangs from there.
+		glm::vec3 position {0.0f};
+		std::optional<ecs::components::CreatureHandGlows> handGlows;
+	};
+
 	std::vector<Creature> creatures;
 	/// The interface's creatures. They are empty when the interface does not show creatures in this frame.
 	std::optional<Interface> interfaceCreatures;
 	/// The tattoo editor's creature. It is empty when the editor does not show the creature in this frame.
 	std::optional<Menu> menuCreature;
+	/// The copy in the falling spell's film. It is empty when the film does not show the copy in this frame.
+	std::optional<Film> filmCreature;
 	/// The game shows the creatures' hair
 	bool hairShown {false};
 	/// Where the static is that all the creatures' eyes share while they fizz, when the game has it

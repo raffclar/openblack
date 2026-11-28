@@ -73,6 +73,7 @@ public:
 	[[nodiscard]] ShaderManager* GetShaderManager() const noexcept override { return nullptr; }
 	void ShowInterfaceCreatures(interface_creatures::Request /*request*/) noexcept override {}
 	void ShowMenuCreature(interface_creatures::MenuCreature /*creature*/) noexcept override {}
+	void FillFilmCreature(DrawnFrame& /*frame*/, const interface_creatures::FilmCreature& /*creature*/) const override {}
 	void DrawFilmCreature(const DrawSceneDesc& /*desc*/, const interface_creatures::FilmCreature& /*creature*/) const override
 	{
 	}

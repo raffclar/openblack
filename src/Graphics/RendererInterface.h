@@ -402,8 +402,11 @@ public:
 	/// The creature that the main menu's tattoo editor shows. The game asks for it each frame that the editor shows it,
 	/// and the next frame of the scene draws it.
 	virtual void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept = 0;
+	/// Copies what the falling spell's film shows into the drawn frame: the copy of the player's creature and the film's
+	/// motes. The game calls this before each DrawFilmCreature, before the draw.
+	virtual void FillFilmCreature(DrawnFrame& frame, const interface_creatures::FilmCreature& creature) const = 0;
 	/// Draws the player's creature in the falling spell's film over the film's picture, in place of the scene, which the
-	/// film hides. The game calls this each frame that the film shows the creature.
+	/// film hides. The game calls this each frame that the film shows the creature. It reads only the drawn frame.
 	virtual void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& creature) const = 0;
 };
 

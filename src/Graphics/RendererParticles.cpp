@@ -29,6 +29,7 @@
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
@@ -510,13 +511,11 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	}
 	// A model that faces the camera can beat with the scrolls' highlights
 	auto alpha = draw.colour.a;
-	if (creator.faceCamera && creator.scriptHighlightPulse && Locator::scriptHighlightSystem::has_value())
+	if (const auto& share = desc.frame->effects.highlightPulseShare;
+	    creator.faceCamera && creator.scriptHighlightPulse && share.has_value())
 	{
-		const float turnFraction = desc.frame->clock.turnFraction;
-		const float share =
-		    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
 		const auto byte = static_cast<uint8_t>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
-		alpha = static_cast<float>(creator.PulsedAlpha(byte, share)) / 255.0f;
+		alpha = static_cast<float>(creator.PulsedAlpha(byte, *share)) / 255.0f;
 	}
 	// Those drawn in their atom's alpha, added to what is behind or kept out of the lights take their atom's colour
 	// unlit; the others are lit
@@ -654,20 +653,26 @@ const VolumeGlowShell* Renderer::GlowShellOf(entt::id_type meshId, uint32_t subM
 	return _glowShells.emplace(key, std::move(shell)).first->second.get();
 }
 
+void Renderer::NameShellMeshes(particles::draw::Frame& frame, const ecs::Registry& registry)
+{
+	for (auto& shell : frame.shells)
+	{
+		const auto* mesh = registry.TryGet<const ecs::components::Mesh>(shell.object);
+		shell.mesh = mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
+		shell.meshCopied = true;
+	}
+}
+
 void Renderer::CollectShellMeshes(DrawnEffects& effects, const ecs::Registry& registry)
 {
-	const auto name = [&registry](particles::draw::Frame& frame) {
-		for (auto& shell : frame.shells)
-		{
-			const auto* mesh = registry.TryGet<const ecs::components::Mesh>(shell.object);
-			shell.mesh = mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
-			shell.meshCopied = true;
-		}
-	};
-	name(effects.particles);
+	NameShellMeshes(effects.particles, registry);
 	for (auto& belief : std::span(effects.townBeliefs).first(effects.townBeliefCount))
 	{
-		name(belief.frame);
+		NameShellMeshes(belief.frame, registry);
+	}
+	for (auto& [magic, frame] : effects.hintEffects)
+	{
+		NameShellMeshes(frame, registry);
 	}
 }
 
@@ -677,12 +682,11 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 	{
 		return;
 	}
-	// The fill copied the mesh of the object of each shell of its frames. A frame that the draw makes has no copy.
-	auto meshId = shell.mesh;
-	if (!shell.meshCopied && Locator::entitiesRegistry::has_value())
+	// The fill copied the mesh of the object of each shell of its frames. The draw makes no frame of its own.
+	const auto meshId = shell.meshCopied ? shell.mesh : std::nullopt;
+	if (!shell.meshCopied)
 	{
-		const auto* meshComponent = Locator::entitiesRegistry::value().TryGet<const ecs::components::Mesh>(shell.object);
-		meshId = meshComponent != nullptr ? std::optional(meshComponent->id) : std::nullopt;
+		SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "The draw has a glow shell with no copy of its mesh");
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -815,13 +819,9 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 	};
 	const auto& textures = Locator::resources::value().GetTextures();
 
-	// The motes and the other puffs, and the stars, sorted by how far they are from the film's camera
+	// The motes and the other puffs, which the fill collected, and the stars, sorted by how far they are from the film's
+	// camera
 	auto& frame = _filmParticleFrame;
-	frame.Clear();
-	if (Locator::liquidParticleSystem::has_value())
-	{
-		Locator::liquidParticleSystem::value().CollectDrawFrame(frame);
-	}
 	if (!film.stars.empty())
 	{
 		static constexpr auto k_Smoke = entt::hashed_string("raw/smoke");
@@ -864,9 +864,9 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 				*out++ = frame.sprites[index];
 			}
 			glm::vec4 islandExtent(0.0f);
-			if (Locator::terrainSystem::has_value())
+			if (_drawnFrame != nullptr && _drawnFrame->land.extent.has_value())
 			{
-				const auto extent = Locator::terrainSystem::value().GetExtent();
+				const auto& extent = *_drawnFrame->land.extent;
 				islandExtent = glm::vec4(extent.minimum, extent.maximum);
 			}
 			const auto* program = _shaderManager->GetShader("ParticleInstanced");
@@ -1495,13 +1495,12 @@ void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 
 void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main || !Locator::introSystem::has_value())
+	if (desc.viewId != RenderPass::Main || !desc.frame->effects.introLight.has_value())
 	{
 		return;
 	}
-	const auto& intro = Locator::introSystem::value();
-	const auto* frame = intro.GetLightFrame();
-	if (frame == nullptr || frame->drawn.empty())
+	const auto* frame = &*desc.frame->effects.introLight;
+	if (frame->drawn.empty())
 	{
 		return;
 	}
@@ -1558,5 +1557,5 @@ void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const
 	bgfx::setInstanceDataBuffer(&instances, 0, count);
 	// Among what blends, by how far its head is from the camera
 	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
-	                zsort::Depth(intro.GetLightSortPoint(), desc.camera->GetOrigin()));
+	                zsort::Depth(desc.frame->effects.introLightSortPoint, desc.camera->GetOrigin()));
 }

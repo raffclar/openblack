@@ -28,7 +28,9 @@
 #include "3D/Extent.h"
 #include "3D/LandHeights.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "Enums.h"
 #include "Graphics/DrawnCreatures.h"
@@ -146,6 +148,8 @@ struct DrawnFrame
 		bool coarse {false};
 		/// The height of the highest land that a corner can have
 		float highestHeight {0.0f};
+		/// The number of the land. It selects the colours that the players show (see player_colour::OnLand).
+		int32_t number {0};
 		/// The land's blocks: their meshes, textures and pages. Only the game's thread changes them, between the draws
 		/// (see LandIslandInterface::CommitAltitudeChanges). The turn can change the heights of the corners. Thus the
 		/// passes read the heights from `heights`, not from the land.
@@ -169,6 +173,17 @@ struct DrawnFrame
 		std::optional<glm::vec2> waterGlowCentre;
 		/// The alignment of the player of this computer, from -1, evil, to 1, good
 		float ownAlignment {0.0f};
+		/// The miracle looks of the drawn hand: its bands, its bracelets and its glow. It is empty when the hand has none.
+		std::optional<ecs::components::HandMiracleFx> miracleFx;
+		/// The place of the drawn hand and its bones as its animation poses them, when it has a miracle look and a place
+		struct Pose
+		{
+			ecs::components::Transform transform;
+			std::vector<glm::mat4> bones;
+		};
+		std::optional<Pose> miraclePose;
+		/// The alignment at which the drawn hand's shape shows, when the hand has a morph
+		std::optional<float> morphDrawn;
 
 		/// The hand that the frame draws: the left hand of the player of this computer
 		[[nodiscard]] entt::entity Drawn() const { return own[0]; }
@@ -222,6 +237,16 @@ struct DrawnFrame
 	std::vector<EntityLook> drawnEntityLooks;
 	/// The bones of all the looks
 	std::vector<glm::mat4> bones;
+	/// The draw that holds an instance first, as the passes use it: none, a draw without the bone palette or a draw
+	/// with the bone palette
+	enum class InstanceHolder : uint8_t
+	{
+		None,
+		WithoutPalette,
+		WithPalette,
+	};
+	/// The first holder of each instance of `models`. The fill finds them for the looks, and the list keeps its memory.
+	std::vector<InstanceHolder> instanceHolders;
 	/// What the effects draw. The renderer fills it after the rest, only in a frame that draws the world.
 	DrawnEffects effects;
 	/// What the creatures' pass draws. The renderer fills it with the effects.

@@ -65,6 +65,8 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandMiracleFx.h"
+#include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -258,11 +260,32 @@ void Renderer::CollectHands(DrawnFrame& frame) const
 {
 	auto& hands = frame.hands;
 	hands.glow = HandGlowColour(hands.Drawn());
+	// The miracle looks and the morph of the drawn hand
+	hands.miracleFx.reset();
+	hands.miraclePose.reset();
+	hands.morphDrawn.reset();
+	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+	const bool handValid = registry != nullptr && registry->Valid(hands.Drawn());
+	const auto* transform = handValid ? registry->TryGet<const ecs::components::Transform>(hands.Drawn()) : nullptr;
+	if (handValid)
+	{
+		const auto* hand = registry->TryGet<const ecs::components::Hand>(hands.Drawn());
+		const auto* fx = registry->TryGet<const ecs::components::HandMiracleFx>(hands.Drawn());
+		if (hand != nullptr && fx != nullptr)
+		{
+			hands.miracleFx = *fx;
+			if (transform != nullptr)
+			{
+				hands.miraclePose = DrawnFrame::Hands::Pose {.transform = *transform, .bones = hand->boneMatrices};
+			}
+		}
+		if (const auto* morph = registry->TryGet<const ecs::components::HandMorph>(hands.Drawn()); morph != nullptr)
+		{
+			hands.morphDrawn = morph->state.drawn;
+		}
+	}
 	// The glow of the hand on the water shows only where the hand is near the low land
 	hands.waterGlowCentre.reset();
-	const auto* transform = Locator::entitiesRegistry::has_value()
-	                            ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(hands.Drawn())
-	                            : nullptr;
 	if (transform == nullptr || frame.land.island == nullptr)
 	{
 		return;
