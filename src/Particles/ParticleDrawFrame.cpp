@@ -389,7 +389,7 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		const uint32_t rgb = sources.playerColour ? sources.playerColour(shown) : 0xFFFFFFu;
 		const auto symbol = SymbolOf(atom, rgb, shown, sources.symbolsInARow);
 		// Added to what is behind, writing no depth
-		const auto additive = Mode::AlphaTexturedAlphaAdditiveNz;
+		const auto additive = k_SymbolMode;
 		builder.Sprite(symbol.instances[0], k_GlowTexture, additive);
 		builder.Sprite(symbol.instances[1], k_GlowTexture, additive);
 		builder.Sprite(symbol.instances[2], k_SymbolTexture, additive);
@@ -577,7 +577,7 @@ std::pair<std::optional<Material>, std::optional<Material>> draw::SymbolMaterial
 		{
 			return std::nullopt;
 		}
-		return Material {.texture = ids->first, .alphaTexture = ids->second, .mode = Mode::AlphaTexturedAlphaAdditiveNz};
+		return Material {.texture = ids->first, .alphaTexture = ids->second, .mode = k_SymbolMode};
 	};
 	return {materialOf(k_GlowTexture), materialOf(k_SymbolTexture)};
 }
