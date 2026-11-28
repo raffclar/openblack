@@ -251,13 +251,13 @@ TEST(LeashTakeOff, TheMindForgetsTheLeash)
 	ecs::components::CreatureMindState mind;
 	mind.leash.learningInHand = true;
 	mind.leash.miracleSightingWeight = MiracleSightingWeight(true);
-	mind.ledByLeash = true;
+	mind.leashLead = creature_leash::Lead::Order;
 	mind.leftAreaActions = {false, true, true};
 	ForgetLeash(mind);
 	EXPECT_FALSE(mind.leash.learningInHand);
 	EXPECT_EQ(mind.leash.miracleSightingWeight, MiracleSightingWeight(false));
 	// The leash no longer leads the plan
-	EXPECT_FALSE(mind.ledByLeash);
+	EXPECT_EQ(mind.leashLead, creature_leash::Lead::None);
 	// The actions that the area refused are possible again
 	EXPECT_TRUE(mind.leftAreaActions.empty());
 }

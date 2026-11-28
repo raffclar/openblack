@@ -114,6 +114,8 @@ std::string_view Name(Quantity quantity)
 		return "a local variable of a script";
 	case Quantity::CreatureLeashed:
 		return "the creature wears a leash";
+	case Quantity::CreatureOutOfLeashArea:
+		return "how far the creature is out of the area of its leash";
 	case Quantity::TempleScriptHasDialogue:
 		return "a script of the temple has the dialogue";
 	case Quantity::FootballPlayersWaiting:

@@ -115,6 +115,24 @@ struct TiedTown
 /// Each sighting of a miracle counts once, three times while the creature wears the learning leash
 [[nodiscard]] uint32_t MiracleSightingWeight(bool learningLeash);
 
+/// How the leash leads the plan of the creature
+enum class Lead : uint8_t
+{
+	/// The leash does not lead the plan
+	None,
+	/// The leash leads a walk back into its area, or a cast of a miracle after a reaction
+	Pull,
+	/// The player gave an order with the leash. The creature can refuse the order, and the leash still leads it.
+	Order,
+};
+/// A forced plan that the leash leads does not stop the creature from taking up reactions
+[[nodiscard]] bool LeadsPlan(Lead lead);
+/// What the leash gives the creature when the player gives an order with the leash on the land or on a thing, or ties
+/// the leash with the hand. A leash that is on and that works leads the creature by the order. This is so also when
+/// the creature refuses the order. The lead stays until a turn with no plan, until the creature stops what it does, or
+/// until the leash comes off. A leash that is off or that does not work sends no order and changes nothing.
+[[nodiscard]] Lead LeadAfterOrder(Lead before, bool leashOn, bool leashWorks);
+
 /// The data that tells if the creature walks back into the area that holds it in this turn
 struct Confinement
 {
@@ -125,6 +143,8 @@ struct Confinement
 	bool leashWorks {true};
 	/// The creature does an order that the player gave with the leash
 	bool orderInForce {false};
+	/// How the leash leads the creature
+	Lead lead {Lead::None};
 	/// The creature copies an action of the player
 	bool mimicking {false};
 	/// A script controls the creature
@@ -148,6 +168,7 @@ constexpr float k_ReturnLeast = 5.0f;
 /// The creature walks back when it is further than the radius from the centre, unless one of these is true:
 /// - the area does not hold it, or it wears a leash that does not work
 /// - it does an order of the leash, it copies the player, a script controls it, or it uses a teleport stone
+/// - the leash leads it by an order, also by an order that it refused
 /// - it clears a thing out of its way
 /// - a creature cannot walk on the land at the centre
 /// - it walks back already, to a place near the centre

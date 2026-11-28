@@ -185,6 +185,36 @@ TEST(LeashRules, AnOrderWithNoStepsLeadsUntilATurnWithNoPlanAndStaysMarkedUntilA
 	EXPECT_FALSE(OrderMarked({.orderSerial = 4, .agendaSerial = 4}));
 }
 
+TEST(LeashRules, ALeashThatIsOnAndWorksLeadsByEachOrderAlsoARefusedOrder)
+{
+	// The order changes the lead from each lead before it. The creature can take or refuse the order.
+	for (const auto before : {Lead::None, Lead::Pull, Lead::Order})
+	{
+		EXPECT_EQ(LeadAfterOrder(before, true, true), Lead::Order);
+		// A leash that is off or that does not work sends no order
+		EXPECT_EQ(LeadAfterOrder(before, false, false), before);
+		EXPECT_EQ(LeadAfterOrder(before, true, false), before);
+	}
+	// Each lead lets a forced plan take up reactions
+	EXPECT_FALSE(LeadsPlan(Lead::None));
+	EXPECT_TRUE(LeadsPlan(Lead::Pull));
+	EXPECT_TRUE(LeadsPlan(Lead::Order));
+}
+
+TEST(LeashRules, OnlyTheLeadOfAnOrderStopsTheWalkBack)
+{
+	constexpr Confinement k_Out {.radius = 77.0f, .leashed = true, .distance = 80.0f};
+	auto check = k_Out;
+	// The creature refused the order, so no order is in force. The leash still leads it by the order.
+	check.lead = Lead::Order;
+	EXPECT_FALSE(WalksBack(check));
+	// The lead of a walk back or of a cast does not stop a walk back
+	check.lead = Lead::Pull;
+	EXPECT_TRUE(WalksBack(check));
+	check.lead = Lead::None;
+	EXPECT_TRUE(WalksBack(check));
+}
+
 TEST(LeashRules, LeashedCreaturesWarmOrCoolToEachOther)
 {
 	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Evil), -0.1f);

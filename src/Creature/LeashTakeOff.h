@@ -23,7 +23,7 @@ inline void ForgetLeash(ecs::components::CreatureMindState& mind)
 {
 	mind.leash.learningInHand = false;
 	mind.leash.miracleSightingWeight = MiracleSightingWeight(false);
-	mind.ledByLeash = false;
+	mind.leashLead = Lead::None;
 	mind.leftAreaActions.clear();
 }
 

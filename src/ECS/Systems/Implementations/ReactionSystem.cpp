@@ -609,7 +609,8 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	}
 	// Nor does one with a forced plan, unless the leash leads the plan
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
-	    mind != nullptr && !creature_reaction::PlanFree({.forced = mind->planForced, .ledByLeash = mind->ledByLeash}))
+	    mind != nullptr &&
+	    !creature_reaction::PlanFree({.forced = mind->planForced, .ledByLeash = creature_leash::LeadsPlan(mind->leashLead)}))
 	{
 		return false;
 	}

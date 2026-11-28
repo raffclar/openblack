@@ -758,7 +758,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 			// The plan that it keeps has priority 0 from now, so the next choice can take any plan
 			creature_planner::NoPlanRuns(mind.planner);
 			// With no plan, the leash does not lead the creature
-			mind.ledByLeash = false;
+			mind.leashLead = creature_leash::Lead::None;
 			++mind.thinksWithoutPlan;
 			// A turn with no plan lets it faint again
 			if (needs != nullptr)
