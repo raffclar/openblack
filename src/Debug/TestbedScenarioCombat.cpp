@@ -788,6 +788,30 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		                 Fight(Kind::PointerOnOpponent, 0, 0, 2.9f)},
 		    .repeatFrom = 5,
 		});
+		// The game draws the fight sparkles at once, before it sorts the hand and the other things that blend
+		all.push_back({
+		    .id = "combat.fight_sparkle_under_hand",
+		    .name = "The hand and the other things that blend draw over the fight sparkles",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight lesson "
+		                   "starts it. A double click into the arena makes the camera show the fight. Then every five "
+		                   "seconds the hand presses the Action button on the middle of the lion's body and holds it for "
+		                   "two seconds.",
+		    .expected = "While the button is down, the hand sits on the sparkle on the lion's body. The hand draws over the "
+		                "sparkle where they overlap, because the game draws the sparkles at once before it draws the "
+		                "sorted things. Dust and other particles in front of a sparkle also draw over it.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 0, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 0, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, k_ViewAfterArena),
+		                 Fight(Kind::PointerOnOpponent, 0, 0, k_PressAfterDuel),
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = k_RightButton},
+		                 Fight(Kind::PointerOnOpponent, 0, 0, 2.9f)},
+		    .repeatFrom = 5,
+		});
 		{
 			// Eighteen quick presses fill the queue of twelve moves, also when the fight plays some of the moves; the fight
 			// refuses the presses after that

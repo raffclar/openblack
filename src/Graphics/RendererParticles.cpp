@@ -215,10 +215,12 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 		}
 		return;
 	}
-	// What burns, among the other things that blend
+	// What burns, among the other things that blend. The objects of the land's draw list draw their fires.
 	if (Locator::fireSystem::has_value())
 	{
+		const auto firstFire = particleFrame.groups.size();
 		Locator::fireSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), particleFrame);
+		particles::draw::SetStage(particleFrame, firstFire, particles::draw::DrawStage::ListedObjects);
 	}
 	if (Locator::explosionSystem::has_value())
 	{
@@ -229,10 +231,13 @@ void Renderer::CollectParticles(DrawnEffects& effects) const
 	{
 		Locator::rewardSystem::value().CollectDrawFrame(particleFrame);
 	}
-	// The drops, the dust, the smoke and the motes
+	// The drops, the dust, the smoke and the motes. The game draws them after the hand and before the particle effects,
+	// so they come first after the hand.
 	if (Locator::liquidParticleSystem::has_value())
 	{
+		const auto firstLiquid = particleFrame.groups.size();
 		Locator::liquidParticleSystem::value().CollectDrawFrame(particleFrame);
+		particles::draw::MoveGroupsToFront(particleFrame, firstLiquid);
 	}
 	// The explorers' boat's wake
 	if (Locator::boatLaunchSystem::has_value())
@@ -937,14 +942,15 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 	}
 }
 
-void Renderer::DrawParticles(const DrawSceneDesc& desc) const
+void Renderer::DrawParticles(const DrawSceneDesc& desc, particles::draw::DrawStage stage) const
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
 	if (desc.viewId != RenderPass::Main && !reflection)
 	{
 		return;
 	}
-	if (_warmingUp)
+	const bool afterHand = stage == particles::draw::DrawStage::AfterHand;
+	if (_warmingUp && afterHand)
 	{
 		WarmUpParticles(desc);
 	}
@@ -957,11 +963,11 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	                                                                 : Profiler::Stage::MainPassDrawParticles);
 	const auto origin = desc.camera->GetOrigin();
 	particles::draw::Order(particleFrame, origin, reflection ? std::nullopt : HandPoint(*desc.frame), _particleCommands,
-	                       _particleSpriteOrder, _particleOrderLists);
+	                       _particleSpriteOrder, _particleOrderLists, stage);
 	// A vortex's swirl is drawn before the land, after the sea in the sky's pass, which keeps its order. Its sprites
 	// follow the others' in the one buffer of instances.
 	_particleBeforeLandCommands.clear();
-	if (!reflection)
+	if (!reflection && afterHand)
 	{
 		particles::draw::OrderBeforeLand(particleFrame, _particleBeforeLandCommands, _particleBeforeLandSprites);
 		const auto offset = static_cast<uint32_t>(_particleSpriteOrder.size());
@@ -974,6 +980,10 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		}
 		_particleSpriteOrder.insert(_particleSpriteOrder.end(), _particleBeforeLandSprites.begin(),
 		                            _particleBeforeLandSprites.end());
+	}
+	if (_particleCommands.empty() && _particleBeforeLandCommands.empty())
+	{
+		return;
 	}
 	SubmitParticleFrame(desc, particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
 }
@@ -1172,6 +1182,11 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 {
 	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto& textures = Locator::resources::value().GetTextures();
+	// Only the kinds that the commands draw go to the GPU
+	const auto draws = [&commands, &beforeLand](ItemKind kind) {
+		const auto ofKind = [kind](const particles::draw::Command& command) { return command.kind == kind; };
+		return std::ranges::any_of(commands, ofKind) || std::ranges::any_of(beforeLand, ofKind);
+	};
 
 	// Every sprite of the pass in one buffer of instances, in the order drawn
 	bgfx::InstanceDataBuffer instances {};
@@ -1192,7 +1207,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 	bgfx::TransientVertexBuffer chainVertices {};
 	bgfx::TransientIndexBuffer chainIndices {};
 	bool haveChains = false;
-	if (!frame.chains.empty())
+	if (!frame.chains.empty() && draws(ItemKind::Chain))
 	{
 		const auto layout = ChainLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.chainVertices.size());
@@ -1234,7 +1249,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
 	bgfx::TransientVertexBuffer surfaceVertices {};
 	bgfx::TransientIndexBuffer surfaceIndices {};
 	bool haveSurfaces = false;
-	if (!frame.surfaces.empty())
+	if (!frame.surfaces.empty() && draws(ItemKind::Surface))
 	{
 		const auto layout = SurfaceLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.surfaceVertices.size());
