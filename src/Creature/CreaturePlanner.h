@@ -343,10 +343,5 @@ void KeepRefusedPlan(PlannerState& state, creature_desires::Desire desire);
 /// choice of the next turn can take any plan. The plan to lie dead after a faint has the highest priority and no agenda
 /// in the mind, so this rule lets the creature choose again after the knock-out.
 void NoPlanRuns(PlannerState& state);
-/// The plan that a script order keeps when its action makes no steps, for example an eat from a pile while the creature
-/// holds food that it can eat. The plan obeys the player with the forced score, but no agenda runs. Under the control of
-/// the script the creature makes no choice. When the script lets it go, the first choice cannot replace the plan. Then
-/// the turn with no agenda gives the plan a priority of 0, and the next choice can take any plan.
-[[nodiscard]] Plan OrderWithNoSteps(uint32_t action, std::optional<uint32_t> object);
 
 } // namespace openblack::creature_planner
