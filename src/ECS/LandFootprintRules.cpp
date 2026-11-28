@@ -121,6 +121,15 @@ footprint_paint::Placement RiverStretch(const glm::vec3& from, const glm::vec3& 
 	};
 }
 
+FootprintChange ChangeOf(const components::Transform& before, const components::Transform& now, bool sameFiling)
+{
+	if (!sameFiling || before.position != now.position || before.rotation != now.rotation)
+	{
+		return FootprintChange::Repaint;
+	}
+	return before.scale == now.scale ? FootprintChange::None : FootprintChange::SizeOnly;
+}
+
 bool SameOrderBesides(std::span<const entt::entity> before, std::span<const entt::entity> now,
                       std::span<const entt::entity> changed)
 {

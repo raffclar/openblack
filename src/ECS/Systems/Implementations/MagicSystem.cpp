@@ -358,7 +358,8 @@ entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaste
 	                              .direction = spell.direction,
 	                              .processInfo = spell.processInfo,
 	                              .sink = link.get(),
-	                              .restored = std::move(restored)});
+	                              .restored = std::move(restored),
+	                              .drawnBy = {.drawer = particles::draw::Drawer::Spells}});
 	// A miracle whose effect did not start keeps no number
 	if (!effects.IsRunning(spell.effect))
 	{

@@ -35,7 +35,7 @@ public:
 	[[nodiscard]] object_draw_list::Frame DrawFrame() const override;
 	[[nodiscard]] bool InDrawList(entt::entity highlight) const override;
 	[[nodiscard]] bool OnScreen(glm::vec3 origin, glm::vec3 centre, float radius) const override;
-	uint32_t StartEffect(ParticleType type, glm::vec3 at) override;
+	uint32_t StartEffect(ParticleType type, glm::vec3 at, entt::entity highlight, uint32_t slot) override;
 	void TargetEffect(uint32_t effect, entt::entity target) override;
 	void StepEffect(uint32_t effect, float seconds) override;
 	void MoveEffect(uint32_t effect, glm::vec3 to) override;

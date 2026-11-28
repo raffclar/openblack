@@ -223,22 +223,24 @@ TEST(LandgenRoadBed, TheBedIsLevelAcrossThePathAndTheBanksHaveTheFixedSlope)
 	EXPECT_LE(SteepestCornerOf(graded), settings.cutSlope + 0.001f);
 }
 
-TEST(LandgenRoadBed, ABankOnASteepSideHasNoVerticalStepAndStopsAtTheWidestBank)
+TEST(LandgenRoadBed, ABankOnACliffIsNoSteeperThanTheSteepestFaceAndStopsNearTheBed)
 {
 	const roads::Settings settings;
 	// The land slopes across the path more steeply than the bank, as a cliff does
-	const SideSlope land(1.2f);
+	constexpr float k_Slope = 1.2f;
+	const SideSlope land(k_Slope);
 	const auto path = StraightPath();
 	const auto ground = land.GroundOf();
 	const auto graded = Grade(BedOf(std::span(&path, 1), ground, settings), ground, settings);
 	const int middle = k_Side / 2;
 	const int x = k_Side / 2;
 	EXPECT_NEAR(graded.At(x, middle + 1), graded.At(x, middle), 0.01f);
-	// The bank is wider than on gentle land. Its change to the land becomes less by the taper, so that it stops.
-	EXPECT_LT(graded.At(x, middle + 4), land.metres.At(x, middle + 4));
-	EXPECT_GT(graded.At(x, middle - 4), land.metres.At(x, middle - 4));
+	// The bank cuts and fills the cliff next to the bed
+	EXPECT_LT(graded.At(x, middle + 2), land.metres.At(x, middle + 2));
+	EXPECT_GT(graded.At(x, middle - 2), land.metres.At(x, middle - 2));
+	// On a cliff, the change to the land becomes less as fast as the steepest face lets it, so that it stops soon
 	const float edge = std::fabs(graded.At(x, middle + 1) - land.metres.At(x, middle + 1));
-	const int farthest = 1 + static_cast<int>(std::ceil(edge / (settings.taper * k_Corner)));
+	const int farthest = 1 + static_cast<int>(std::ceil(edge / ((settings.steepestFace - k_Slope) * k_Corner)));
 	for (int z = 0; z < k_Side; ++z)
 	{
 		if (std::abs(z - middle) > farthest)
@@ -246,8 +248,46 @@ TEST(LandgenRoadBed, ABankOnASteepSideHasNoVerticalStepAndStopsAtTheWidestBank)
 			EXPECT_EQ(graded.At(x, z), land.metres.At(x, z)) << z;
 		}
 	}
-	// No step between two corners is vertical: the ground is never steeper than the land by more than the taper
-	EXPECT_LE(SteepestCornerOf(graded), 1.2f + settings.taper + 0.001f);
+	// No step between two corners is vertical: the ground is never steeper than the steepest face
+	EXPECT_LE(SteepestCornerOf(graded), settings.steepestFace + 0.001f);
+}
+
+TEST(LandgenRoadBed, ABankOnACliffSteeperThanTheSteepestFaceStopsAtTheTaper)
+{
+	const roads::Settings settings;
+	constexpr float k_Slope = 2.5f;
+	const SideSlope land(k_Slope);
+	const auto path = StraightPath();
+	const auto ground = land.GroundOf();
+	const auto graded = Grade(BedOf(std::span(&path, 1), ground, settings), ground, settings);
+	// The ground is never steeper than the land by more than the taper
+	EXPECT_LE(SteepestCornerOf(graded), k_Slope + settings.taper + 0.001f);
+}
+
+TEST(LandgenRoadBed, NoChangeIsFartherFromTheBedThanTheFarthestChange)
+{
+	// A side slope a little less steep than a cliff, where the change to the land becomes less slowly
+	const SideSlope land(0.6f);
+	const auto path = StraightPath();
+	const auto ground = land.GroundOf();
+	const int middle = k_Side / 2;
+	const auto farthestOf = [&](const roads::Settings& settings) {
+		const auto graded = Grade(BedOf(std::span(&path, 1), ground, settings), ground, settings);
+		int farthest = 0;
+		for (int z = 0; z < k_Side; ++z)
+		{
+			if (graded.At(middle, z) != land.metres.At(middle, z))
+			{
+				farthest = std::max(farthest, std::abs(z - middle));
+			}
+		}
+		return farthest;
+	};
+	roads::Settings near;
+	near.farthestChange = 20.0f;
+	// The bed is one corner on each side of the middle of the path, and the change stops two corners from the bed
+	EXPECT_LE(farthestOf(near), 1 + 2);
+	EXPECT_GT(farthestOf(roads::Settings {}), 1 + 2);
 }
 
 TEST(LandgenRoadBed, APathAtTheFootOfACliffDoesNotCutTheCliff)
@@ -375,9 +415,8 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 	ASSERT_EQ(graded.cells.values.size(), flat.cells.values.size());
 	const int side = graded.cells.side;
 
-	// Each change is near a path, and no water changes. On steep land the taper of a bank can reach about 21 corners
-	// from the path.
-	constexpr int k_Reach = 24;
+	// Each change is near a path, and no water changes. No change is farther from the bed than the farthest change.
+	constexpr int k_Reach = 15;
 	Grid<uint8_t> nearPath(side, 0);
 	for (const auto& path : graded.paths)
 	{

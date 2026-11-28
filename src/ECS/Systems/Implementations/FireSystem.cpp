@@ -1854,8 +1854,20 @@ void FireSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& fr
 			// The game sorts the flames, the steam and the smoke of a fire as one thing among what blends. That thing is at
 			// the place where the frame draws the object, and its flames come first, then its steam, then its smoke.
 			const auto place = ToWorld(object, glm::vec3(0.0f));
+			const auto firstGroup = frame.groups.size();
 			particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, transform.position,
 			                           particles::draw::k_NeutralPlayer, sources, place);
+			if (const auto* ball = registry.TryGet<const MagicFireBall>(object))
+			{
+				// The miracles draw the fires of the fireballs after the shields, the newest fireball first
+				particles::draw::SetDrawer(frame, firstGroup, {.drawer = particles::draw::Drawer::FireBalls},
+				                           particles::draw::FireBallPlace(ball->made));
+			}
+			else
+			{
+				// The object draws its fire at its place in the land's draw list
+				particles::draw::SetDrawer(frame, firstGroup, particles::draw::ObjectEffect(object), 0);
+			}
 		}
 		// A large building burning lights the land round it, flickering
 		if (look.lightsLand && lightMap.has_value())

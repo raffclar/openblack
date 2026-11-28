@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "ParticleDrawer.h"
+
 namespace openblack::particles
 {
 
@@ -121,6 +123,9 @@ public:
 	/// draw it but do not move it on.
 	void SetOwnClock(bool own) { _ownClock = own; }
 	[[nodiscard]] bool OwnClock() const { return _ownClock; }
+	/// The thing that draws the sheet in the game's frame
+	void SetDrawnBy(const draw::DrawnBy& by) { _drawnBy = by; }
+	[[nodiscard]] const draw::DrawnBy& GetDrawnBy() const { return _drawnBy; }
 	/// Time passes: the wave rolls on, the stars slide and the strengths move along
 	void Update(float seconds);
 	/// Its corners, three over each point (the land, the bright line and the top), and its triangles, four between each
@@ -167,6 +172,7 @@ private:
 	/// not keep them.
 	float _slideSpeed {k_SlideSpeed};
 	bool _ownClock {false};
+	draw::DrawnBy _drawnBy {draw::SheetEffect(draw::SheetList::Objects)};
 };
 
 } // namespace openblack::particles

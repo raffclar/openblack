@@ -1273,6 +1273,8 @@ ParticleRuleSystemInterface::EffectId ParticleRuleSystem::StartSpotVisual(SpotVi
 	{
 		it->turnsLeft = turns.value_or(static_cast<int>(info.life));
 		it->owner = owner;
+		// The game keeps each spot visual in a container, and draws the containers after the miracles
+		it->drawnBy = {.drawer = particles::draw::Drawer::Containers};
 		// Some act on their owner, which their rules take as a target
 		if (info.targetOwnerObject == 1 && owner != entt::null)
 		{
@@ -1347,6 +1349,10 @@ EffectHandle ParticleRuleSystem::Serve(const EffectRequest& request, EffectHandl
 	if (request.drawPath.has_value())
 	{
 		started->path = *request.drawPath;
+	}
+	if (request.drawnBy.drawer != particles::draw::Drawer::Others)
+	{
+		started->drawnBy = request.drawnBy;
 	}
 	if (!request.saved)
 	{
@@ -1469,6 +1475,49 @@ void ParticleRuleSystem::SetDrawnAlone(EffectId id)
 	}
 }
 
+void ParticleRuleSystem::SetDrawnBy(EffectId id, const particles::draw::DrawnBy& by)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->drawnBy = by;
+	}
+}
+
+void ParticleRuleSystem::GiveHandEffectsTheirDrawer()
+{
+	// A save of an older form does not keep the drawers. The lasting effects of the hand are known by their numbers and
+	// their files.
+	using particles::draw::HandSlot;
+	const std::array<std::pair<EffectId, HandSlot>, 6> numbered {{
+	    {_explodeObject, HandSlot::Pieces},
+	    {_handManaPath, HandSlot::ManaPath},
+	    {_stormBolts, HandSlot::StormBolts},
+	    {_gestureTrails, HandSlot::GestureTrails},
+	    {_gestureChain, HandSlot::Chain},
+	    {_selectionEffect, HandSlot::Selection},
+	}};
+	for (auto& running : _effects)
+	{
+		if (running.drawnBy.drawer != particles::draw::Drawer::Others)
+		{
+			continue;
+		}
+		if (const auto found = std::ranges::find(numbered, running.id, &std::pair<EffectId, HandSlot>::first);
+		    found != numbered.end())
+		{
+			running.drawnBy = particles::draw::HandEffect(found->second);
+		}
+		else if (running.file == "SF_BeliefSprite")
+		{
+			running.drawnBy = particles::draw::HandEffect(HandSlot::BeliefSymbols);
+		}
+		else if (running.file == "SF_OnFire")
+		{
+			running.drawnBy = particles::draw::HandEffect(HandSlot::Arcs);
+		}
+	}
+}
+
 void ParticleRuleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1499,6 +1548,7 @@ void ParticleRuleSystem::AddHandManaPathSpark(const particles::mana_path::Spark&
 	if (FindRunning(_handManaPath) == _effects.end())
 	{
 		_handManaPath = Start(ParticleType::ManaPath, glm::vec3(0.0f), 1.0f, false);
+		SetDrawnBy(_handManaPath, particles::draw::HandEffect(particles::draw::HandSlot::ManaPath));
 	}
 	if (const auto it = FindRunning(_handManaPath); it != _effects.end())
 	{
@@ -1657,11 +1707,13 @@ void ParticleRuleSystem::ProcessTurn()
 	if (!IsRunning(_explodeObject))
 	{
 		_explodeObject = Start(ParticleType::ExplodeObject, glm::vec3(0.0f), 1.0f, true);
+		SetDrawnBy(_explodeObject, particles::draw::HandEffect(particles::draw::HandSlot::Pieces));
 	}
 	// So does the one every storm's forked bolts come down in
 	if (!IsRunning(_stormBolts))
 	{
 		_stormBolts = Start(ParticleType::LightningStrike, glm::vec3(0.0f), 1.0f, true);
+		SetDrawnBy(_stormBolts, particles::draw::HandEffect(particles::draw::HandSlot::StormBolts));
 	}
 	for (const auto& point : _pendingStormBolts)
 	{
@@ -1707,14 +1759,16 @@ void ParticleRuleSystem::ProcessTurn()
 	if (_beliefWanted &&
 	    std::ranges::none_of(_effects, [](const Running& running) { return running.file == "SF_BeliefSprite"; }))
 	{
-		Start(ParticleType::BeliefSprite, glm::vec3(0.0f), 1.0f, true);
+		SetDrawnBy(Start(ParticleType::BeliefSprite, glm::vec3(0.0f), 1.0f, true),
+		           particles::draw::HandEffect(particles::draw::HandSlot::BeliefSymbols));
 	}
 	_beliefWanted = false;
 	// The electric arcs over what lightning struck crawl in an effect of their own, kept running once wanted
 	if (_world.TakeArcsWanted() &&
 	    std::ranges::none_of(_effects, [](const Running& running) { return running.file == "SF_OnFire"; }))
 	{
-		Start(ParticleType::OnFire, glm::vec3(0.0f), 1.0f, true);
+		SetDrawnBy(Start(ParticleType::OnFire, glm::vec3(0.0f), 1.0f, true),
+		           particles::draw::HandEffect(particles::draw::HandSlot::Arcs));
 	}
 }
 
@@ -1800,6 +1854,7 @@ ParticleRuleSystemInterface::DrawnEffect ParticleRuleSystem::Drawn(const Running
 	    .drawnAlone = running.drawnAlone,
 	    .shown = running.shown,
 	    .atLastStep = running.atLastStep,
+	    .drawnBy = running.drawnBy,
 	};
 }
 
@@ -2234,8 +2289,10 @@ namespace
 {
 
 /// The forms of the two parts of the save of the particles. A load refuses a part of another form.
-constexpr uint32_t k_SyncedPartVersion = 4;
-constexpr uint32_t k_LocalPartVersion = 4;
+constexpr uint32_t k_SyncedPartVersion = 5;
+constexpr uint32_t k_LocalPartVersion = 5;
+/// The form of the two parts before each effect kept the thing that draws it. A load reads it too.
+constexpr uint32_t k_NoDrawerVersion = 4;
 /// The form of the two parts before a gesture trail kept the place where it is heard. A load reads it too.
 constexpr uint32_t k_NoTrailSoundVersion = 3;
 /// The form of the two parts before the effects of this computer took numbers of their own. A load reads it too.
@@ -2246,7 +2303,8 @@ constexpr uint32_t k_WaitWithSoundVersion = 1;
 /// The form of the world in a part of a save of a given version
 std::optional<GameParticleWorld::SavedForm> WorldForm(uint32_t version, uint32_t current)
 {
-	if (version == current || version == k_NoTrailSoundVersion || version == k_NoNextNumberVersion)
+	if (version == current || version == k_NoDrawerVersion || version == k_NoTrailSoundVersion ||
+	    version == k_NoNextNumberVersion)
 	{
 		return GameParticleWorld::SavedForm::WaitOnThisComputer;
 	}
@@ -2347,6 +2405,10 @@ void ParticleRuleSystem::SaveRunning(reflection::BinaryWriter& bytes, particles:
 	reflection::Save(bytes, running.owner);
 	reflection::Save(bytes, running.path);
 	reflection::Save(bytes, running.drawOffset);
+	reflection::Save(bytes, running.drawnBy.drawer);
+	reflection::Save(bytes, running.drawnBy.slot);
+	reflection::Save(bytes, running.drawnBy.object);
+	reflection::Save(bytes, running.drawnBy.after);
 	const auto at = bytes.BeginLength();
 	running.effect->Save(effects);
 	bytes.EndLength(at);
@@ -2474,7 +2536,7 @@ void ParticleRuleSystem::SaveLocalState(reflection::BinaryWriter& out) const
 }
 
 ParticleRuleSystem::ReadResult ParticleRuleSystem::ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader,
-                                                               Running& running)
+                                                               Running& running, bool withDrawer)
 {
 	bool synced = true;
 	reflection::Load(in, running.id);
@@ -2487,6 +2549,18 @@ ParticleRuleSystem::ReadResult ParticleRuleSystem::ReadRunning(reflection::Binar
 	reflection::Load(in, running.owner);
 	reflection::Load(in, running.path);
 	reflection::Load(in, running.drawOffset);
+	if (withDrawer)
+	{
+		reflection::Load(in, running.drawnBy.drawer);
+		reflection::Load(in, running.drawnBy.slot);
+		reflection::Load(in, running.drawnBy.object);
+		reflection::Load(in, running.drawnBy.after);
+	}
+	else if (running.turnsLeft.has_value())
+	{
+		// Only a spot visual has turns left. The game draws it with the containers.
+		running.drawnBy = {.drawer = particles::draw::Drawer::Containers};
+	}
 	const auto length = in.ReadSize();
 	if (!length.has_value())
 	{
@@ -2537,7 +2611,8 @@ void ParticleRuleSystem::RestoreCarried(std::span<const std::shared_ptr<particle
 	}
 }
 
-bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form, bool trailSound)
+bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form, bool trailSound,
+                                        bool withDrawer)
 {
 	particles::SharedTables tables;
 	particles::EffectReader reader(in, tables);
@@ -2551,7 +2626,7 @@ bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GamePartic
 	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
 	{
 		Running running;
-		const auto result = ReadRunning(in, reader, running);
+		const auto result = ReadRunning(in, reader, running, withDrawer);
 		if (result == ReadResult::Failed)
 		{
 			return false;
@@ -2612,7 +2687,7 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	_selectionEffect = k_NoEffect;
 	_handManaPath = k_NoEffect;
 	_chainScrollPace = {};
-	if (!LoadSyncedBody(in, *form, version > k_NoTrailSoundVersion))
+	if (!LoadSyncedBody(in, *form, version > k_NoTrailSoundVersion, version > k_NoDrawerVersion))
 	{
 		return false;
 	}
@@ -2685,7 +2760,7 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 		uint32_t place = 0;
 		reflection::Load(in, place);
 		Running running;
-		const auto result = ReadRunning(in, reader, running);
+		const auto result = ReadRunning(in, reader, running, version > k_NoDrawerVersion);
 		if (result == ReadResult::Failed)
 		{
 			return false;
@@ -2723,6 +2798,7 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 	}
 	const auto firstCarried = std::min(tables.carried.firstLocal.value_or(0), tables.carried.items.size());
 	RestoreCarried(std::span(tables.carried.items).subspan(firstCarried));
+	GiveHandEffectsTheirDrawer();
 	// The next number of an effect of this computer is after the numbers of its loaded effects
 	for (const auto& running : _effects)
 	{
@@ -2753,7 +2829,8 @@ bool ParticleRuleSystem::LoadOldState(reflection::BinaryReader& in)
 	reflection::Load(in, _handManaPath);
 	reflection::Load(in, _beliefWanted);
 	reflection::Load(in, _chainScrollPace);
-	const bool read = LoadSyncedBody(in, GameParticleWorld::SavedForm::WaitWithSound, false);
+	const bool read = LoadSyncedBody(in, GameParticleWorld::SavedForm::WaitWithSound, false, false);
 	_loadedSynced.reset();
+	GiveHandEffectsTheirDrawer();
 	return read;
 }

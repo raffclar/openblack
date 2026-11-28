@@ -259,6 +259,24 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_road_beds_steep",
+	    .name = "The road beds of a generated land on steep ground",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 23 and the game loads it. Fly over the "
+	                   "path from the temple of player one at 740, 2650 m to the town at 1020, 2460 m. The steep side "
+	                   "of a hill is near 820, 2320 m. Then fly over the paths of the land near the cliffs of the "
+	                   "mountains.",
+	    .expected = "A path keeps away from the steep side of a hill where a way on more level ground of about the same "
+	                "length is near. Near 820, 2320 m the path does not climb along the edge of the steep side, so no "
+	                "brown earth lies on a step of the side. Where a path goes along a cliff, the bank cuts or fills only "
+	                "the foot of the cliff next to the bed. The cliff face above the bank is as steep as the faces of the "
+	                "story lands, and the land changes nowhere more than 120 m from the bed.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 23, .object = k_BigIsland}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_players_2",
 	    .name = "The starts of two players on a generated land",
 	    .facet = Facet::Editor,

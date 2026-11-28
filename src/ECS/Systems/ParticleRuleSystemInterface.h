@@ -76,6 +76,8 @@ public:
 		bool shown {true};
 		/// Drawn as its last step left it, with no blend from the step before
 		bool atLastStep {false};
+		/// The thing that draws the effect in the game's frame
+		particles::draw::DrawnBy drawnBy {};
 	};
 
 	/// What the debug window shows of an effect
@@ -183,6 +185,9 @@ public:
 	/// An effect that the world and the temple do not draw. Only the draw of this one effect shows it, as for the seeds
 	/// over the hints of the gestures.
 	virtual void SetDrawnAlone(EffectId /*id*/) {}
+	/// The thing that draws the effect in the game's frame, which gives the effect its turn among the effects at an equal
+	/// distance
+	virtual void SetDrawnBy(EffectId /*id*/, const particles::draw::DrawnBy& /*by*/) {}
 	/// The live shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override = 0;
 	/// How many particle sounds are playing or dying away, for the debug window

@@ -115,6 +115,7 @@ void StartChain(const ecs::Registry& registry, entt::entity creature, CreatureGe
 	    .step = EffectStep::Frame,
 	    .player = static_cast<int>(body.owner),
 	    .processInfo = particles::ProcessInfo {.handPosition = glm::vec3(0.0f), .enabled = false},
+	    .drawnBy = particles::draw::ObjectEffect(creature),
 	});
 }
 } // namespace

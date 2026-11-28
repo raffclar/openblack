@@ -279,6 +279,26 @@ TOGGLE_COMPUTER_PLAYER("PLAYER_THREE", 1)
 	});
 
 	all.push_back({
+	    .id = "particles.equal_distance_drawers",
+	    .name = "Two effects at one point, by the things that draw them",
+	    .facet = Facet::Particles,
+	    .description = "Steam and smoke stand at the same point, and each is drawn all at once at its origin, so both are "
+	                   "at the same distance. A miracle draws the steam, which starts first. A spot visual draws the smoke, "
+	                   "which starts second.",
+	    .expected = "The game draws the miracles before the spot visuals, so the dark smoke covers the white steam. Before "
+	                "this order, the newer smoke drew first and the steam covered it.",
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, 0.0f}, {10.0f, 0.0f}}, .distance = 0.2f},
+	    .particles = {{.type = ParticleType::Steam,
+	                   .path = particles::draw::DrawPath::Queued,
+	                   .magnitude = 8.0f,
+	                   .drawer = particles::draw::Drawer::Spells},
+	                  {.type = ParticleType::Smoke,
+	                   .path = particles::draw::DrawPath::Queued,
+	                   .magnitude = 8.0f,
+	                   .drawer = particles::draw::Drawer::Containers}},
+	});
+
+	all.push_back({
 	    .id = "particles.fireball_rows",
 	    .name = "The fireball's heat by its power-up",
 	    .facet = Facet::Particles,

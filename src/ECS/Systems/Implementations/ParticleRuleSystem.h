@@ -324,6 +324,7 @@ public:
 	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
+	void SetDrawnBy(EffectId id, const particles::draw::DrawnBy& by) override;
 	void SetDrawnAtLastStep(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShieldCrossing(glm::vec3 before, glm::vec3 point,
@@ -417,6 +418,8 @@ private:
 		bool shown {true};
 		/// Drawn as its last step left it, with no blend from the step before
 		bool atLastStep {false};
+		/// The thing that draws it in the game's frame
+		particles::draw::DrawnBy drawnBy {};
 		/// A spot visual's turns left, negative for ever
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with
@@ -513,8 +516,11 @@ private:
 	bool LoadOldState(reflection::BinaryReader& in);
 	/// Reads the tables, the effects and the world of the synced part, or of the one part of an old save
 	/// trailSound tells if the gesture trails in the save keep the place where they are heard
-	bool LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form, bool trailSound);
-	ReadResult ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader, Running& running);
+	bool LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form, bool trailSound, bool withDrawer);
+	/// Gives the lasting effects of the hand their drawer when a save of an older form did not keep it
+	void GiveHandEffectsTheirDrawer();
+	/// Reads one saved effect. A save of an older form does not keep the thing that draws the effect.
+	ReadResult ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader, Running& running, bool withDrawer);
 	static void RestoreCarried(std::span<const std::shared_ptr<particles::CarriedObject>> carried);
 
 	LocalPart _localPart {*this};

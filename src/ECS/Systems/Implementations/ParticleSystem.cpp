@@ -208,8 +208,10 @@ void ParticleSystem::AddLightSheets(const ParticleRuleSystemInterface& rules, pa
 {
 	std::vector<particles::LightSheet::Vertex> vertices;
 	std::vector<uint32_t> triangles;
-	for (const auto& sheet : rules.LightSheets())
+	const auto sheets = rules.LightSheets();
+	for (uint32_t i = 0; i < sheets.size(); ++i)
 	{
+		const auto& sheet = sheets[i];
 		if (sheet->Hidden())
 		{
 			continue;
@@ -217,7 +219,12 @@ void ParticleSystem::AddLightSheets(const ParticleRuleSystemInterface& rules, pa
 		// It takes its place by the point where its middle was at its last draw
 		const auto sortPoint = sheet->Middle();
 		sheet->Build(vertices, triangles);
+		const auto firstGroup = frame.groups.size();
 		particles::draw::AddLightSheet(frame, vertices, triangles, sortPoint, sheet->GetLook());
+		// Each owner draws its sheets in its turn, the newest sheet first. The sheets are in the order that they started.
+		const auto& by = sheet->GetDrawnBy();
+		const auto newestFirst = static_cast<uint32_t>(sheets.size()) - 1 - i;
+		particles::draw::SetDrawer(frame, firstGroup, by, particles::draw::PlaceOf(by, newestFirst, std::nullopt));
 	}
 }
 
@@ -229,23 +236,49 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	{
 		ResolveTextures(*rules);
 		const auto sources = DrawSources(*rules);
+		// The place of each effect in the list of the running effects, the newest first. A miracle draws the effects
+		// after its own effect at the place of its own effect.
+		_drawnPlaces.clear();
+		uint32_t index = 0;
+		rules->ForEachDrawn([&](const DrawnEffect& drawn) { _drawnPlaces.emplace_back(drawn.id, index++); });
+		std::ranges::sort(_drawnPlaces);
+		const auto placeOfEffect = [this](EffectId id) -> std::optional<uint32_t> {
+			const auto found = std::ranges::lower_bound(_drawnPlaces, id, {}, &std::pair<EffectId, uint32_t>::first);
+			return found != _drawnPlaces.end() && found->first == id ? std::optional(found->second) : std::nullopt;
+		};
+		index = 0;
 		rules->ForEachDrawn([&](const DrawnEffect& drawn) {
+			const auto place = index++;
 			if (drawn.effect == nullptr || drawn.inTemple != inTemple || drawn.drawnAlone || !drawn.shown)
 			{
 				return;
 			}
+			const auto firstGroup = frame.groups.size();
 			AddDrawn(drawn, turnFraction, frame, sources);
+			// The temple draws its rooms' effects in its own frame
+			if (inTemple)
+			{
+				return;
+			}
+			const auto& by = drawn.drawnBy;
+			const auto afterPlace =
+			    by.after != ParticleRuleSystemInterface::k_NoEffect ? placeOfEffect(by.after) : std::nullopt;
+			particles::draw::SetDrawer(frame, firstGroup, by, particles::draw::PlaceOf(by, place, afterPlace));
 		});
 		// The light sheets of the land and the symbols of the players over their artefacts are of the world. The game
 		// draws the fight sparkles at once before the force field of the fence, which is one of the light sheets.
 		if (!inTemple)
 		{
+			auto firstGroup = frame.groups.size();
 			particles::draw::AddFightMarks(frame, rules->FightMarks());
+			particles::draw::SetDrawer(frame, firstGroup, {.drawer = particles::draw::Drawer::FightMarks}, 0);
 			AddLightSheets(*rules, frame);
+			firstGroup = frame.groups.size();
 			for (const auto& symbol : rules->PlayerSymbols())
 			{
 				particles::draw::AddPlayerSymbol(frame, symbol, sources);
 			}
+			particles::draw::SetDrawer(frame, firstGroup, {.drawer = particles::draw::Drawer::Players}, 0);
 		}
 	}
 	if (!inTemple)

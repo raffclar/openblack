@@ -81,6 +81,9 @@ private:
 	/// What the last collected frame drew, and its walk, kept for its room
 	mutable DrawStats _drawStats {};
 	mutable particles::Effect::DrawWalk _walk;
+	/// The place of each running effect in the list of the effects, by its number. The list stays from frame to frame, so
+	/// that each frame uses the same memory.
+	mutable std::vector<std::pair<EffectId, uint32_t>> _drawnPlaces;
 };
 
 } // namespace openblack::ecs::systems

@@ -547,6 +547,7 @@ uint32_t Runner::StartParticle(size_t index) const
 	                                          : particles.Start(particle.file, position, particle.magnitude);
 	particles.SetPlayer(effect, particle.player);
 	particles.SetDrawPath(effect, particle.path);
+	particles.SetDrawnBy(effect, {.drawer = particle.drawer});
 	if (particle.targetsCreatures)
 	{
 		for (const auto creature : _creatures)

@@ -401,7 +401,7 @@ void RewardSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	};
 	particles::Effect::DrawWalk walk;
 	const auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const Reward>([&](const Reward& chest) {
+	registry.Each<const Reward>([&](entt::entity entity, const Reward& chest) {
 		// Only a chest that fell shows its dust, while its time lasts
 		if (chest.state != Reward::State::Landed || chest.dustMilliseconds <= 0.0f)
 		{
@@ -423,7 +423,10 @@ void RewardSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 			    .rgb = sprite.rgb,
 			});
 		}
+		const auto firstGroup = frame.groups.size();
 		particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, chest.madeAt,
 		                           particles::draw::k_NeutralPlayer, sources);
+		// The chest draws its dust at its place in the land's draw list
+		particles::draw::SetDrawer(frame, firstGroup, particles::draw::ObjectEffect(entity), 0);
 	});
 }

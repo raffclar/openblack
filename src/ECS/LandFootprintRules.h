@@ -26,6 +26,7 @@
 #include "3D/FootprintPaint.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Transform.h"
 
 /// Which footprints the game paints into a land block, in which order, and where they lie. Pure rules, tested on their
 /// own.
@@ -74,6 +75,23 @@ template <typename Things>
 /// The lowest and the highest corner, along x and z, of a footprint's triangles on the ground, as the game finds them
 [[nodiscard]] std::pair<glm::vec2, glm::vec2> GroundBounds(std::span<const footprint_paint::Triangle> triangles,
                                                            const footprint_paint::Placement& placement);
+
+/// How a change of a thing with a footprint changes the land
+enum class FootprintChange : uint8_t
+{
+	/// The thing did not change
+	None,
+	/// Only the size of the thing changed, and it stayed in its cells. The land keeps the old footprint until a block
+	/// under it is painted again for another cause. A block that the game paints again then shows the new size.
+	SizeOnly,
+	/// The blocks under the footprint are painted again now
+	Repaint,
+};
+
+/// How the land shows a change of a thing with a footprint. The game paints a footprint again only when its thing goes
+/// into the map's cells or comes out of them. A tree that grows changes its size, but it stays in its cells. `sameFiling`
+/// tells whether the thing has the same model and stayed in the same cells since the last time, with no new filing.
+[[nodiscard]] FootprintChange ChangeOf(const components::Transform& before, const components::Transform& now, bool sameFiling);
 
 /// Whether two lists of the things that paint a block hold the other things in the same order, when the changed things
 /// are not counted. `changed` is in order of the entities' values.

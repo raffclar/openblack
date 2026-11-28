@@ -360,3 +360,28 @@ TEST(LandFootprintRules, AGroundPrintWithAnotherTurnIsAnotherPrint)
 	};
 	EXPECT_EQ(land_footprints::GroundPrintOrder(things), (std::vector<size_t> {1, 0}));
 }
+
+TEST(LandFootprintRules, AThingThatOnlyGrowsInItsCellsKeepsItsOldFootprint)
+{
+	using land_footprints::FootprintChange;
+	using openblack::ecs::components::Transform;
+	const Transform before {.position = {100.0f, 5.0f, 200.0f}, .rotation = glm::mat3(1.0f), .scale = glm::vec3(0.5f)};
+
+	// A tree that grows in its cells changes only its size, and the land keeps the old footprint
+	auto grown = before;
+	grown.scale = glm::vec3(0.6f);
+	EXPECT_EQ(land_footprints::ChangeOf(before, grown, true), FootprintChange::SizeOnly);
+	EXPECT_EQ(land_footprints::ChangeOf(before, before, true), FootprintChange::None);
+
+	// A thing that went into the cells again, at any size, paints its blocks again
+	EXPECT_EQ(land_footprints::ChangeOf(before, grown, false), FootprintChange::Repaint);
+	EXPECT_EQ(land_footprints::ChangeOf(before, before, false), FootprintChange::Repaint);
+
+	// A thing that moves or turns paints its blocks again
+	auto moved = grown;
+	moved.position.x += 1.0f;
+	EXPECT_EQ(land_footprints::ChangeOf(before, moved, true), FootprintChange::Repaint);
+	auto turned = before;
+	turned.rotation = glm::mat3(glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	EXPECT_EQ(land_footprints::ChangeOf(before, turned, true), FootprintChange::Repaint);
+}
