@@ -952,6 +952,7 @@ bool Game::Initialize() noexcept
 	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
 	// meanwhile ends the game at its first frame
 	PlayStartupScreens();
+	Locator::loadingScreenSystem::value().StartupStep("logos, pre-intro and tips screen");
 
 	// Every resource of the game's data, as the dedicated server registers them too. The game is the view of the start.
 	if (!simulation::RegisterWorldData(*this))
