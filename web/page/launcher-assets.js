@@ -5,7 +5,8 @@
 // which the browser can keep for a long time with no check, because other bytes never have that address. An account
 // without the mark gets 401 or 403, and the page shows the folder picker.
 // The page keeps each file in the private storage of the site (OPFS), with its SHA-256 as its name. Thus a second
-// visit downloads only the files that changed. The page checks the size and the SHA-256 of each file that it gets.
+// visit downloads only the files that changed. Of a changed file in blocks, it downloads only the changed blocks, and
+// takes the other blocks from the old file. The page checks the size and the SHA-256 of each file that it gets.
 //
 // Before the game starts, the page gets only the files of the boot phase: the files that the game reads before its
 // first frame. The game sees every file of the list. The page then gets the files of the next phases of the start in
@@ -30,6 +31,10 @@ const k_AssetIndexFormats = [1, 2];
 const k_AssetMostBlockSize = 64 * 1024 * 1024;
 // The folder of the private storage of the site that keeps the files that the page got
 const k_AssetCacheFolder = 'game-files';
+// The file of the private storage of the site that keeps the SHA-256 of each file in blocks of the last visit, and its
+// format. When a new version changes a file in blocks, the page takes the blocks that did not change from the old file.
+const k_AssetPathRecord = 'game-files-paths.json';
+const k_AssetPathRecordFormat = 1;
 // The number of files that the page gets at the same time
 const k_AssetDownloads = 4;
 // The number of attempts for each file
@@ -273,6 +278,56 @@ function planAssetCache(files, kept, blockSize = 0) {
       sha256: file.sha256, size: file.size, path: file.path, address: file.address, hashed: file.hashed,
     }));
   return { download, ready, blocks, remove };
+}
+
+/**
+ * The record of the last version of the files in blocks: an object from the lower-case path of each file of the list
+ * that has blocks to its SHA-256. The next visit finds the old version of a changed file with it.
+ */
+function assetPathRecord(files) {
+  const record = {};
+  for (const file of files) {
+    if (file.blocks) {
+      record[file.path.toLowerCase()] = file.sha256;
+    }
+  }
+  return record;
+}
+
+/** The record of the last visit (assetPathRecord) in the text of its file, or an empty record */
+function parseAssetPathRecord(text) {
+  try {
+    const value = JSON.parse(text);
+    if (value === null || typeof value !== 'object' || value.format !== k_AssetPathRecordFormat ||
+      value.files === null || typeof value.files !== 'object') {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(value.files)
+      .filter(([path, sha256]) => typeof sha256 === 'string' && k_Sha256Pattern.test(sha256) && path !== ''));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The changed files in blocks of which the page keeps the old version whole: a list of { number, old }, with the
+ * number of the file in the list and the SHA-256 of the old version. The page can take the blocks of the new version
+ * that did not change from the old version, and download only the changed blocks. The arguments are the files of the
+ * list, the map of the kept files (see planAssetCache) and the record of the last visit (assetPathRecord).
+ */
+function planAssetReuse(files, kept, record) {
+  const reuse = [];
+  const seen = new Set();
+  files.forEach((file, number) => {
+    const old = record[file.path.toLowerCase()];
+    if (!file.blocks || seen.has(file.sha256) || kept.get(file.sha256) === file.size || old === undefined ||
+      old === file.sha256 || !(kept.get(old) > 0)) {
+      return;
+    }
+    seen.add(file.sha256);
+    reuse.push({ number, old });
+  });
+  return reuse;
 }
 
 /** The address of a game file on the site, with each part of its path encoded */
@@ -935,6 +990,12 @@ class AssetStore {
 
   async getWhole(number) {
     const file = this.files[number];
+    // A file of which the page keeps some blocks, for example the blocks that did not change in a new version, comes
+    // in its other blocks
+    if (file.blocks && this.blocksOf(number).some((kept) => kept !== null)) {
+      await this.getOtherBlocks(number);
+      return;
+    }
     const key = `file ${file.sha256}`;
     const bytes = await fetchAsset(this.fetchFile, this.digest, file, (count) => this.watch('bytes', key, count));
     const kept = await this.write(file.sha256, bytes);
@@ -942,6 +1003,20 @@ class AssetStore {
     this.received.bytes += bytes.byteLength;
     for (const user of this.users.get(file.sha256)) {
       this.share(user, null, kept);
+    }
+  }
+
+  /** Gets each block of the file that the page does not keep, one at a time, then joins the blocks */
+  async getOtherBlocks(number) {
+    const file = this.files[number];
+    for (let block = 0; block < file.blocks.length && !this.fileOf(number); block += 1) {
+      if (!this.kept.has(file.blocks[block])) {
+        await this.getBlock(number, block);
+      }
+    }
+    await this.joinBlocks(number);
+    if (!this.fileOf(number)) {
+      throw new Error(`the page cannot join the blocks of ${file.path}`);
     }
   }
 
@@ -1046,6 +1121,88 @@ async function keptAssets(folder) {
   return kept;
 }
 
+/** The record of the last visit (assetPathRecord) in the root folder, or an empty record */
+async function readAssetPathRecord(root) {
+  try {
+    const handle = await root.getFileHandle(k_AssetPathRecord);
+    return parseAssetPathRecord(await (await handle.getFile()).text());
+  } catch {
+    return {};
+  }
+}
+
+/** Keeps the record of the files in the root folder for the next visit. A failure goes only to the log. */
+async function writeAssetPathRecord(root, files, log) {
+  try {
+    const handle = await root.getFileHandle(k_AssetPathRecord, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify({ format: k_AssetPathRecordFormat, files: assetPathRecord(files) }));
+    await writable.close();
+  } catch (error) {
+    log(`The page cannot keep the record of the game files: ${error.message || error}`);
+  }
+}
+
+/**
+ * Takes the blocks of each changed file of reuse (planAssetReuse) that did not change from its old version: the page
+ * makes the SHA-256 of each block of the old file, and keeps each block that the new file also has. It adds each kept
+ * block to the map kept. Gives { blocks, bytes }: the count and the bytes of the blocks that the page does not get.
+ * A failure goes only to the log: the page then downloads the blocks.
+ */
+async function reuseAssetBlocks(folder, digest, files, reuse, kept, blockSize, log) {
+  const result = { blocks: 0, bytes: 0 };
+  for (const { number, old } of reuse) {
+    const file = files[number];
+    try {
+      const oldFile = await (await folder.getFileHandle(old)).getFile();
+      const wanted = new Map();
+      file.blocks.forEach((block, index) => {
+        const bounds = assetBlockBounds(file, blockSize, index);
+        if (kept.get(block) !== bounds.end - bounds.start) {
+          wanted.set(block, bounds.end - bounds.start);
+        }
+      });
+      for (let start = 0; start < oldFile.size && wanted.size > 0; start += blockSize) {
+        const part = oldFile.slice(start, Math.min(oldFile.size, start + blockSize));
+        const bytes = new Uint8Array(await part.arrayBuffer());
+        const sha256 = hexText(await digest('SHA-256', bytes));
+        if (wanted.get(sha256) !== bytes.byteLength) {
+          continue;
+        }
+        const writable = await (await folder.getFileHandle(sha256, { create: true })).createWritable();
+        await writable.write(bytes);
+        await writable.close();
+        wanted.delete(sha256);
+        kept.set(sha256, bytes.byteLength);
+        result.blocks += 1;
+        result.bytes += bytes.byteLength;
+      }
+    } catch (error) {
+      log(`The page cannot take the blocks of the old version of ${file.path}: ${error.message || error}`);
+    }
+  }
+  return result;
+}
+
+/**
+ * Joins the blocks of the file that the folder keeps, checks the whole file against the list and keeps it whole. Gives
+ * true when the folder keeps the whole file.
+ */
+async function joinKeptAssetBlocks(folder, digest, file) {
+  const parts = [];
+  for (const block of file.blocks) {
+    parts.push(await (await folder.getFileHandle(block)).getFile());
+  }
+  const bytes = new Uint8Array(await new Blob(parts).arrayBuffer());
+  if (await assetProblem(digest, file, bytes) !== null) {
+    return false;
+  }
+  const writable = await (await folder.getFileHandle(file.sha256, { create: true })).createWritable();
+  await writable.write(bytes);
+  await writable.close();
+  return true;
+}
+
 /**
  * Makes sure that the private storage of the site keeps each game file of the list, and gives the entries
  * { path, file } of the game files for the game. The options are:
@@ -1076,24 +1233,39 @@ async function streamAssets(index, {
   const files = index.files.filter((file) => wanted(file.path));
   const blockSize = index.blockSize ?? 0;
   const folder = await root.getDirectoryHandle(k_AssetCacheFolder, { create: true });
-  const plan = planAssetCache(files, await keptAssets(folder), blockSize);
+  const keptSizes = await keptAssets(folder);
+  // Before the page removes the old version of a changed file in blocks, it takes the blocks that did not change
+  const reuse = planAssetReuse(files, keptSizes, await readAssetPathRecord(root));
+  if (reuse.length > 0) {
+    const reused = await reuseAssetBlocks(folder, digest, files, reuse, keptSizes, blockSize, log);
+    log(`The page takes ${reused.blocks} blocks (${Math.round(reused.bytes / (1024 * 1024))} MB) of the old versions ` +
+      `of ${reuse.length} changed files, and downloads only the changed blocks.`);
+  }
+  const plan = planAssetCache(files, keptSizes, blockSize);
   // Remove the old files first, so that the new files have their space
   for (const name of plan.remove) {
     await folder.removeEntry(name, { recursive: true });
   }
+  await writeAssetPathRecord(root, files, log);
   const phases = planAssetTiers(files, tiers, blockSize);
   const boot = phases[k_AssetPhaseBoot];
   const startShas = new Set(boot.filter(({ block }) => block === null).map(({ number }) => files[number].sha256));
-  const download = all ? plan.download : plan.download.filter((file) => startShas.has(file.sha256));
+  const startFiles = all ? plan.download : plan.download.filter((file) => startShas.has(file.sha256));
+  // A file of which the page keeps some blocks comes in its other blocks, and the page then joins the blocks
+  const fileOfSha = new Map(files.map((file) => [file.sha256, file]));
+  const inParts = ({ sha256 }) => fileOfSha.get(sha256).blocks?.some((block) => plan.blocks.has(block)) ?? false;
+  const joined = startFiles.filter(inParts).map(({ sha256 }) => fileOfSha.get(sha256));
+  const download = startFiles.filter((file) => !inParts(file));
   const blockNames = new Set();
-  const startBlocks = all ? [] : boot.filter(({ block }) => block !== null)
-    .map(({ number, block }) => ({ file: files[number], block }))
-    .filter(({ file, block }) => {
-      const name = file.blocks[block];
-      const wantedBlock = !plan.ready.has(file.sha256) && !plan.blocks.has(name) && !blockNames.has(name);
-      blockNames.add(name);
-      return wantedBlock;
-    });
+  const startBlocks = [
+    ...(all ? [] : boot.filter(({ block }) => block !== null).map(({ number, block }) => ({ file: files[number], block }))),
+    ...joined.flatMap((file) => file.blocks.map((_, block) => ({ file, block }))),
+  ].filter(({ file, block }) => {
+    const name = file.blocks[block];
+    const wantedBlock = !plan.ready.has(file.sha256) && !plan.blocks.has(name) && !blockNames.has(name);
+    blockNames.add(name);
+    return wantedBlock;
+  });
   // The map of the downloads shows the kept files and blocks, then the files and blocks that the start needs
   plan.ready.forEach((sha256) => observe('present', `file ${sha256}`));
   plan.blocks.forEach((sha256) => observe('present', `block ${sha256}`));
@@ -1179,6 +1351,11 @@ async function streamAssets(index, {
     ...Array.from({ length: k_AssetDownloads }, () => getNext(queues.large)),
   ]);
   await Promise.all(Array.from({ length: k_AssetDownloads }, getNextBlock));
+  for (const file of joined) {
+    if (!await joinKeptAssetBlocks(folder, digest, file)) {
+      log(`The page keeps the blocks of ${file.path}, but the whole file is not correct`);
+    }
+  }
   // The kept File of each whole file and each block that the folder has now with the correct size
   const sizes = new Map();
   for (const file of files) {
@@ -1214,7 +1391,8 @@ if (typeof module !== 'undefined') {
     refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
     assetPhaseOf, parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetProblem,
     assetBlockBounds, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange,
-    assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
+    assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore, assetPathRecord, parseAssetPathRecord,
+    planAssetReuse,
     k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile, k_AssetSmallDownloads,
     k_AssetPhaseDownloads, k_AssetDownloads,
   };

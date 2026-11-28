@@ -7,7 +7,8 @@ const {
   isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
   refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets: streamWithTiers, isStartAsset,
   parseAssetTiers, fetchAssetTiers, planAssetTiers, planAssetPrefetch, assetBlockBounds, assetBlockRange,
-  parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange, AssetStore,
+  parseContentRange, assetWaitHoldsScreen, assetWaitShowsPanel, assetWaitPanelChange, AssetStore, assetPathRecord,
+  parseAssetPathRecord, planAssetReuse,
   k_AssetIndexAddress, k_AssetCacheFolder, k_AssetTiersAddress, k_AssetPagePhases, k_AssetSmallFile,
   k_AssetSmallDownloads, k_AssetPhaseDownloads, k_AssetDownloads,
 } = require('../web/page/launcher-assets.js');
@@ -1050,6 +1051,80 @@ process.on('exit', (code) => {
     console.error(`not ok: the test "${tests[count].name}" did not end`);
     process.exitCode = 1;
   }
+});
+
+// A dialogue bank in blocks of four bytes, and its next version with only the second block changed
+const k_OldBank = 'AAAABBBBCCCCDD';
+const k_NewBank = 'AAAAXXXXCCCCDD';
+const k_Changed = (bank) => ({ ...k_Streamed, 'Audio/Dialogue/Spell.sad': bank });
+const changedText = (bank) =>
+  streamedText(k_Changed(bank), ['Audio/Music/align/Good.sad', 'Data/INTRO.bik', 'Audio/Dialogue/Spell.sad']);
+const bankAddress = assetAddress('Audio/Dialogue/Spell.sad');
+const bankRequests = (site) => [...site.requests.keys()].filter((key) => key.startsWith(bankAddress)).sort();
+
+check('the record of the last visit gives the old version of each changed file in blocks', () => {
+  const files = parseAssetIndex(changedText(k_NewBank)).files;
+  const record = { ...assetPathRecord(files), 'audio/dialogue/spell.sad': sha(k_OldBank) };
+  assert.deepEqual(Object.keys(assetPathRecord(files)).sort(),
+    ['audio/dialogue/spell.sad', 'audio/music/align/good.sad', 'data/intro.bik']);
+  const number = numberOf(files, 'Audio/Dialogue/Spell.sad');
+  // The page keeps the old version whole: it can take its blocks
+  assert.deepEqual(planAssetReuse(files, new Map([[sha(k_OldBank), 14]]), record), [{ number, old: sha(k_OldBank) }]);
+  // No old version, an empty old file, or the new version kept whole: nothing to take
+  assert.deepEqual(planAssetReuse(files, new Map(), record), []);
+  assert.deepEqual(planAssetReuse(files, new Map([[sha(k_OldBank), 0]]), record), []);
+  assert.deepEqual(planAssetReuse(files, new Map([[sha(k_OldBank), 14], [sha(k_NewBank), 14]]), record), []);
+  assert.deepEqual(planAssetReuse(files, new Map([[sha(k_OldBank), 14]]), assetPathRecord(files)), []);
+  // The record of a file reads again, and a record that is not correct is empty
+  const text = JSON.stringify({ format: 1, files: record });
+  assert.deepEqual(parseAssetPathRecord(text), record);
+  assert.deepEqual(parseAssetPathRecord('not json'), {});
+  assert.deepEqual(parseAssetPathRecord(JSON.stringify({ format: 2, files: record })), {});
+  assert.deepEqual(parseAssetPathRecord(JSON.stringify({ format: 1, files: { a: 'short' } })), {});
+});
+
+check('a new version of a bank downloads only its changed block, before the start and later', async () => {
+  for (const all of [true, false]) {
+    const root = new FakeFolder();
+    const first = fakeSite(k_Changed(k_OldBank), { index: changedText(k_OldBank) });
+    await keepAssets((await fetchAssetIndex(first.fetchFile)).index, { fetchFile: first.fetchFile, digest, root });
+    assert.equal(first.requests.get(bankAddress), 1);
+    const second = fakeSite(k_Changed(k_NewBank), { index: changedText(k_NewBank) });
+    const { index } = await fetchAssetIndex(second.fetchFile);
+    const logged = [];
+    const { store, entries } = await streamAssets(index,
+      { fetchFile: second.fetchFile, digest, root, all, log: (line) => logged.push(line) });
+    const number = numberOf(index.files, 'Audio/Dialogue/Spell.sad');
+    if (!all) {
+      // The tiers do not give the bank: it comes when the page gets it for later
+      assert.equal(entries[number].file, null);
+      store.prefetch([number]);
+      await store.drained();
+    }
+    assert.deepEqual(bankRequests(second), [`${bankAddress} bytes=4-7`], `all ${all}`);
+    assert.equal(Buffer.from((all ? entries[number].file : store.fileOf(number)).bytes).toString(), k_NewBank);
+    assert.match(logged.join('\n'), /takes 3 blocks .* of 1 changed files/);
+    const folder = await root.getDirectoryHandle(k_AssetCacheFolder);
+    assert.equal(folder.children.has(sha(k_OldBank)), false);
+    // The record now gives the new version
+    const record = parseAssetPathRecord(Buffer.from((await root.getFileHandle('game-files-paths.json')).bytes)
+      .toString());
+    assert.equal(record['audio/dialogue/spell.sad'], sha(k_NewBank));
+  }
+});
+
+check('a game read of a changed bank downloads only its changed block', async () => {
+  const root = new FakeFolder();
+  const first = fakeSite(k_Changed(k_OldBank), { index: changedText(k_OldBank) });
+  await keepAssets((await fetchAssetIndex(first.fetchFile)).index, { fetchFile: first.fetchFile, digest, root });
+  const second = fakeSite(k_Changed(k_NewBank), { index: changedText(k_NewBank) });
+  const { index } = await fetchAssetIndex(second.fetchFile);
+  const { store } = await streamAssets(index, { fetchFile: second.fetchFile, digest, root });
+  await store.drained();
+  const number = numberOf(index.files, 'Audio/Dialogue/Spell.sad');
+  await store.obtain(number);
+  assert.deepEqual(bankRequests(second), [`${bankAddress} bytes=4-7`]);
+  assert.equal(Buffer.from(store.fileOf(number).bytes).toString(), k_NewBank);
 });
 
 (async () => {
