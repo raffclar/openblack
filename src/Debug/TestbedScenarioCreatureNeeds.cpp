@@ -881,6 +881,8 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	constexpr glm::vec2 k_PenHome {-319.0f, 112.0f};
 	constexpr glm::vec2 k_PenPile {-309.0f, 106.0f};
 	constexpr glm::vec2 k_OutsideThePen {-250.0f, 60.0f};
+	// The second order comes while the creature holds the food that the first order tells it to eat and looks it over
+	constexpr float k_SecondOrderSeconds = 2.0f;
 	all.push_back({
 	    .id = "objects.magic_food_in_pen",
 	    .name = "Creature eats from a pile of magic food in its temple pen",
@@ -911,6 +913,35 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	                .byTurn = 200,
 	                .atLeast = 80.0,
 	                .atMost = 80.0}},
+	});
+
+	all.push_back({
+	    .id = "objects.script_order_with_no_steps",
+	    .name = "Script order with no steps while the creature holds food",
+	    .facet = Facet::Objects,
+	    .description = "A tiger stands next to a pile of magic food and a mobile object of magic food. A script tells it to "
+	                   "look over the mobile object and eat it. While it holds the object and looks it over, a second "
+	                   "order tells it to eat from the pile.",
+	    .expected = "With food in its hand, the eat from the pile makes no steps. The tiger stops the first order, keeps "
+	                "the food in its hand and does not eat it. It stands under the control of the script, and the pile "
+	                "stays as it was.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 1.0f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = PotInfo::MagicFood, .offset = {10.0f, -15.0f}, .amount = 300},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -8.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "EatAfterExamining"},
+	                 {.kind = Kind::DoAction, .delaySeconds = k_SecondOrderSeconds, .object = 0, .action = "EatFromFoodPile"}},
+	    .checks = {{.label = "the mobile object of magic food is not eaten",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 400,
+	                .atLeast = 2.0},
+	               {.label = "the pile keeps its 300 food",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = 0,
+	                .afterTurns = 400,
+	                .atLeast = 300.0,
+	                .atMost = 300.0}},
 	});
 
 	all.push_back({

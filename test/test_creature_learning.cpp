@@ -1002,6 +1002,27 @@ TEST(CreaturePlanner, ChoosesOnlyWhatIsPressingEnough)
 	EXPECT_TRUE(creature_planner::Choose(state).has_value());
 }
 
+TEST(CreaturePlanner, AScriptOrderWithNoStepsHoldsTheFirstChoiceAfterTheScriptLetsGo)
+{
+	// An eat from a pile while the creature holds food that it can eat makes no steps. The order stays as the plan.
+	const auto order = creature_planner::OrderWithNoSteps(157, 12u);
+	EXPECT_EQ(order.desire, Desire::ObeyPlayer);
+	EXPECT_EQ(order.action, 157u);
+	EXPECT_EQ(order.object, 12u);
+	EXPECT_EQ(order.priority, creature_planner::k_ForcedScore);
+	creature_planner::PlannerState state;
+	state.current = order;
+	state.best.at(static_cast<size_t>(Desire::Hunger)) =
+	    creature_planner::Plan {.desire = Desire::Hunger, .action = 2, .priority = 1e30f};
+	// The first choice after the script lets it go cannot replace the order
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	// That turn runs no agenda, so the next choice takes the most pressing plan
+	creature_planner::NoPlanRuns(state);
+	const auto choice = creature_planner::Choose(state);
+	ASSERT_TRUE(choice.has_value());
+	EXPECT_EQ(choice->desire, Desire::Hunger);
+}
+
 TEST(CreaturePlanner, APlanKeptWhenNoAgendaRunsLetsTheNextChoiceTakeAnyPlan)
 {
 	// After a faint, the plan to lie dead stays with the highest priority and no agenda in the mind

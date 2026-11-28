@@ -16,6 +16,7 @@
 #include <optional>
 #include <random>
 #include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -276,6 +277,12 @@ private:
 	/// A script takes control of the creature. The creature stops a fight, gets up when it lies knocked out, and stops
 	/// what its hands do, such as a walk to a thing to pick up.
 	void StopForScript(entt::entity creature);
+	/// The creature does the action that a script orders: a fight, a faint or a forced plan. Whether openblack's
+	/// creatures can do the action (CreatureMindScriptActions.cpp).
+	bool DoForScript(entt::entity creature, std::string_view name, entt::entity target, std::optional<entt::entity> with);
+	/// The action of a script order makes no steps. The creature stops what it did and keeps the order as a plan with no
+	/// agenda. Whether openblack's creatures can do the action (CreatureMindScriptActions.cpp).
+	bool KeepOrderWithNoSteps(entt::entity creature, std::string_view name, entt::entity target);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
 	/// The creature has taken a thing the hand gave it: its desires choose what it does with it
