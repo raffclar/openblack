@@ -164,6 +164,27 @@ TEST(LeashRules, WalkBackEndsWithItsAction)
 	EXPECT_FALSE(ReturnInForce(7, 8, 0, 1));
 }
 
+TEST(LeashRules, AnOrderWithNoStepsLeadsUntilATurnWithNoPlanAndStaysMarkedUntilAStop)
+{
+	// The order gave the mind an agenda, and the mind still does it
+	const OrderAgenda doing {.orderSerial = 4, .agendaSerial = 4, .step = 1, .steps = 3};
+	EXPECT_TRUE(OrderInForce(doing));
+	EXPECT_TRUE(OrderMarked(doing));
+	// The agenda ended, or a new agenda started
+	EXPECT_FALSE(OrderInForce({.orderSerial = 4, .agendaSerial = 4, .step = 3, .steps = 3, .ledByLeash = true}));
+	EXPECT_FALSE(OrderMarked({.orderSerial = 4, .agendaSerial = 5, .step = 0, .steps = 2, .planKept = true}));
+	// The plan of the order made no steps: the creature keeps the plan, and the leash leads it
+	const OrderAgenda kept {.orderSerial = 4, .agendaSerial = 4, .planKept = true, .ledByLeash = true};
+	EXPECT_TRUE(OrderInForce(kept));
+	EXPECT_TRUE(OrderMarked(kept));
+	// The next turn with no plan: the leash does not lead the creature, but the mark stays
+	const OrderAgenda unled {.orderSerial = 4, .agendaSerial = 4, .planKept = true};
+	EXPECT_FALSE(OrderInForce(unled));
+	EXPECT_TRUE(OrderMarked(unled));
+	// The creature stopped what it does: it keeps no plan
+	EXPECT_FALSE(OrderMarked({.orderSerial = 4, .agendaSerial = 4}));
+}
+
 TEST(LeashRules, LeashedCreaturesWarmOrCoolToEachOther)
 {
 	EXPECT_FLOAT_EQ(AttitudeChange(LeashType::Evil), -0.1f);

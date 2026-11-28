@@ -1640,15 +1640,17 @@ void CreatureMindSystem::StopForUnbuiltPlan(entt::entity creature)
 	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 }
 
-void CreatureMindSystem::KeepForcedPlanWithNoSteps(entt::entity creature, const creature_planner::Plan& plan)
+void CreatureMindSystem::KeepForcedPlanWithNoSteps(entt::entity creature, const creature_planner::Plan& plan, bool forced)
 {
 	// A forced plan stops what the creature does as a failure before it makes the agenda. Thus the creature also stops
 	// when the action makes no steps.
 	StopForUnbuiltPlan(creature);
 	// The plan stays as the plan of the creature, with no agenda. The turn with no agenda then gives it a priority of 0.
+	// The order marks the plan as forced, also with no agenda. The mark stays until the creature next decides.
 	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
 	{
 		mind->planner.current = plan;
+		mind->planForced = forced;
 	}
 }
 
@@ -1747,7 +1749,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		// The action makes no steps. The creature stops, once a pose it was in has ended and an action it was playing has
 		// played out. It keeps the plan with no agenda, so the next choice must be more pressing than the plan.
-		KeepForcedPlanWithNoSteps(creature, plan);
+		KeepForcedPlanWithNoSteps(creature, plan, forced.forced && !forced.unforcedPriority.has_value());
 		return creature_plan_actions::For(forced.action) != nullptr;
 	}
 	auto& [executor, agenda] = *built;

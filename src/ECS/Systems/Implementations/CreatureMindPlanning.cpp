@@ -1158,7 +1158,8 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	}
 	const auto& info = tables->actions[plan.action];
 	// Copying the player makes no steps: what the creature did before stops, it copies its last deed again, and it
-	// decides again on its next turn. The choice is remembered for feedback, and the desires it opposes are held back.
+	// decides again on its next turn. The copy plan stays as the plan of the creature with no agenda, so the next stop
+	// makes its action new. The choice is remembered for feedback, and the desires it opposes are held back.
 	if (const auto* executor = creature_plan_actions::For(info.name);
 	    executor != nullptr && executor->build == creature_plan_actions::Build::MimicPlayer)
 	{
@@ -1174,6 +1175,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		}
 		Abandon(creature, mind);
 		creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
+		mind.planner.current = plan;
 		CopyObservedDeedAgain(creature, mind);
 		if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
 		{

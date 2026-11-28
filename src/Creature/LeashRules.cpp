@@ -211,6 +211,29 @@ bool creature_leash::ReturnInForce(uint32_t walkSerial, uint32_t agendaSerial, s
 	return walkSerial == agendaSerial && step < steps;
 }
 
+namespace
+{
+bool DoesOrderAgenda(const creature_leash::OrderAgenda& agenda)
+{
+	return agenda.orderSerial == agenda.agendaSerial && agenda.step < agenda.steps;
+}
+
+bool KeepsOrderWithNoSteps(const creature_leash::OrderAgenda& agenda)
+{
+	return agenda.orderSerial == agenda.agendaSerial && agenda.steps == 0 && agenda.planKept;
+}
+} // namespace
+
+bool creature_leash::OrderInForce(const OrderAgenda& agenda)
+{
+	return DoesOrderAgenda(agenda) || (KeepsOrderWithNoSteps(agenda) && agenda.ledByLeash);
+}
+
+bool creature_leash::OrderMarked(const OrderAgenda& agenda)
+{
+	return DoesOrderAgenda(agenda) || KeepsOrderWithNoSteps(agenda);
+}
+
 bool creature_leash::AttitudeDue(std::optional<uint32_t> lastTurn, uint32_t turn)
 {
 	return !lastTurn.has_value() || turn - *lastTurn > k_AttitudeTurns;

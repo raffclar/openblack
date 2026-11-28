@@ -613,6 +613,19 @@ void HurryFor(entt::entity creature, const orders::Interruption& interruption)
 	}
 }
 
+/// What the order knows about the mind of the creature after the order
+leash::OrderAgenda AgendaAfterOrder(const CreatureMindState& mind, const CreatureLeash::Order& order)
+{
+	return {
+	    .orderSerial = order.serial,
+	    .agendaSerial = mind.idle.serial,
+	    .step = mind.idle.step,
+	    .steps = mind.idle.agenda.size(),
+	    .planKept = !mind.planActive && mind.planner.current.has_value(),
+	    .ledByLeash = mind.ledByLeash,
+	};
+}
+
 /// Whether the creature walks to a point now, as the step of a forced plan
 bool WalksToPointWhenForced(const Registry& registry, entt::entity creature)
 {
@@ -1961,7 +1974,7 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		return;
 	}
 	// An order's marker goes once the creature finishes or gives up what it was told, or the thing is gone
-	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderInForce(entity))
+	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderMarked(entity))
 	{
 		EndOrder(entity);
 	}
@@ -3113,7 +3126,24 @@ bool LeashSystem::OrderInForce(entt::entity creature) const
 		return Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature);
 	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	return mind != nullptr && mind->idle.serial == order.serial && mind->idle.step < mind->idle.agenda.size();
+	return mind != nullptr && leash::OrderInForce(AgendaAfterOrder(*mind, order));
+}
+
+bool LeashSystem::OrderMarked(entt::entity creature) const
+{
+	if (OrderInForce(creature))
+	{
+		return true;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& order = *registry.Get<const CreatureLeash>(creature).order;
+	if (order.fight || (order.object.has_value() &&
+	                    (!registry.Valid(*order.object) || registry.TryGet<const Transform>(*order.object) == nullptr)))
+	{
+		return false;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return mind != nullptr && leash::OrderMarked(AgendaAfterOrder(*mind, order));
 }
 
 std::optional<glm::vec3> LeashSystem::OrderTarget(entt::entity creature) const

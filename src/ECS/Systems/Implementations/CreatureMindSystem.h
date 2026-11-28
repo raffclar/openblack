@@ -358,8 +358,8 @@ private:
 	/// with no plan and no agenda, and it decides again.
 	void StopForUnbuiltPlan(entt::entity creature);
 	/// The action of a forced plan makes no steps. The creature stops what it does as a failure, and it keeps the plan as
-	/// its plan with no agenda (CreatureMindAgenda.cpp).
-	void KeepForcedPlanWithNoSteps(entt::entity creature, const creature_planner::Plan& plan);
+	/// its plan with no agenda. A forced order also marks the kept plan as forced (CreatureMindAgenda.cpp).
+	void KeepForcedPlanWithNoSteps(entt::entity creature, const creature_planner::Plan& plan, bool forced);
 	/// The stop of what the creature does before a new agenda: the walk, the hands, a pose, a held miracle and the plan
 	void StopForNewAgenda(entt::entity creature, components::CreatureMindState& mind, components::CreatureAnimation& body,
 	                      bool stopsWalk, bool endsBody);

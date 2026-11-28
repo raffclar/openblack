@@ -472,10 +472,12 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		{
 			return false;
 		}
-		KeepForcedPlanWithNoSteps(creature, {.desire = plan.desire,
-		                                     .action = *action,
-		                                     .object = object,
-		                                     .priority = plan.priority.value_or(std::numeric_limits<float>::max())});
+		KeepForcedPlanWithNoSteps(creature,
+		                          {.desire = plan.desire,
+		                           .action = *action,
+		                           .object = object,
+		                           .priority = plan.priority.value_or(std::numeric_limits<float>::max())},
+		                          plan.forced);
 		return creature_plan_actions::For(plan.action) != nullptr;
 	}
 	// The area that holds the creature checks each walk of the new agenda. An agenda that the action makes fails when the

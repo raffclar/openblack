@@ -153,6 +153,9 @@ private:
 	void EndOrder(entt::entity creature);
 	/// Whether the order the creature took is still being carried out
 	[[nodiscard]] bool OrderInForce(entt::entity creature) const;
+	/// Whether the marker of the order stays: the order is in force, or the creature keeps the plan of the order with no
+	/// steps and did not stop what it does
+	[[nodiscard]] bool OrderMarked(entt::entity creature) const;
 	/// The ring of the player's own creature's order follows its target and throbs
 	void UpdateMarkers();
 	/// The player's worn leash while it is tied to something, or none (which drops any rope the hand held)
